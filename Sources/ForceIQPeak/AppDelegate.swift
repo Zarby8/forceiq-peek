@@ -102,6 +102,9 @@ enum Screens {
     /// or the live env opt-in with settings.json desktopActions=true in that same scratch root (live: FLOW's Code
     /// Window press only, after Run). Decided once the state root's settings are read; desktopActions has no UI.
     var desktopMode: DesktopActionMode = .off
+    /// "Start a meeting with <client>" → Command's Start sheet by deep link (Command #685). OFF unless settings.json
+    /// commandMeetingLink is true or FORCEIQ_PEAK_COMMAND_MEETING_LINK=1 (CommandMeetingLinkGate); no UI toggle.
+    var commandMeetingLink = false
     var dryRunPanel: DryRunPanel?
 
     func applicationWillFinishLaunching(_ n: Notification) {
@@ -135,6 +138,7 @@ enum Screens {
         log.move(to: root)
         prefs = PeakPrefs(stateRoot: root)
         desktopMode = DesktopActionGate.mode(env: ProcessInfo.processInfo.environment, desktopActions: prefs.desktopActions, stateRoot: root.path)
+        commandMeetingLink = CommandMeetingLinkGate.enabled(env: ProcessInfo.processInfo.environment, setting: prefs.commandMeetingLink)
         GhostAssets.format = prefs.ghostFormat
         ThreePOAssets.log = { [weak self] e in self?.log.log(e) }
         ThreePOAssets.demoReduceMotion = demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_REDUCE_MOTION"] == "1"
@@ -194,6 +198,8 @@ enum Screens {
         }
         if isVoiceTour { voiceTour() }
         log.log("desktop mode=\(desktopMode.rawValue)")
+        log.log("command meeting-link=\(commandMeetingLink ? "on" : "off")")
+        if meetingLinkTour { meetingLinkTourRun() }
         if let t = dryRunTour { dryRunTourRun(t) }
     }
 
@@ -213,8 +219,10 @@ enum Screens {
         threePO.commandContext = { [weak self] in
             guard let self else { return nil }
             return ClientCommandContext(roster: self.profile.roster.names, meeting: self.lastMeeting, desktopActions: self.prefs.desktopActions,
-                                        flowApp: self.profile.apps.first { $0.name.lowercased() == "flow" }?.name, desktopMode: self.desktopMode)
+                                        flowApp: self.profile.apps.first { $0.name.lowercased() == "flow" }?.name, desktopMode: self.desktopMode,
+                                        commandMeetingLink: self.commandMeetingLink)
         }
+        threePO.onCommandSignIn = { [weak self] n in self?.cards.signIn.update(n) }      // the existing sign-in row; no retry
         threePO.onCommandRun = { [weak self] c in self?.runCommand(c) ?? "Nothing ran." }
         let on = VoiceGate.enabled(p, setting: demo ? (isVoiceTour ? true : nil) : prefs.voiceEnabled)
         voice.configure(enabled: on, roster: p.roster.names)
@@ -231,6 +239,7 @@ enum Screens {
     /// forward; nothing else. With desktop actions gated on (scratch root only), Run starts the dry run, or in live mode
     /// FLOW's Code Window press for a flow_package_code card (the meeting start stays locate-only).
     func runCommand(_ c: ProposalCard) -> String {
+        if c.action == ClientCommands.meetingLinkAction { return openMeetingLink(c) }
         if desktopMode != .off { return startDryRun(c) }
         if demo { log.log("command run demo=1"); return "Demo mode: nothing opened." }
         if let l = c.link {
@@ -242,6 +251,60 @@ enum Screens {
             return "FLOW is in front. Press the code button there yourself (desktop clicks stay off)."
         }
         return "FLOW isn't in this coach's app list, so nothing opened."
+    }
+
+    /// Run on a Command meeting-link card (an explicit tap): re-validates the link (validated lower-case UUID, source=goat,
+    /// nothing else) and opens it. Command shows its own Start / Cancel sheet; nothing starts until Start is tapped there.
+    /// Logged: the outcome only (never the client's name or id).
+    func openMeetingLink(_ c: ProposalCard) -> String {
+        let who = c.client ?? "the client"
+        guard commandMeetingLink, desktopMode == .off, CommandMeetingLink.isValid(c.link), let l = c.link, let u = URL(string: l) else {
+            log.log("command meeting-link open refused=1")
+            return "That Command link didn't pass Peak's check, so nothing opened."
+        }
+        if demo { log.log("command meeting-link open demo=1"); return "Demo mode: nothing opened. Run would open Command's Start sheet for \(who)." }
+        guard NSWorkspace.shared.open(u) else { log.log("command meeting-link open ok=0"); return "Command didn't open. Nothing started." }
+        log.log("command meeting-link open ok=1")
+        return "Command's Start sheet is open for \(who). Nothing starts until you tap Start there."
+    }
+
+    var meetingLinkTour: Bool { demo && commandMeetingLink && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "meeting-link" }
+
+    /// Meeting-link smoke (demo mode + the flag on in a scratch GOAT_PEAK_ROOT + FORCEIQ_PEAK_DEMO_TOUR=meeting-link): the
+    /// demo transport's mocked directory (fake clients only). Types an exact name (unique), a partial one (ambiguous) and an
+    /// unknown one (none), checks nothing opened before Run, then taps Run on the unique card (demo: nothing opens).
+    /// Logs counts and outcomes only.
+    func meetingLinkTourRun() {
+        guard let scr = NSScreen.screens.first else { return }
+        let main = Screens.uuid(scr)
+        let c = controller!, store = threePO!
+        func at(_ t: Double, _ name: String, _ f: @escaping @MainActor () async -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + t) { [weak self] in
+                self?.log.log("tour step=\(name) t=\(String(format: "%.3f", Date().timeIntervalSince1970))"); Task { @MainActor in await f() }
+            }
+        }
+        func last() -> ProposalCard? { store.transcript.messages.last?.proposals.first }
+        func report(_ which: String) {
+            let k = last()
+            let origin = k?.origin.rawValue ?? "none", action = k?.action ?? "none", picks = k?.picks.count ?? 0
+            let linkOK = CommandMeetingLink.isValid(k?.link) ? 1 : 0
+            var phase = "none"
+            if let k { phase = store.phases[k.id] == .described ? "described" : "other" }
+            self.log.log("tour meeting-link said=\(which) card=\(origin) action=\(action) picks=\(picks) link_ok=\(linkOK) phase=\(phase) opened=0")
+        }
+        at(1.5, "chat") { c.activeDisplay = main; c.tab = .threePO; c.expand() }
+        at(3.0, "unique") { store.draft = "start a meeting with Test Client Alpha"; await store.send(); report("unique") }
+        at(6.0, "ambiguous") { store.draft = "start a meeting with test client"; await store.send(); report("ambiguous") }
+        at(9.0, "none") { store.draft = "start a meeting with Nobody Fictional"; await store.send(); report("none") }
+        at(12.0, "run-unique") {
+            let card = store.transcript.messages.reversed().lazy.flatMap(\.proposals).first { $0.action == ClientCommands.meetingLinkAction }
+            guard let card else { self.log.log("tour meeting-link no-link-card"); return }
+            self.log.log("tour meeting-link before-run phase=\(store.phases[card.id] == .described ? "described" : "other")")
+            await store.run(card.id)
+            if case .done(let m) = store.phases[card.id] { self.log.log("tour meeting-link after-run demo_nothing_opened=\(m.hasPrefix("Demo mode: nothing opened") ? 1 : 0)") }
+        }
+        at(14.0, "collapse") { c.tab = .home; c.collapse() }
+        at(15.0, "tour-end") {}
     }
 
     // ── desktop actions STOP dry run (locate and report only) ──

@@ -4,7 +4,7 @@ import Foundation
 /// (KeyboardShortcuts keeps the recorded shortcut itself in the app's UserDefaults; that's the library's storage.)
 public final class PeakPrefs: @unchecked Sendable {
     struct Doc: Codable { var hiddenDisplays: [String] = []; var hotkeyEnabled: Bool? = nil; var globallyHidden = false; var ghostFormat: String? = nil
-                          var voiceEnabled: Bool? = nil; var desktopActions: Bool? = nil }
+                          var voiceEnabled: Bool? = nil; var desktopActions: Bool? = nil; var commandMeetingLink: Bool? = nil }
     public let url: URL
     private var doc: Doc
     private let lock = NSLock()
@@ -49,6 +49,12 @@ public final class PeakPrefs: @unchecked Sendable {
     public var desktopActions: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.desktopActions ?? false }
         set { edit { $0.desktopActions = newValue } }
+    }
+    /// "Start a meeting with <client>" opens Command's Start sheet by deep link (Command #685) instead of the room page /
+    /// schedule. OFF by default, no UI (see CommandMeetingLinkGate; env FORCEIQ_PEAK_COMMAND_MEETING_LINK=1 also turns it on).
+    public var commandMeetingLink: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return doc.commandMeetingLink ?? false }
+        set { edit { $0.commandMeetingLink = newValue } }
     }
     public var globallyHidden: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.globallyHidden }

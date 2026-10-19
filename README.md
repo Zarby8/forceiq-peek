@@ -75,6 +75,7 @@ Command". Peak uploads nothing, and client video stays local.
 |---|---|
 | `GET /api/peak/profile` | **new**, this Mac only: this coach's `peak` overlay section (engine/peakprofile.py), no secrets |
 | `GET /api/peak/next-meeting` | **new**, this Mac only, read-only: the next Command booking (engine/peakmeeting.py → panels.command_get) |
+| `GET /api/peak/client-directory` | **new**, this Mac only, read-only, asked only with `commandMeetingLink` on: this coach's active Command clients `[{id, display_name}]` (engine/peakdirectory.py → panels.command_get → Command `GET /clients/directory`); ids re-validated as UUIDs; nothing persisted or logged but counts |
 | `GET /api/live` | existing: fixes and download counts |
 | `GET /api/approvals`, `POST /api/approvals/<id>/approve\|ask\|prompt` | existing (approve without confirm only previews strong gates; Peak never sends confirm) |
 | `GET /api/family-delivery-alerts` | existing (flag off → enabled=false, no Command call) |
@@ -133,6 +134,21 @@ process)" to phone.py, so Peak carries no token and no secret.
   meeting start stays locate-only. `desktopActions` stays OFF by default with no UI toggle. `FORCEIQ_PEAK_FLOW_PACKAGES`
   points the package search at a scratch folder for demo proofs. `DesktopLiveTests` pins the single AXPress call site
   (`ForceIQPeak/DesktopPresser.swift`); the dry-run sources stay free of any perform API.
+- **Command meeting link (flag, OFF by default; waits for Command #685's deploy).** With `settings.json`
+  `commandMeetingLink: true` (no UI) or `FORCEIQ_PEAK_COMMAND_MEETING_LINK=1`, and desktop actions off, "start a meeting
+  with <client>" resolves the client in this coach's Command directory (`GET /api/peak/client-directory`, kept in memory
+  for 120 s, a failure for 30 s; never on disk). Only an exact, unique `display_name` match (case- and
+  whitespace-normalised) goes straight to the link card; several, partial or fuzzy matches give a pick card naming the
+  candidates; no match gives a plain not-found card. The card names the client and describes what Run does; Run (an
+  explicit tap) re-validates and opens `forceiq-command://meeting/start?client_id=<lowercase uuid>&source=goat`, which
+  shows Command's own Start / Cancel sheet: nothing starts until Start is tapped in Command. A name never goes into the
+  link. 401 / a dead session → the existing "Command sign-in expired, tap to sign in" row; 403 (client role) → one dead
+  state; nothing retries in a loop. Logs: `3po meeting-link match=unique|ambiguous|none clients=<n> …`, never a name or id.
+  Flag off (or a desktop dry-run / live gate on) → the meeting start is unchanged (room page / schedule; locate-only under
+  the gates). Known gaps (Command): the client_id is lost after a signed-out login, and the link is desktop-only (iOS out
+  of scope). Smoke: `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=meeting-link GOAT_PEAK_ROOT=<scratch root with
+  settings.json {"commandMeetingLink": true}>` types unique / ambiguous / none against a mocked directory (fake clients)
+  and taps Run once (demo: nothing opens).
 - **Live smoke:** `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=voice GOAT_PEAK_ROOT=<scratch root> FORCEIQ_PEAK_VOICE_FEED=<folder
   of .wav>` feeds recorded `say` clips in real time through the mic's conversion path (fake roster) and logs
   `voice turn first_confirmed_ms=… final_ms=… cpu_pct=…` per clip plus a summary.
