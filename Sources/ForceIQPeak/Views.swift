@@ -114,7 +114,7 @@ struct PeakRootView: View {
         if panel.mode == .notch && isExpanded { r = r.insetBy(dx: -earRadius, dy: 0) }   // ears sit outside the sheet
         return r
     }
-    var earRadius: CGFloat { panel.mode == .notch ? (isExpanded ? 14 : 8) : 0 }
+    var earRadius: CGFloat { panel.mode == .notch && isExpanded ? 14 : 0 }   // collapsed: no flare past the notch
     var topRadius: CGFloat { panel.mode == .notch ? earRadius : (isExpanded ? 22 : panel.collapsedSize.height / 2) }
     var bottomRadius: CGFloat { isExpanded ? 24 : (panel.mode == .notch ? 12 : panel.collapsedSize.height / 2) }
     var shape: PeakShellShape { PeakShellShape(rect: shellRect, topRadius: topRadius, bottomRadius: bottomRadius, notch: panel.mode == .notch) }
@@ -230,13 +230,19 @@ struct PeakRootView: View {
 
     var badgeCount: Int { cards.cards.filter { $0.kind != .meeting }.count }
 
-    var collapsed: some View {
+    @ViewBuilder var collapsed: some View {
+        if panel.mode == .notch {
+            // Inside the camera housing nothing would be visible anyway: a plain black fill the size of the notch.
+            Color.clear.frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
+        } else {
+            collapsedPill
+        }
+    }
+
+    var collapsedPill: some View {
         HStack(spacing: 6) {
             ghost(panel.collapsedSize.height - 10)
-            if panel.mode == .notch {
-                Spacer().frame(width: panel.notchWidth)
-                NextSessionDot(model: nextSession)
-            } else if nextSession.showsPill {
+            if nextSession.showsPill {
                 NextSessionPill(model: nextSession, compact: true)          // names the client; gold on a gap
                 Spacer(minLength: 0)
             } else {

@@ -272,8 +272,7 @@ final class GeometryTests: XCTestCase {
         XCTAssertEqual(l.notchRect, CGRect(x: 662, y: 950, width: 188, height: 32))
         XCTAssertEqual(l.collapsed.maxY, 982)
         XCTAssertEqual(l.collapsed.height, 32)
-        XCTAssertLessThan(l.collapsed.minX, 662); XCTAssertGreaterThan(l.collapsed.maxX, 850)
-        XCTAssertEqual(l.collapsed.midX, l.notchRect!.midX, accuracy: 0.5)
+        XCTAssertEqual(l.collapsed, l.notchRect, "collapsed sits exactly inside the notch, nothing in the menu bar beside it")
         XCTAssertEqual(l.expanded.maxY, 982)
         XCTAssertEqual(l.expanded.midX, l.notchRect!.midX, accuracy: 0.5)
     }
@@ -522,3 +521,24 @@ final class GhostPackTests: XCTestCase {
 }
 
 func md5Hex(_ d: Data) -> String { Insecure.MD5.hash(data: d).map { String(format: "%02x", $0) }.joined() }
+
+// Chris's M5, measured 10.19.2026 (14" MacBook Pro, "More Space" 2048×1330): notch x 899…1149, 43 pt tall.
+final class NotchFitM5Tests: XCTestCase {
+    func testCollapsedIsExactlyTheMeasuredNotch() {
+        let m5 = ScreenDescriptor(uuid: "M5", name: "Built-in Display", frame: CGRect(x: 0, y: 0, width: 2048, height: 1330),
+                                  safeAreaTop: 43, auxiliaryTopLeft: CGRect(x: 0, y: 1287, width: 899, height: 43),
+                                  auxiliaryTopRight: CGRect(x: 1149, y: 1287, width: 899, height: 43))
+        let l = PeakGeometry().layout(for: m5)
+        XCTAssertEqual(l.collapsed, CGRect(x: 899, y: 1287, width: 250, height: 43))
+        XCTAssertEqual(l.hitRect(.collapsed), l.collapsed)
+    }
+
+    func testStudioDisplayKeepsTheFloatingPill() {
+        let studio = ScreenDescriptor(uuid: "S", name: "Studio Display", frame: CGRect(x: 2048, y: 0, width: 2560, height: 1440),
+                                      safeAreaTop: 0, auxiliaryTopLeft: nil, auxiliaryTopRight: nil)
+        let l = PeakGeometry().layout(for: studio)
+        XCTAssertEqual(l.mode, .pill)
+        XCTAssertEqual(l.collapsed.midX, studio.frame.midX, accuracy: 0.5)
+        XCTAssertLessThanOrEqual(l.collapsed.maxY, studio.frame.maxY)
+    }
+}

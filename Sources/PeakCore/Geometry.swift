@@ -41,7 +41,6 @@ public protocol PeakGeometryProviding: Sendable {
 }
 
 public struct PeakGeometry: PeakGeometryProviding {
-    public var ear: CGFloat = 44                         // room either side of the notch for the Ghost mark / badge
     public var expandedSize = CGSize(width: 620, height: 360)
     public var chatSize = CGSize(width: 620, height: 520)
     public var glowMargin: CGFloat = 28                  // room for the rim glow / shadow / pop outside the shell
@@ -53,7 +52,9 @@ public struct PeakGeometry: PeakGeometryProviding {
         let top = s.frame.maxY
         if s.hasNotch, let l = s.auxiliaryTopLeft, let r = s.auxiliaryTopRight {
             let notch = CGRect(x: l.maxX, y: top - s.safeAreaTop, width: max(0, r.minX - l.maxX), height: s.safeAreaTop)
-            let collapsed = CGRect(x: notch.minX - ear, y: top - s.safeAreaTop, width: notch.width + 2 * ear, height: s.safeAreaTop)
+            // Collapsed sits exactly in the hardware notch: nothing in the menu bar beside or below it (Chris 10.19.2026,
+            // 14" MacBook Pro: the old ears spilled 44 pt each side and the shell hung past the notch).
+            let collapsed = notch
             let w = max(expandedSize.width, collapsed.width)
             let expanded = CGRect(x: notch.midX - w / 2, y: top - expandedSize.height, width: w, height: expandedSize.height)
             let cw = max(chatSize.width, collapsed.width)
