@@ -205,12 +205,26 @@ struct ThreePOView: View {
                     .modifier(OpusPulse(trigger: store.transcript.opusPulses, reduceMotion: reduceMotion))
                 Text("3PO").font(.system(size: 14, weight: .heavy)).foregroundStyle(Color.peakGold)
                 ModelPills(store: store)
+                PanePills(store: store)
                 Spacer()
                 if store.transcript.consultingOpus { ConsultingOpusChip(reduceMotion: reduceMotion).transition(.scale.combined(with: .opacity)) }
             }
             .animation(Motion.quick(reduceMotion), value: store.transcript.consultingOpus)
             if profile.isEnabled(.spend) { SpendMeter(spend: store.transcript.spend) }
             Rectangle().fill(Color.peakGold).frame(height: 1)
+            if store.pane == .memory {
+                MemoryPanel(store: store).transition(.slideUpFull(reduceMotion))
+            } else {
+                chat
+            }
+        }
+        .onAppear {
+            if let p = prefill, !p.isEmpty, store.draft.isEmpty { store.draft = p }   // prefilled, never sent
+            focused = true
+        }
+    }
+
+    @ViewBuilder var chat: some View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
@@ -247,11 +261,6 @@ struct ThreePOView: View {
                     Task { await store.send() }
                 }
             }
-        }
-        .onAppear {
-            if let p = prefill, !p.isEmpty, store.draft.isEmpty { store.draft = p }   // prefilled, never sent
-            focused = true
-        }
     }
 }
 
@@ -281,6 +290,8 @@ struct MessageRow: View {
                     }
                     if last && store.transcript.thinking { ThinkingDots().transition(.scale(scale: 0.4)) }
                     if let e = message.error { Text(e).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.peakGold) }
+                    ForEach(message.skills) { c in SkillCardView(card: c, store: store).transition(reduceMotion ? .identity : .scale(scale: 0.94, anchor: .top)) }
+                    if let ev = message.memory, ev.needsPick { MemoryPickRow(message: message, event: ev, store: store) }
                     ForEach(message.proposals) { c in ProposalView(card: c, store: store).transition(reduceMotion ? .identity : .scale(scale: 0.94, anchor: .top)) }
                     if message.done { meta }
                 }
@@ -296,6 +307,7 @@ struct MessageRow: View {
                 chip(a.capitalized + (message.cached ? " · cached" : ""), .peakGreen)
             }
             if message.consultedOpus { chip("consulted Opus", .peakGold, filled: true) }
+            if message.recalled > 0 { chip("used \(message.recalled) memor\(message.recalled == 1 ? "y" : "ies")", .peakGreen) }
             if let c = message.costUSD, c > 0 { chip(String(format: "$%.4f", c), .white) }
         }
     }

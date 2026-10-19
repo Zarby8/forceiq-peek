@@ -222,6 +222,10 @@ public enum ThreePOEvent: Equatable, Sendable {
     case spend(SpendDoc)
     case done(text: String, costUSD: Double, peakMTD: Double?, warn: Bool?, firstTokenMs: Int?)
     case error(code: String, message: String)
+    case skill(SkillCard)                              // a skill's description card (nothing has run)
+    case skillRun(slug: String)                        // the card's Run tap is being answered
+    case memory(MemoryEvent)                           // remember / forget / list (local, zero tokens)
+    case memoryRecall(count: Int, clients: [String])   // this Claude turn carried N remembered facts
     case unknown
 
     public static func decode(event: String, data: String) -> ThreePOEvent {
@@ -252,6 +256,12 @@ public enum ThreePOEvent: Equatable, Sendable {
             return .done(text: s("text"), costUSD: SpendDoc.num(usage?["cost_usd"]) ?? 0, peakMTD: SpendDoc.num(sp?["peak_mtd_usd"]),
                          warn: sp?["warn"] as? Bool, firstTokenMs: (o["first_token_ms"] as? NSNumber)?.intValue)
         case "error": return .error(code: s("code"), message: s("message"))
+        case "skill":
+            guard let c = o["card"] as? [String: Any], let card = SkillPolicy.card(from: c) else { return .unknown }
+            return .skill(card)
+        case "skill_run": return .skillRun(slug: s("slug"))
+        case "memory": return .memory(MemoryEvent.parse(o))
+        case "memory_recall": return .memoryRecall(count: (o["count"] as? NSNumber)?.intValue ?? 0, clients: jstrs(o["clients"]))
         default: return .unknown
         }
     }
@@ -281,6 +291,9 @@ public struct ChatMessage: Equatable, Sendable, Identifiable {
     public var role: Role
     public var text: String
     public var proposals: [ProposalCard] = []
+    public var skills: [SkillCard] = []
+    public var memory: MemoryEvent? = nil         // a remember / forget / list answer (tap-to-pick when the client is unclear)
+    public var recalled = 0                       // remembered facts this Claude turn carried
     public var tools: [String] = []
     public var modelAlias: String? = nil
     public var consultedOpus = false
@@ -355,6 +368,15 @@ public struct ThreePOTranscript: Equatable, Sendable {
         case .error(let code, let msg):
             reply { $0.error = ThreePOTranscript.friendly(code, msg); $0.done = true }
             streaming = false; thinking = false; consultingOpus = false
+        case .skill(let c):
+            thinking = false
+            reply { m in if !m.skills.contains(where: { $0.id == c.id }) { m.skills.append(c) } }
+        case .skillRun: break
+        case .memory(let e):
+            thinking = false
+            reply { $0.memory = e }
+        case .memoryRecall(let n, _):
+            reply { $0.recalled = n }
         case .unknown: break
         }
     }

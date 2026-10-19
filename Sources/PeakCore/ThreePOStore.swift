@@ -23,6 +23,15 @@ public enum ProposalPhase: Equatable, Sendable {
     @Published public var draft = ""
     @Published public private(set) var phases: [String: ProposalPhase] = [:]
     @Published public private(set) var approvedPops = 0
+    /// Skill cards: described until the card's own Run tap (skillPhases[id] = .running), then done or failed.
+    @Published public private(set) var skillPhases: [String: SkillPhase] = [:]
+    /// The 3PO tab's two panes: the chat and this coach's memory (engine/threepo_memory.py, plain local files).
+    public enum Pane: String, Sendable { case chat, memory }
+    @Published public var pane: Pane = .chat
+    @Published public private(set) var memory = MemoryDoc()
+    @Published public private(set) var memoryLoad: MemoryLoad = .idle
+    @Published public var showForgotten = false
+    @Published public private(set) var forgetting: Set<String> = []
     /// The mic is open (the voice module sets it; voice is behind its profile flag, off by default). Drives 'listening'.
     @Published public var micOn = false
     public var onOpenApp: ((String) -> Void)?           // intent open_app → the switcher (allow-listed apps only)
@@ -48,14 +57,17 @@ public enum ProposalPhase: Equatable, Sendable {
         await turn(text)
     }
 
-    func turn(_ text: String) async {
+    func turn(_ text: String, body custom: Data? = nil) async {
         transcript.begin(text)
         logger?.log("3po send pick=\(pick.rawValue)")
-        let body = (try? JSONSerialization.data(withJSONObject: ["text": text, "session": session, "model": pick.rawValue])) ?? Data()
+        let body = custom ?? (try? JSONSerialization.data(withJSONObject: ["text": text, "session": session, "model": pick.rawValue])) ?? Data()
+        var memoryChanged = false
         for await e in transport.stream(body) {
             transcript.apply(e)
             switch e {
             case .proposal(let c): if phases[c.id] == nil { phases[c.id] = .described }
+            case .skill(let c): if skillPhases[c.id] == nil { skillPhases[c.id] = .described }
+            case .memory(let m): if m.op != "list" && (m.status == "saved" || m.status == "forgotten") { memoryChanged = true }
             case .intent(let n, let app): if n == "open_app", let app { onOpenApp?(app) }
             case .done: logger?.log("3po done")
             case .error(let code, _): logger?.log("3po error code=\(code)")
@@ -63,7 +75,74 @@ public enum ProposalPhase: Equatable, Sendable {
             }
         }
         transcript.endOfStream()
+        if memoryChanged { await loadMemory() }
     }
+
+    // ── memory: view + soft forget (the file is never deleted) ──
+    public func loadMemory() async {
+        memoryLoad = .loading
+        let (c, d) = await transport.get("/api/3po/memory")
+        if c == 200, let m = MemoryDoc.parse(d) { memory = m; memoryLoad = .loaded } else { memoryLoad = .failed("Couldn't read 3PO's memory on this Mac.") }
+    }
+
+    /// An explicit Forget tap. Soft: the engine marks the fact forgotten; nothing is deleted.
+    public func forget(_ id: String) async {
+        guard let f = memory.facts.first(where: { $0.id == id }), !f.forgotten, !forgetting.contains(id) else { return }
+        forgetting.insert(id)
+        logger?.log("3po memory forget")
+        let (c, d) = await transport.post("/api/3po/memory", (try? JSONSerialization.data(withJSONObject: ["op": "forget", "id": id])) ?? Data())
+        forgetting.remove(id)
+        let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any]
+        if c == 200 && (o?["ok"] as? Bool) == true, let i = memory.facts.firstIndex(where: { $0.id == id }) {
+            memory.facts[i].forgotten = true
+        }
+        await loadMemory()
+    }
+
+    /// Tap-to-pick when a remembered fact's client was unclear: re-sends the same fact with the picked roster client.
+    public func pickMemoryClient(_ client: String, for messageID: Int) async {
+        guard !transcript.streaming, let m = transcript.messages.first(where: { $0.id == messageID }), let ev = m.memory, ev.needsPick,
+              ev.candidates.contains(client), let text = ev.text, !text.isEmpty else { return }
+        let body = try? JSONSerialization.data(withJSONObject: ["text": "remember \(text)", "client": client, "session": session, "model": pick.rawValue])
+        await turn("Remember for \(client): \(text)", body: body)
+    }
+
+    // ── skill cards: description → Run (explicit tap) ──
+    public func skillCard(_ id: String) -> SkillCard? {
+        for m in transcript.messages.reversed() { if let c = m.skills.first(where: { $0.id == id }) { return c } }
+        return nil
+    }
+
+    public func runSkill(_ id: String) async {
+        guard !transcript.streaming, let c = skillCard(id), c.canRun, skillPhases[id] == .described || isSkillFailed(id),
+              let body = SkillPolicy.runBody(c, session: session, pick: pick) else { return }
+        skillPhases[id] = .running
+        logger?.log("3po skill run kind=\(c.kind)")
+        await turn("Run: \(c.name)", body: body)
+        let reply = transcript.messages.last(where: { $0.role == .threePO })
+        skillPhases[id] = (reply?.error).map { .failed($0) } ?? .done
+    }
+
+    public func pickSkillClient(_ id: String, client: String) async {
+        guard !transcript.streaming, let c = skillCard(id), let body = SkillPolicy.pickBody(c, client: client, session: session, pick: pick) else { return }
+        await turn("\(c.name) for \(client)", body: body)
+    }
+
+    /// Ask for a skill's DESCRIPTION card by slug (the /skills list, the snapshot). Never sets "run".
+    public func describeSkill(_ slug: String) async {
+        guard !transcript.streaming, !slug.isEmpty else { return }
+        let body = try? JSONSerialization.data(withJSONObject: ["text": "/skill \(slug)", "session": session, "model": pick.rawValue, "skill": slug])
+        await turn("/skill \(slug)", body: body)
+    }
+
+    public func askSkill(_ id: String) async {
+        guard let c = skillCard(id), !transcript.streaming else { return }
+        await turn(SkillPolicy.askText(c))
+    }
+
+    public func copySkill(_ id: String) { if let c = skillCard(id) { onCopy?(c.prompt) } }
+
+    func isSkillFailed(_ id: String) -> Bool { if case .failed = skillPhases[id] { return true }; return false }
 
     // ── models ──
     public func loadModels() async {
@@ -171,6 +250,9 @@ public struct DemoThreePOTransport: ThreePOTransport {
         if path == "/api/3po/spend", !knobs.spendWarn {
             return (200, Data(#"{"budget_usd":250,"warn_at":0.8,"show_account_line":true,"account":{"total_usd":118.6,"budget_usd":250,"warn":false,"by_model":{"opus":52.4,"sonnet":38.2,"haiku":19.5,"other":8.5}},"peak":{"total_usd":12.34,"budget_usd":250,"warn":false,"by_model":{"haiku":{"usd":9.24},"opus":{"usd":3.1}}},"hint":null}"#.utf8))
         }
+        if path == "/api/3po/memory" {
+            return (200, Data(#"{"ok":true,"owner":"demo","facts":[{"id":"m_demo00000001","text":"Sample Skater's games are on Saturdays","client":"Sample Skater","clients":["Sample Skater"],"ts":"2026-10-19T02:30:00-04:00","forgotten":false},{"id":"m_demo00000002","text":"the NAS is slow on Monday mornings","client":null,"clients":[],"ts":"2026-10-18T09:00:00-04:00","forgotten":false},{"id":"m_demo00000003","text":"Sample Skater prefers early ice","client":"Sample Skater","clients":["Sample Skater"],"ts":"2026-10-12T09:00:00-04:00","forgotten":true,"forgotten_at":"2026-10-18T10:00:00-04:00"}]}"#.utf8))
+        }
         if path.hasPrefix("/api/peak/shift-drop/status/") {
             let steps = ["waiting", "identified", "staged", "running", "succeeded"]
             let s = steps[min(knobs.statusReads, steps.count - 1)]; knobs.statusReads += 1
@@ -185,6 +267,7 @@ public struct DemoThreePOTransport: ThreePOTransport {
     }
     public func post(_ path: String, _ body: Data) async -> (Int, Data) {
         if path == "/api/3po/model" { return (200, Data(#"{"ok":true}"#.utf8)) }
+        if path == "/api/3po/memory" { return (200, Data(#"{"ok":true,"status":"forgotten","message":"Demo mode: nothing changed."}"#.utf8)) }
         if path == "/api/act" { return (200, Data(#"{"ok":true,"message":"Demo mode: nothing ran."}"#.utf8)) }
         if path == "/api/peak/shift-drop/preview" {
             try? await Task.sleep(nanoseconds: 700_000_000)

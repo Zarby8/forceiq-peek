@@ -29,6 +29,22 @@ static mark's). Proof tours: `FORCEIQ_PEAK_DEMO_TOUR=3po-send` (send latency), `
 collapsed Peak renders and decodes nothing; Reduce Motion shows a still. Proof tour: `FORCEIQ_PEAK_DEMO=1
 FORCEIQ_PEAK_DEMO_TOUR=3po`. See `Resources/ASSETS.md`.
 
+**3PO memory:** say "remember Sample Skater's games are on Saturdays" and 3PO keeps it, for this coach only, as plain local
+JSONL under `<peak_root>/<owner>/memory/facts.jsonl` (append-only; "forget …" or the Forget button marks a fact forgotten
+and never deletes the file). Client facts are resolved against this coach's roster (peakdrop.roster(); an unclear client
+is tap-to-pick) and always name the client. Anything that looks like a key or token is stripped before it is written.
+Recall is local (relevance + recency) and packed into a token budget; only those lines ride along with a Claude turn, and
+the saved session keeps no copy. The 3PO tab's **Memory** pill shows the list (client sections in gold, General in
+green, forgotten facts on request), all white text on black at full opacity. Routes: `GET /api/3po/memory`,
+`POST /api/3po/memory {op: add|forget}`.
+
+**3PO skills:** named, reusable prompts or actions (`peak/skills/<slug>/SKILL.md` with `kind: read|prompt|action`, plus
+this coach's own in `<peak_root>/<owner>/skills/`). In chat a skill first shows its description card (inputs, what it
+touches, outputs) with Run / Ask Claude / Copy prompt; only the card's Run tap runs it. Read skills answer locally (zero
+tokens), prompt skills go to Claude, action skills only propose a fix from 3PO's routine allow-list (then GOAT's preview
+and Confirm). Anything else is view-only with a GOAT approval card. Starters: What's next today, Spend this month,
+Explain this approval card, Shift progress for a client, Title slide preview. `/skills` lists them.
+
 Tapping a card only shows a plain description (inputs, what it touches, outputs). Then come Run / Ask Claude / Copy
 prompt. Nothing runs until that explicit tap. Upscale, Dagu and publish progress are never shown, only "Open in
 Command". Peak uploads nothing, and client video stays local.

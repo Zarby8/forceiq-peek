@@ -167,6 +167,12 @@ enum Screens {
         if avatarTour { threePOAvatarTour() }
         if sendTour { threePOSendTour() }
         if idleTour { threePOIdleTour() }
+        if PeakSnapshot.dir != nil {                       // visual proof: render the memory pane + a skill card, then quit
+            Task { @MainActor in
+                await PeakSnapshot.run(store: threePO) { [weak self] e in self?.log.log(e) }
+                NSApp.terminate(nil)
+            }
+        }
     }
 
     /// First-use costs paid once, off-screen, right after launch instead of on the first tap: the multi-line text
