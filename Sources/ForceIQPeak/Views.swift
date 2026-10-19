@@ -458,7 +458,7 @@ struct CardList: View {
                     Text("No coach profile on this Mac yet (overlay peak section). Peak shows nothing until it has one.")
                         .font(.system(size: 13)).foregroundStyle(Color.peakGold)
                 } else {
-                    HomeStatusRows(signIn: cards.signIn, empty: cards.cards.isEmpty)
+                    HomeStatusRows(signIn: cards.signIn, empty: cards.cards.isEmpty, settingsNotice: cards.settingsNotice)
                 }
                 // Each card rises in, staggered; approvals pop; a card that leaves collapses its height (StaggeredEntry,
                 // .cardCollapse). Nothing here runs a card: a tap only opens its description.

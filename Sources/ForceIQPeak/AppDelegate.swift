@@ -137,6 +137,7 @@ enum Screens {
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         log.move(to: root)
         prefs = PeakPrefs(stateRoot: root)
+        prefs.reportLoad(to: log)                          // a settings.json that exists but can't be used: one loud line
         desktopMode = DesktopActionGate.mode(env: ProcessInfo.processInfo.environment, desktopActions: prefs.desktopActions, stateRoot: root.path)
         commandMeetingLink = CommandMeetingLinkGate.enabled(env: ProcessInfo.processInfo.environment, setting: prefs.commandMeetingLink)
         GhostAssets.format = prefs.ghostFormat
@@ -145,6 +146,7 @@ enum Screens {
         controller = PeakController(prefs: prefs, profile: p, hotkey: KeyboardShortcutsHotkey(name: PeakHotkeyName.make(p)), logger: log)
         performer = Performer(engine: engine, demo: demo)
         cards = CardStackViewModel(performer: performer, logger: log, signInTransport: demo ? nil : engine)
+        cards.settingsNotice = prefs.settingsNotice
         threePO = ThreePOStore(transport: demo ? DemoThreePOTransport(knobs: demoKnobs) : engine, session: "peak-\(p.coachID)", logger: log)
         threePO.onCopy = { [weak self] s in self?.performer.copy(s) }
         threePO.onOpenApp = { [weak self] name in

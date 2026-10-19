@@ -97,6 +97,36 @@ process)" to phone.py, so Peak carries no token and no secret.
 - Raycast: `raycast/*.sh` script commands (package "ForceIQ Peak"). At install they're copied to `~/ForceIQ/peak/raycast/`.
   Add that folder once by hand: Raycast Settings → Extensions → + → Add Script Directory.
 
+## Settings (`<state_root>/settings.json`; `GOAT_PEAK_ROOT` overrides the root)
+Peak writes this file itself (menu bar, Settings); you can also hand-edit it. Every key is optional: a missing key (or a
+JSON `null`) gets its default and the keys that are present are kept, so `{"commandMeetingLink": true}` alone works.
+Unknown keys are ignored.
+
+| key | type | default (missing key, no file, or an unreadable file) |
+|---|---|---|
+| `hiddenDisplays` | array of display UUIDs | `[]` (shown on every display) |
+| `globallyHidden` | true/false | `false` (shown) |
+| `hotkeyEnabled` | true/false | unset: the profile's `hotkey.enabled` |
+| `ghostFormat` | `"h264-black"` / `"hevc-alpha"` | `"h264-black"` |
+| `voiceEnabled` | true/false | unset: the profile's `modules.voice` (false by default); an unreadable file: off |
+| `desktopActions` | true/false | `false` (no UI; on only matters in a scratch root with the live opt-in) |
+| `commandMeetingLink` | true/false | `false` (no UI) |
+
+- **No file** is normal (a new Mac, a fresh scratch root): silent defaults, nothing logged, nothing written until a setting
+  changes.
+- **A file that exists but can't be used** fails loudly and fails closed. That covers a file Peak can't read, an empty
+  file, invalid JSON, a top level that isn't an object, or any key with the wrong type (e.g. `"desktopActions": "yes"`,
+  or a number inside `hiddenDisplays`). Then:
+  - **all** settings use the defaults above, and `desktopActions`, `commandMeetingLink` and voice stay **off**
+    (nothing is ever on because the file was bad);
+  - `logs/peak.log` gets one line naming the file and the bad key or parse position, never a value, e.g.
+    `settings unreadable path=…/settings.json error=key 'desktopActions' has the wrong type (expected true/false); using defaults (desktopActions, commandMeetingLink, voice off)`;
+  - the home list shows a plain-white status row: **Settings file couldn't be read: using defaults**;
+  - Peak never crashes. Before its first write over the bad file, it copies the file to
+    `<state_root>/settings.unreadable.json` so hand edits aren't lost. Fix the file and relaunch Peak.
+- Tests: `PrefsLoadTests` (lenient decode, loud failure, safe defaults) and `SettingsNoticeGuardTests` (the row is pure
+  white with no fade, and `desktopActions` has no toggle).
+
 ## Voice (opt-in; off until scored on the coach's own voice)
 - **Toggle only.** The mic button in the 3PO field, `forceiq-peak://voice` or the Raycast command "Talk to 3PO": the first
   press starts, the next press stops. No hold-to-talk, no wake word, no silence auto-stop. While it listens the droid is in

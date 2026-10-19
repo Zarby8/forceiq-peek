@@ -111,6 +111,8 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     @Published public private(set) var lastResult: String? = nil
     @Published public private(set) var ghost: GhostState = .idle
     @Published public private(set) var approvedPops = 0            // trigger: an approval / run went through (green check pop)
+    /// "Settings file couldn't be read: using defaults" while settings.json couldn't be used (PeakPrefs.settingsNotice).
+    @Published public var settingsNotice: String? = nil
     private var baseGhost: GhostState = .idle
     let performer: CardActionPerforming
     weak var logger: PeakLogging?
