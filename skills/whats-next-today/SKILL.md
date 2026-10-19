@@ -1,7 +1,8 @@
 ---
 name: What's next today
 description: A quick read of the rest of today, the next client meeting, open GOAT alerts and what is running on this Mac.
-keywords: [next, today, what's next, whats next, rest of today, agenda, up next, schedule today]
+keywords: [agenda, rest of today, what's next today, up next today, schedule today, today's schedule, today's agenda, day plan]
+anchors: [agenda, rest of today, what's next today, whats next today, up next today, schedule today, today's schedule, today's agenda]
 kind: read
 reads: [next_meeting, goat_alerts, machine_health]
 client: optional

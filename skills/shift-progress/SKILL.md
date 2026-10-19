@@ -1,7 +1,8 @@
 ---
 name: Shift progress for a client
 description: Where one client's shift and film downloads are right now.
-keywords: [shift progress, shifts, downloads, film download, shift download, how far]
+keywords: [shift progress, shift download, shift downloads, film download, download progress, shifts, downloads]
+anchors: [shift progress, shift download, film download, download progress, shifts downloaded, shift files]
 kind: read
 reads: [shift_progress]
 client: required

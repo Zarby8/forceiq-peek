@@ -1,7 +1,8 @@
 ---
 name: Spend this month
 description: How much Peak's 3PO has spent on Claude so far this month, against this coach's budget.
-keywords: [spend, spent, spending, cost, budget, this month, claude bill, usage]
+keywords: [spend, spent, spending, cost, costs, budget, claude bill, claude spend, monthly spend]
+anchors: [spend, spent, spending, cost, budget, claude bill]
 kind: read
 reads: [spend]
 client: none

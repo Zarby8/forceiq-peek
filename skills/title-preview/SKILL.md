@@ -1,7 +1,8 @@
 ---
 name: Title slide preview
 description: Propose a re-render of a client's title slide and folder image as a preview in scratch. Uses 3PO's routine rerender fix.
-keywords: [title slide, title card, folder image, retitle, title preview, wrong title]
+keywords: [title slide, title card, title preview, folder image, retitle, wrong title, rerender, re-render, redo title slide, redo folder image]
+anchors: [title slide, title card, title preview, folder image, retitle, wrong title]
 kind: action
 action: rerender
 client: required

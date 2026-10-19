@@ -46,6 +46,9 @@ touches, outputs) with Run / Ask Claude / Copy prompt; only the card's Run tap r
 tokens), prompt skills go to Claude, action skills only propose a fix from 3PO's routine allow-list (then GOAT's preview
 and Confirm). Anything else is view-only with a GOAT approval card. Starters: What's next today, Spend this month,
 Explain this approval card, Shift progress for a client, Title slide preview. `/skills` lists them.
+Plain chat opens a card only when it names one of the skill's `anchors` (distinctive words such as "approval card" or
+"spend"; generic words never count) and that skill covers most of the ask. Anything unclear, like "what can you do?",
+goes to Claude. `/skill <name>` always opens the card.
 
 Tapping a card only shows a plain description (inputs, what it touches, outputs). Then come Run / Ask Claude / Copy
 prompt. Nothing runs until that explicit tap. Upscale, Dagu and publish progress are never shown, only "Open in

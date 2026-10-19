@@ -1,7 +1,8 @@
 ---
 name: Explain this approval card
 description: Plain-English explanation of a GOAT approval card, what approving it would touch and what could go wrong. Explains only; never approves.
-keywords: [explain, approval, approval card, what does this card do, card, approve, what is this asking]
+keywords: [approval, approval card, approval cards, card, approve, explain card]
+anchors: [approval card, approval, card]
 kind: prompt
 client: optional
 inputs:
