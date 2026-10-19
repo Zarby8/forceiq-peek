@@ -3,7 +3,7 @@
 A Ghost-branded strip for macOS. It wraps the notch on a notch display and floats as a pill at top-center on a display
 without one (Studio Display). There's one non-activating, borderless `NSPanel` per `NSScreen`, above the menu bar, on
 every Space and stationary, and it follows `NSApplication.didChangeScreenParametersNotification`. Pure white on pure
-black, green `#5BE37D` and gold `#F5C542` accents, no dim gray text.
+black, green `#4FFF4F` and gold `#F4C430` accents (ForceIQ Brand 2026; defined once in `Sources/PeakCore/Brand.swift`), no dim gray text.
 
 **Ghost mark:** BOB Motion **ForceIQ-Peak-BOB-v1, v1.1** (idle re-timed to a seamless 60-frame loop), h264 on black,
 masked to a circle, played with AVPlayerLooper and driven by the pack's MANIFEST.json. See `Resources/ASSETS.md`.

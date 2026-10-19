@@ -2,7 +2,7 @@ import AppKit
 import PeakCore
 import SwiftUI
 
-// 3PO memory + skill cards. Bright on black: pure white text, gold #F5C542 and green #5BE37D accents, every element at
+// 3PO memory + skill cards. Bright on black: pure white text, Brand gold and green accents, every element at
 // full opacity (no gray, no dim text, no half-faded buttons; a disabled button is PeakButton's gold outline + white label).
 
 extension Color {

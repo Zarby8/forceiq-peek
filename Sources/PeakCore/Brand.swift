@@ -1,11 +1,13 @@
 import Foundation
 
 /// Hard rules: pure white text on pure black, green and gold accents, never dim gray text.
+/// Palette: ForceIQ Brand 2026 pack (gold #F4C430, green #4FFF4F). This is Peak's one palette definition; Color.peakGold /
+/// .peakGreen and every *Hex token read these.
 public enum Brand {
     public static let blackHex: UInt32 = 0x000000
     public static let whiteHex: UInt32 = 0xFFFFFF
-    public static let greenHex: UInt32 = 0x5BE37D
-    public static let goldHex: UInt32 = 0xF5C542
+    public static let greenHex: UInt32 = 0x4FFF4F
+    public static let goldHex: UInt32 = 0xF4C430
     /// Every text color Peak may use. Tests assert nothing else is ever offered.
     public static let allowedTextHex: Set<UInt32> = [whiteHex, greenHex, goldHex, blackHex]
 

@@ -193,7 +193,7 @@ final class ClientNameTests: XCTestCase {
     }
 
     func testOnlyBrandTextColors() {
-        XCTAssertEqual(Brand.allowedTextHex, [0xFFFFFF, 0x5BE37D, 0xF5C542, 0x000000])
+        XCTAssertEqual(Brand.allowedTextHex, [0xFFFFFF, 0x4FFF4F, 0xF4C430, 0x000000])
     }
 }
 

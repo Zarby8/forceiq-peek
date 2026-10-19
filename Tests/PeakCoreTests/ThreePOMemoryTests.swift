@@ -50,8 +50,8 @@ final class MemoryDocTests: XCTestCase {
     func testMemoryViewIsBrightOnBlack() {
         XCTAssertEqual(MemoryStyle.backgroundHex, 0x000000)
         XCTAssertEqual(MemoryStyle.textHex, 0xFFFFFF)
-        XCTAssertEqual(MemoryStyle.clientHex, 0xF5C542)
-        XCTAssertEqual(MemoryStyle.generalHex, 0x5BE37D)
+        XCTAssertEqual(MemoryStyle.clientHex, 0xF4C430)
+        XCTAssertEqual(MemoryStyle.generalHex, 0x4FFF4F)
         XCTAssertEqual(MemoryStyle.opacity, 1.0)
         XCTAssertEqual(PeakTokens.disabledOpacity, 1.0)                 // no half-faded buttons
         for h in MemoryStyle.all { XCTAssertTrue(Brand.allowedTextHex.contains(h), String(h, radix: 16)) }

@@ -444,6 +444,6 @@ final class CAGlowNSView: NSView {
 }
 
 extension Color {
-    static let peakGreen = Color(red: 0x5B / 255, green: 0xE3 / 255, blue: 0x7D / 255)
-    static let peakGold = Color(red: 0xF5 / 255, green: 0xC5 / 255, blue: 0x42 / 255)
+    static let peakGreen = Color(hex: Brand.greenHex)
+    static let peakGold = Color(hex: Brand.goldHex)
 }
