@@ -12,7 +12,7 @@ struct NextSessionPill: View {
     var body: some View {
         if model.showsPill {
             TimelineView(.periodic(from: .now, by: 30)) { ctx in
-                Text(model.pillText(now: ctx.date) ?? "")
+                Text((compact ? model.compactPillText(now: ctx.date) : model.pillText(now: ctx.date)) ?? "")
                     .font(.system(size: compact ? 11 : 12, weight: .bold).monospacedDigit())
                     .foregroundStyle(Color(hex: NextSessionStyle.textHex)).lineLimit(1)
                     .padding(.horizontal, compact ? 8 : 12)

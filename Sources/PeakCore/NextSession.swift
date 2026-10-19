@@ -130,6 +130,18 @@ public enum NextSessionCountdown {
     }
 }
 
+public extension NextSessionCountdown {
+    /// The shortest readable countdown for the Studio Display pill: "now", "42m", "3h 10m", "2d 4h".
+    static func compact(to start: Date, now: Date) -> String {
+        let s = Int(start.timeIntervalSince(now))
+        if s < 60 { return s > -15 * 60 ? "now" : "started" }
+        let m = s / 60, h = m / 60
+        if h >= 24 { return "\(h / 24)d \(h % 24)h" }
+        if h > 0 { return m % 60 == 0 ? "\(h)h" : "\(h)h \(m % 60)m" }
+        return "\(m)m"
+    }
+}
+
 /// The next-session feed for this coach, in memory only. Polls sparingly off the app's existing refresh tick.
 @MainActor public final class NextSessionModel: ObservableObject {
     nonisolated public static let path = "/api/peak/next-session"
@@ -190,6 +202,12 @@ public enum NextSessionCountdown {
     public var gold: Bool { warnings.contains { $0.state == .present } }
     /// The pill shows only with the flag on and a session for one of this coach's clients.
     public var showsPill: Bool { enabled && session != nil }
+
+    /// The Studio pill is ~196 pt wide: the first name and a compact countdown ("Spiros 3h 10m"), never an ellipsis over the time.
+    public func compactPillText(now: Date) -> String? {
+        guard let s = session else { return nil }
+        return "\(WingStatus.firstName(s.client, limit: 9)) \(NextSessionCountdown.compact(to: s.scheduledAt, now: now))"
+    }
 
     public func pillText(now: Date) -> String? {
         guard let s = session else { return nil }

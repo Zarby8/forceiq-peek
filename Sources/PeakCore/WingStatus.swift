@@ -20,9 +20,9 @@ public enum WingStatus {
     public static let nowGraceSeconds: TimeInterval = 15 * 60
     public static let nameLimit = 6
 
-    public static func firstName(_ client: String) -> String {
+    public static func firstName(_ client: String, limit: Int = nameLimit) -> String {
         let first = client.split(separator: " ").first.map(String.init) ?? client
-        return first.count > nameLimit ? String(first.prefix(nameLimit - 1)) + "…" : first
+        return first.count > limit ? String(first.prefix(limit - 1)) + "…" : first
     }
 
     /// "42m", "now", or nil when the session is outside the window (more than an hour out, or long started).
