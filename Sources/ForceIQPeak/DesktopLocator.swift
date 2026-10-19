@@ -10,6 +10,8 @@ struct AXDesktopLocator: DesktopLocator {
     var packageRoots: [URL] = Self.defaultPackageRoots()
     var axBudget = 8000                // elements per lookup
     var axDeadline: TimeInterval = 4   // seconds per lookup
+    /// Live mode: production FLOW (ProductionGuard) is never brought forward. Always on with a smoke target.
+    var refuseProduction = false
 
     func locate(_ step: DryRunStep, _ strategy: LocateStrategy, stop: StopSwitch) async -> LocateAttempt {
         let t0 = Date()
@@ -68,9 +70,29 @@ struct AXDesktopLocator: DesktopLocator {
         guard step.kind == .bringForward, step.bundleID == DesktopApps().flowBundle || step.app.lowercased() == "flow" else {
             return "not FLOW: nothing brought forward"
         }
+        let env = ProcessInfo.processInfo.environment
+        let target = FlowSmokeTarget.from(env: env)
+        let refuseProduction = self.refuseProduction || target != nil
         return await MainActor.run {
-            guard let app = NSRunningApplication.runningApplications(withBundleIdentifier: step.bundleID).first else {
-                return "\(step.app) is not running; a dry run never launches it"
+            let protected = ProductionPids.running().union(ProductionGuard.protectedPids(env: env))
+            if refuseProduction, let why = target?.refusal(protectedPids: protected) { return "\(step.app) not brought forward: \(why)" }
+            // with a smoke target, exactly that instance (by pid, else its bundle id); otherwise the profile's FLOW
+            let found: NSRunningApplication?
+            if let t = target {
+                found = t.pid.flatMap { NSRunningApplication(processIdentifier: $0) }
+                    ?? (t.pid == nil ? t.bundleID.flatMap { NSRunningApplication.runningApplications(withBundleIdentifier: $0).first } : nil)
+            } else {
+                found = NSRunningApplication.runningApplications(withBundleIdentifier: step.bundleID).first
+            }
+            guard let app = found else { return "\(step.app) is not running; a dry run never launches it" }
+            if refuseProduction {
+                if let why = ProductionGuard.reason(pid: app.processIdentifier, bundleID: app.bundleIdentifier, bundlePath: app.bundleURL?.path,
+                                                    protectedPids: protected) {
+                    return "\(step.app) not brought forward: \(why)"
+                }
+                if let t = target, !t.matches(pid: app.processIdentifier, bundleID: app.bundleIdentifier) {
+                    return "\(step.app) not brought forward: pid \(app.processIdentifier) isn't the smoke target"
+                }
             }
             return app.activate() ? "\(step.app) brought forward (pid \(app.processIdentifier))" : "\(step.app) did not come forward"
         }
@@ -122,10 +144,12 @@ struct AXDesktopLocator: DesktopLocator {
 struct AppInfo {
     var name: String, url: URL, schemes: [String], pid: pid_t?
     @MainActor static func lookup(_ bundleID: String) -> AppInfo? {
-        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return nil }
+        let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first
+        // an isolated FLOW test build may not be registered with Launch Services: fall back to the running copy's bundle
+        guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) ?? running?.bundleURL else { return nil }
         let plist = NSDictionary(contentsOf: url.appendingPathComponent("Contents/Info.plist")) as? [String: Any] ?? [:]
         let schemes = ((plist["CFBundleURLTypes"] as? [[String: Any]]) ?? []).flatMap { ($0["CFBundleURLSchemes"] as? [String]) ?? [] }
-        let pid = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first?.processIdentifier
+        let pid = running?.processIdentifier
         return AppInfo(name: url.deletingPathExtension().lastPathComponent, url: url, schemes: schemes, pid: pid)
     }
 }

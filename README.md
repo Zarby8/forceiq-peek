@@ -172,6 +172,37 @@ Unknown keys are ignored.
   meeting start stays locate-only. `desktopActions` stays OFF by default with no UI toggle. `FORCEIQ_PEAK_FLOW_PACKAGES`
   points the package search at a scratch folder for demo proofs. `DesktopLiveTests` pins the single AXPress call site
   (`ForceIQPeak/DesktopPresser.swift`); the dry-run sources stay free of any perform API.
+  **Production FLOW is never a live target** (PeakCore `ProductionGuard`): the presser refuses, before its guard and the
+  press, a frontmost app with bundle id `com.forceiq.flowai` (any case), the app at `/Applications/FLOW.app`, any running
+  `com.forceiq.flowai` pid, a pid in `FORCEIQ_PEAK_PROTECTED_PIDS`, or no readable bundle id; in live mode the locator
+  won't bring such an app forward either. The press only reaches an isolated, non-production FLOW (FLOW's own test build
+  with its own bundle id, DB and prefs), named by the smoke-only `FORCEIQ_PEAK_FLOW_TARGET_PID` and/or
+  `FORCEIQ_PEAK_FLOW_TARGET_BUNDLE`; the frontmost process must then be exactly that instance. FLOW's project window has
+  no title and no AXDocument, so the window check also accepts a static text in that window that is exactly the package's
+  name (case aside), and resolves symlinks. A window title must be exactly the package's name; a partial, prefix or
+  longer name (`FLOW-Dem`, `FLOW-Demo-extra` for `FLOW-Demo`) is refused, by title or by text. `ProductionTargetGuardTests` covers the refusals (pid 11311, the bundle id,
+  the path) and pins the order.
+- **Real-press smoke** (`peak/scripts/real_press_smoke.sh`): the live press against an isolated FLOW, proven in text by
+  an Accessibility read of that FLOW's window list before and after.
+  ```
+  peak/build.sh
+  peak/scripts/real_press_smoke.sh --pid <isolated FLOW pid> --package <the .flowaipkg it has open> --mode press
+  peak/scripts/real_press_smoke.sh --pid <isolated FLOW pid> --package <same> --mode stop   # STOP while armed
+  peak/scripts/real_press_smoke.sh --bundle <its non-production bundle id> --check-only      # target checks only
+  ```
+  It refuses production FLOW (exit 3) before it looks at or launches anything: `--bundle com.forceiq.flowai`, any pid of
+  a running `/Applications/FLOW.app`, or a pid in `FORCEIQ_PEAK_PROTECTED_PIDS`, and hands those pids to Peak. It makes
+  a scratch `GOAT_PEAK_ROOT` under `~/ForceIQ/peak-tmp` with `settings.json` `{"desktopActions": true, "hiddenDisplays":
+  [], "globallyHidden": false}` (Peak ignores a settings.json missing the last two, so the flag would read off) and a
+  package folder holding only a symlink named for the demo client, launches a demo Peak of the build in live mode, checks
+  Peak logged `desktop mode=live`, taps Peak's own Run (AX, Peak's button only), and reads FLOW's windows again.
+  `--mode press` passes when no `Code Window` window was open before, Peak logged one press, and a `Code Window` window is
+  open after. `--mode stop` first closes an open `Code Window` window in the isolated FLOW, taps Peak's STOP while the
+  press is armed, and passes on `STOPPED phase=before_press`, no press, no `Code Window` window. Then it quits its own
+  demo Peak, deletes the scratch root (the symlink only) and leaves the proof in `~/ForceIQ/peak-tmp/real-press-<mode>-<time>`
+  (or `--out`). No screen captures. The script never activates, quits or opens a FLOW (only Peak's step 2 brings the
+  isolated FLOW forward, by pid) and never changes the installed Peak, its settings or the engine. Accessibility for the terminal is required (the helper `scripts/real_press_ax.swift` is
+  compiled into `$TMPDIR`).
 - **Command meeting link (flag, OFF by default; waits for Command #685's deploy).** With `settings.json`
   `commandMeetingLink: true` (no UI) or `FORCEIQ_PEAK_COMMAND_MEETING_LINK=1`, and desktop actions off, "start a meeting
   with <client>" resolves the client in this coach's Command directory (`GET /api/peak/client-directory`, kept in memory
