@@ -112,12 +112,14 @@ import simd
         // Idle and nothing changing: the slow idle sway at 20 Hz is indistinguishable at 32 pt, and an untouched scene
         // costs RealityKit far less than one rewritten every frame. Any change (a cut, a stream) is back to every frame.
         level = lvl
-        if throttle, isSteadyIdle, now - lastApply < 1.0 / AvatarIdleCache.hz { return }
+        if throttle, isSteadyIdle, now - lastApply < 1.0 / AvatarIdleCache.hz(rate) { return }
         apply(timeline.params(now, talkDrive: drive))
         lastApply = now
     }
     /// Off while the idle loop is being captured (every frame is posed exactly at its phase).
     var throttle = true
+    /// The screen's avatar rate (ThreePORigHost): the steady idle poses at 20 Hz on 60 Hz screens, every refresh at 120.
+    var rate: AvatarFrameRate = .fps60
     private var lastApply = -1.0
     private var level = 0.0
     /// The idle loop with nothing in flight: no blend, nothing queued, no stream (what the parked playback can stand in for).
@@ -170,10 +172,11 @@ struct ThreePORigView: NSViewRepresentable {
 }
 
 /// The rig slot. RealityKit's ARView renders every display frame while it is in a window (an empty, untouched scene
-/// costs the same), so a steady idle droid parks it: one idle pass of the live rig is captured (20 fps, 50 frames,
-/// once per launch and size), the ARView leaves the window and a layer animation plays those frames in phase with
-/// the rig's clock (Core Animation, ~no app CPU). Any change re-attaches the ARView at once; the parked frame stays
-/// over it until the rig has drawn, so the switch shows no gap.
+/// costs the same), so a steady idle droid parks it: one idle pass of the live rig is captured (20 fps, 50 frames on a
+/// 60 Hz screen; 120 fps, 300 frames on a ≥ 120 Hz one; once per launch, size and rate), the ARView leaves the window
+/// and a layer animation plays those frames in phase with the rig's clock (Core Animation, ~no app CPU). Any change
+/// re-attaches the ARView at once; the parked frame stays over it until the rig has drawn, so the switch shows no gap.
+/// The ARView follows its screen's refresh itself (120 on ProMotion); a screen change re-chooses the rate and unparks.
 @available(macOS 15.0, *)
 final class ThreePORigHost: NSView {
     let ar: ThreePORigARView
@@ -183,6 +186,9 @@ final class ThreePORigHost: NSView {
     private var snapping = false
     private var lastBin = 0
     private var reveal = 0                                         // rig frames to wait before dropping the parked frame
+    private(set) var rate: AvatarFrameRate = .fps60
+    private var screenObs: NSObjectProtocol?
+    private var announced = false
     @MainActor static var cache: [Int: CGImage] = [:]
     @MainActor static var cacheKey = ""
     @MainActor static var capturePasses = 0
@@ -213,19 +219,50 @@ final class ThreePORigHost: NSView {
         ar.driver.update(signals: s, now: now)
     }
 
-    func tearDown() { overlay.layer?.removeAllAnimations(); if parked { addSubview(ar) }; ar.tearDown() }
+    func tearDown() {
+        if let o = screenObs { NotificationCenter.default.removeObserver(o); screenObs = nil }
+        overlay.layer?.removeAllAnimations(); if parked { addSubview(ar) }; ar.tearDown()
+    }
 
-    private var key: String { "\(Int(bounds.width))x\(Int(bounds.height))@\(window?.backingScaleFactor ?? 2)" }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard let w = window else { return }                        // parked: the host stays in the window, the ARView leaves
+        if screenObs == nil {
+            screenObs = NotificationCenter.default.addObserver(forName: NSWindow.didChangeScreenNotification, object: w, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.screenChanged() }
+            }
+        }
+        screenChanged()
+    }
+
+    /// The rig's rate follows the window's screen; a change unparks (the capture is per rate) and re-settles.
+    private func screenChanged() {
+        let r = ThreePOAssets.rate(for: window?.screen)
+        let first = !announced
+        announced = true
+        guard r != rate else {
+            if first { ThreePOAssets.log?("3po avatar fps=\(r.rawValue) screen_max=\(window?.screen?.maximumFramesPerSecond ?? 0) tier=rig") }
+            return
+        }
+        rate = r
+        ar.driver.rate = r
+        unpark()
+        settledSince = CACurrentMediaTime()
+        ThreePOAssets.log?("3po avatar fps=\(r.rawValue) screen_max=\(window?.screen?.maximumFramesPerSecond ?? 0) tier=rig")
+    }
+
+    private var key: String { "\(Int(bounds.width))x\(Int(bounds.height))@\(window?.backingScaleFactor ?? 2)/\(rate.rawValue)" }
 
     private func ticked(_ now: Double) {
         let d = ar.driver
         if reveal > 0 { reveal -= 1; if reveal == 0 { overlay.isHidden = true; overlay.layer?.removeAllAnimations() } }
         guard d.isSteadyIdle else { settledSince = now; d.throttle = true; return }
         if Self.cacheKey != key { Self.cache = [:]; Self.cacheKey = key; Self.capturePasses = 0 }
-        let complete = Self.cache.count == AvatarIdleCache.bins
-        d.throttle = complete || Self.capturePasses > AvatarIdleCache.maxPasses
-        if !complete, Self.capturePasses <= AvatarIdleCache.maxPasses, !snapping, bounds.width > 0 {
-            let b = AvatarIdleCache.bin(local: d.timeline.local(now))
+        let bins = AvatarIdleCache.bins(rate), passes = AvatarIdleCache.maxPasses(rate)
+        let complete = Self.cache.count == bins
+        d.throttle = complete || Self.capturePasses > passes
+        if !complete, Self.capturePasses <= passes, !snapping, bounds.width > 0 {
+            let b = AvatarIdleCache.bin(local: d.timeline.local(now), rate: rate)
             if b < lastBin { Self.capturePasses += 1 }               // wrapped: one more idle pass
             lastBin = b
             if Self.cache[b] == nil {
@@ -236,7 +273,7 @@ final class ThreePORigHost: NSView {
                         self?.snapping = false
                         guard Self.cacheKey == k, let cg = img?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
                         Self.cache[b] = cg
-                        if Self.cache.count == AvatarIdleCache.bins { ThreePOAssets.log?("3po rig idle captured frames=\(AvatarIdleCache.bins) size=\(k)") }
+                        if Self.cache.count == bins { ThreePOAssets.log?("3po rig idle captured frames=\(bins) size=\(k)") }
                     }
                 }
             }
@@ -246,8 +283,9 @@ final class ThreePORigHost: NSView {
 
     private func park(_ now: Double) {
         guard !parked, let l = overlay.layer else { return }
-        let frames = (0..<AvatarIdleCache.bins).compactMap { Self.cache[$0] }
-        guard frames.count == AvatarIdleCache.bins else { return }
+        let bins = AvatarIdleCache.bins(rate)
+        let frames = (0..<bins).compactMap { Self.cache[$0] }
+        guard frames.count == bins else { return }
         let a = CAKeyframeAnimation(keyPath: "contents")
         a.values = frames
         a.calculationMode = .discrete
@@ -256,7 +294,7 @@ final class ThreePORigHost: NSView {
         a.beginTime = l.convertTime(now, from: nil) - ar.driver.timeline.local(now)   // in phase with the rig's clock
         a.isRemovedOnCompletion = false
         CATransaction.begin(); CATransaction.setDisableActions(true)
-        l.contents = frames[AvatarIdleCache.bin(local: ar.driver.timeline.local(now))]
+        l.contents = frames[AvatarIdleCache.bin(local: ar.driver.timeline.local(now), rate: rate)]
         l.add(a, forKey: "idle")
         overlay.isHidden = false
         reveal = 0

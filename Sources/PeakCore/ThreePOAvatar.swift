@@ -192,19 +192,40 @@ public struct AvatarCrossfade: Equatable, Sendable {
     }
 }
 
+/// The frame rate the 3PO avatar renders at on the screen Peak is on. 60 is the default and the fallback; 120 only
+/// when that screen reports ≥ 120 Hz (NSScreen.maximumFramesPerSecond: a ProMotion built-in with the lid open) and the
+/// bundle carries a complete 120 fps set (BOB Motion v1.1 add-on, fps120/). Re-chosen whenever Peak changes screens.
+public enum AvatarFrameRate: Int, Sendable, CaseIterable {
+    case fps60 = 60, fps120 = 120
+    public var fps: Double { Double(rawValue) }
+    /// `screenMaxFPS`: the screen's maximumFramesPerSecond (nil: no screen yet). `has120`: a complete 120 fps set loaded.
+    /// `override`: FORCEIQ_PEAK_3PO_FPS; "60" pins 60 (a kill switch). Nothing ever picks 120 on a screen below 120 Hz.
+    public static func choose(screenMaxFPS: Int?, has120: Bool, override: String? = nil) -> AvatarFrameRate {
+        if override?.trimmingCharacters(in: .whitespaces) == "60" { return .fps60 }
+        guard has120, let hz = screenMaxFPS, hz >= 120 else { return .fps60 }
+        return .fps120
+    }
+}
+
 /// The rig's parked idle: RealityKit draws every display frame while its view is in a window, so a steady idle
-/// rig plays a captured pass of itself (20 fps) and leaves the window until something changes.
+/// rig plays a captured pass of itself and leaves the window until something changes. 60 Hz screens: 20 fps (50 frames,
+/// the slow sway reads the same at 32 pt); 120 Hz screens: the full 120 (300 frames, one per ProMotion refresh).
 public enum AvatarIdleCache {
     public static let hz = 20.0
-    public static var bins: Int { Int(((ThreePOCurves.loopSeconds[.idle] ?? 2.5) * hz).rounded()) }
+    public static var bins: Int { bins(.fps60) }
     /// Give up capturing after this many idle passes (the rig then simply stays live, throttled).
     public static let maxPasses = 3
     /// Idle this long with nothing changing before the rig parks.
     public static let settle = 0.5
-    public static func bin(local t: Double) -> Int {
+    public static func hz(_ r: AvatarFrameRate) -> Double { r == .fps120 ? 120 : hz }
+    public static func bins(_ r: AvatarFrameRate) -> Int { Int(((ThreePOCurves.loopSeconds[.idle] ?? 2.5) * hz(r)).rounded()) }
+    /// A 120 Hz pass needs a snapshot on every refresh to fill in one go; give it as many seconds of tries as 60 Hz gets.
+    public static func maxPasses(_ r: AvatarFrameRate) -> Int { r == .fps120 ? maxPasses * 4 : maxPasses }
+    public static func bin(local t: Double) -> Int { bin(local: t, rate: .fps60) }
+    public static func bin(local t: Double, rate r: AvatarFrameRate) -> Int {
         let T = ThreePOCurves.loopSeconds[.idle] ?? 2.5
         let u = t.truncatingRemainder(dividingBy: T)
-        return min(bins - 1, max(0, Int(((u < 0 ? u + T : u) * hz).rounded(.down))))
+        return min(bins(r) - 1, max(0, Int(((u < 0 ? u + T : u) * hz(r)).rounded(.down))))
     }
     public static func shouldPark(steadyIdle: Bool, complete: Bool, settledFor: Double) -> Bool {
         steadyIdle && complete && settledFor >= settle
@@ -234,7 +255,9 @@ public enum AvatarPolicy {
 
 public enum AvatarFormat: String, Sendable { case hevcAlpha = "hevc_alpha", h264Black = "h264_black" }
 
-/// BOB Motion's ForceIQ-Peak-3PO-v1 MANIFEST.json, as shipped: frames/fps per clip and the MD5 of every file.
+/// BOB Motion's ForceIQ-Peak-3PO MANIFEST.json (v1.1, as shipped): frames/fps per clip and the MD5 of every file.
+/// rate .fps60 reads the v1 pack (top-level states/transitions); .fps120 reads the v1.1 add-on (the "fps120" block:
+/// same clips and durations, frame counts doubled, files under fps120/). A manifest without that block: no 120 pack.
 public struct ThreePOPack: Sendable {
     public let name: String
     public let version: String
@@ -245,34 +268,43 @@ public struct ThreePOPack: Sendable {
     /// Sizes whose files for `format` are all present under `root` (what this bundle actually carries).
     public let sizes: [Int]
     public let format: AvatarFormat
+    public let rate: AvatarFrameRate
 
-    public static func load(manifest data: Data, root: URL?, format: AvatarFormat = .hevcAlpha) -> ThreePOPack? {
-        guard let o = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
-              let states = o["states"] as? [String: [String: Any]], let trans = o["transitions"] as? [String: [String: Any]] else { return nil }
+    public static func load(manifest data: Data, root: URL?, format: AvatarFormat = .hevcAlpha, rate: AvatarFrameRate = .fps60) -> ThreePOPack? {
+        guard let top = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return nil }
+        let o: [String: Any]
+        if rate == .fps120 { guard let b = top["fps120"] as? [String: Any] else { return nil }; o = b } else { o = top }
+        guard let states = o["states"] as? [String: [String: Any]], let trans = o["transitions"] as? [String: [String: Any]],
+              let topStates = top["states"] as? [String: [String: Any]] else { return nil }
         let fps = (o["fps"] as? Double) ?? Double((o["fps"] as? Int) ?? 0)
-        guard fps > 0 else { return nil }
+        guard fps == rate.fps else { return nil }
         var frames: [String: Int] = [:], loops: Set<String> = []
-        for (k, v) in states { if let f = v["frames"] as? Int { frames[k] = f; if (v["loop"] as? Bool) == true { loops.insert(k) } } }
+        for (k, v) in states {
+            guard let f = v["frames"] as? Int else { continue }
+            frames[k] = f
+            if (topStates[k]?["loop"] as? Bool) == true { loops.insert(k) }        // the add-on keeps v1's loop flags
+        }
         for (k, v) in trans { if let f = v["frames"] as? Int { frames[k] = f } }
         var md5: [String: String] = [:], px: Set<Int> = []
-        for f in (o["files"] as? [[String: Any]]) ?? [] {
+        for f in (top["files"] as? [[String: Any]]) ?? [] {
             guard let p = f["path"] as? String, let m = f["md5"] as? String else { continue }
             md5[p] = m
-            if (f["kind"] as? String) == format.rawValue, let x = f["px"] as? Int { px.insert(x) }
+            if (f["kind"] as? String) == format.rawValue, p.hasPrefix(prefix(rate)), let x = f["px"] as? Int { px.insert(x) }
         }
         let names = Array(frames.keys)
         var sizes = px.sorted()
         if let root {
-            sizes = sizes.filter { x in names.allSatisfy { FileManager.default.fileExists(atPath: root.appendingPathComponent(path(clip: $0, px: x, format: format)).path) } }
+            sizes = sizes.filter { x in names.allSatisfy { FileManager.default.fileExists(atPath: root.appendingPathComponent(path(clip: $0, px: x, format: format, rate: rate)).path) } }
         }
-        return ThreePOPack(name: (o["name"] as? String) ?? "", version: (o["version"] as? String) ?? "", fps: fps, frames: frames,
-                           loops: loops, md5: md5, sizes: sizes, format: format)
+        return ThreePOPack(name: (top["name"] as? String) ?? "", version: (top["version"] as? String) ?? "", fps: fps, frames: frames,
+                           loops: loops, md5: md5, sizes: sizes, format: format, rate: rate)
     }
 
-    public static func path(clip: String, px: Int, format: AvatarFormat) -> String {
-        format == .hevcAlpha ? "hevc_alpha/\(px)/3po_\(clip)_\(px)_hevc_alpha.mov" : "h264_black/\(px)/3po_\(clip)_\(px)_black.mp4"
+    private static func prefix(_ r: AvatarFrameRate) -> String { r == .fps120 ? "fps120/" : "" }
+    public static func path(clip: String, px: Int, format: AvatarFormat, rate: AvatarFrameRate = .fps60) -> String {
+        prefix(rate) + (format == .hevcAlpha ? "hevc_alpha/\(px)/3po_\(clip)_\(px)_hevc_alpha.mov" : "h264_black/\(px)/3po_\(clip)_\(px)_black.mp4")
     }
-    public func path(_ c: AvatarClip, px: Int) -> String { Self.path(clip: c.name, px: px, format: format) }
+    public func path(_ c: AvatarClip, px: Int) -> String { Self.path(clip: c.name, px: px, format: format, rate: rate) }
     /// The still Peak shows under Reduce Motion and beside each reply: the neutral talking sprite (talkAmp 0).
     public static func stillPath(px: Int) -> String { "sprites/\(px)/talking/3po_talk_amp_00_\(px).png" }
 

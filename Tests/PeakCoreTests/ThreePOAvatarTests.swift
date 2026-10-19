@@ -228,14 +228,17 @@ final class ThreePOAvatarBundleTests: XCTestCase {
     var manifest: Data { try! Data(contentsOf: threePODir.appendingPathComponent("MANIFEST.json")) }
 
     func testManifestIsTheShippedPack() {
-        XCTAssertEqual(md5Hex(manifest), "bf67596170da1025137b8fda5485369d")
+        XCTAssertEqual(md5Hex(manifest), "cbab0d470436659e8157d57195d34e01")                // v1.1 (adds fps120/)
+        let o = try! JSONSerialization.jsonObject(with: manifest) as! [String: Any]
+        XCTAssertEqual(o["version"] as? String, "v1.1")
+        XCTAssertEqual(o["v1_manifest_md5"] as? String, "bf67596170da1025137b8fda5485369d")  // the v1 pack, unchanged
         let p = ThreePOPack.load(manifest: manifest, root: nil)!
         XCTAssertEqual(p.fps, 60)
         XCTAssertEqual(p.frames["idle"], 150)
         for s in ["listening", "thinking", "talking", "alert"] { XCTAssertEqual(p.frames[s], 120, s); XCTAssertEqual(p.frames["idle_to_\(s)"], 20); XCTAssertEqual(p.frames["\(s)_to_idle"], 20) }
         XCTAssertEqual(p.frames.count, 13)
         XCTAssertTrue(p.isComplete)
-        XCTAssertEqual(p.md5.count, 395)
+        XCTAssertEqual(p.md5.count, 633)                                                // v1's 395 + the add-on's 238
         XCTAssertEqual(p.sizes, [64, 96, 128, 192, 512, 768])                          // in the pack
     }
 
@@ -251,9 +254,10 @@ final class ThreePOAvatarBundleTests: XCTestCase {
             shipped.append(String(u.path.dropFirst(threePODir.path.count + 1)))
         }
         let expected = Set(["MANIFEST.json", "rig/3po.usdz", ThreePOPack.stillPath(px: 64)]
-                           + p.frames.keys.map { ThreePOPack.path(clip: $0, px: 64, format: .hevcAlpha) })
+                           + p.frames.keys.map { ThreePOPack.path(clip: $0, px: 64, format: .hevcAlpha) }
+                           + p.frames.keys.map { ThreePOPack.path(clip: $0, px: 64, format: .hevcAlpha, rate: .fps120) })
         XCTAssertEqual(Set(shipped), expected)
-        XCTAssertEqual(shipped.count, 16)
+        XCTAssertEqual(shipped.count, 29)                                               // + the 13 fps120 clips
         for rel in expected where rel != "MANIFEST.json" {
             XCTAssertEqual(md5Hex(try Data(contentsOf: threePODir.appendingPathComponent(rel))), p.md5[rel], rel)
         }

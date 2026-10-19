@@ -4,7 +4,8 @@ import PeakCore
 import SwiftUI
 
 // ───────────────────────────── 3PO avatar: BOB Motion ForceIQ-Peak-3PO-v1 (Resources/threepo) ─────────────────────────────
-/// Assets: the bundled pack (Resources/threepo: MANIFEST.json as shipped, hevc_alpha 64 px, the neutral still), or
+/// Assets: the bundled pack (Resources/threepo: MANIFEST.json v1.1 as shipped, hevc_alpha 64 px at 60 fps and, from the
+/// v1.1 add-on, at 120 fps under fps120/, the neutral still), or
 /// FORCEIQ_PEAK_3PO_DIR=<an unpacked pack root>. hevc_alpha (real alpha, proven in AVPlayerLayer on macOS 26.6.2);
 /// h264_black only if a pack root has no complete hevc_alpha set. Nothing found: the static droid mark.
 /// The live rig (Resources/threepo/rig/3po.usdz) comes first when it loads (ThreePORig.swift).
@@ -26,9 +27,24 @@ import SwiftUI
         }
         return nil
     }()
-    static func url(_ c: AvatarClip, px: Int) -> URL? {
-        guard let root, let pack else { return nil }
-        return root.appendingPathComponent(pack.path(c, px: px))
+    /// The v1.1 120 fps add-on: the same format, every clip the 60 fps pack has, and at least one size on disk.
+    static let pack120: ThreePOPack? = {
+        guard let r = root, let p60 = pack, let d = try? Data(contentsOf: r.appendingPathComponent("MANIFEST.json")),
+              let p = ThreePOPack.load(manifest: d, root: r, format: p60.format, rate: .fps120),
+              p.isComplete, Set(p.frames.keys) == Set(p60.frames.keys), !p.sizes.isEmpty else { return nil }
+        return p
+    }()
+    /// FORCEIQ_PEAK_3PO_FPS=60 pins the 60 fps pack and rig rate everywhere.
+    static let fpsOverride = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_3PO_FPS"]
+    /// The rate for the screen Peak is on (AvatarFrameRate.choose: 120 only on a ≥ 120 Hz screen, else 60).
+    static func rate(for screen: NSScreen?, px: Int? = nil) -> AvatarFrameRate {
+        let has120 = pack120.map { p in px.map { p.sizes.contains($0) } ?? true } ?? false
+        return AvatarFrameRate.choose(screenMaxFPS: screen?.maximumFramesPerSecond, has120: has120, override: fpsOverride)
+    }
+    static func pack(_ r: AvatarFrameRate) -> ThreePOPack? { r == .fps120 ? (pack120 ?? pack) : pack }
+    static func url(_ c: AvatarClip, px: Int, rate: AvatarFrameRate = .fps60) -> URL? {
+        guard let root, let p = pack(rate) else { return nil }
+        return root.appendingPathComponent(p.path(c, px: px))
     }
     static let still: NSImage? = {
         guard let root, let pack else { return nil }
@@ -107,8 +123,13 @@ final class ThreePOClipItem: AVPlayerItem {
 /// freezes into an overlay, the queue is replaced under it with the pack's 20-frame transitions, and once the first
 /// new frame is up the overlay fades out (AvatarCrossfade, 130 ms, ease-out). The alert flash settling back to idle
 /// is the one change queued behind the clip on screen. Paused while not live; torn down when the chat unmounts.
+/// Frame rate: the 120 fps clips only while the window is on a ≥ 120 Hz screen (ThreePOAssets.rate); a screen change
+/// re-queues everything behind the clip on screen at the new rate (same names and durations), so the swap is gapless.
 final class ThreePOPlayerView: NSView {
     private let px: Int
+    private(set) var rate: AvatarFrameRate = .fps60
+    private var screenObs: NSObjectProtocol?
+    private var announced = false
     private let playerLayer = AVPlayerLayer()
     private let snapLayer = CALayer()                              // the frozen frame a cut crossfades from
     private let player = AVQueuePlayer()
@@ -161,7 +182,36 @@ final class ThreePOPlayerView: NSView {
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        if let o = screenObs { NotificationCenter.default.removeObserver(o); screenObs = nil }
+        if let w = window {
+            screenObs = NotificationCenter.default.addObserver(forName: NSWindow.didChangeScreenNotification, object: w, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.screenChanged() }
+            }
+            screenChanged()
+        }
         if window == nil { player.pause(); stopLink() } else if live { player.play() }
+    }
+
+    /// Re-choose the rate for the window's screen. Changed: the queue behind the clip on screen is rebuilt at the new
+    /// rate (nothing played yet: the whole queue), so the next clip boundary is the switch and nothing is cut.
+    private func screenChanged() {
+        let r = ThreePOAssets.rate(for: window?.screen, px: px)
+        let first = !announced
+        announced = true
+        guard r != rate else {
+            if first { ThreePOAssets.log?("3po avatar fps=\(r.rawValue) screen_max=\(window?.screen?.maximumFramesPerSecond ?? 0) tier=loops") }
+            return
+        }
+        rate = r
+        let cur = player.currentItem
+        let fresh = (cur?.currentTime().seconds ?? 0) < 0.001 && player.rate == 0
+        let keep: AVPlayerItem? = fresh ? nil : cur
+        let clips = player.items().filter { $0 !== keep }.compactMap { ($0 as? ThreePOClipItem)?.clip }
+        for it in player.items() where it !== keep { player.remove(it) }
+        var after = keep
+        for c in clips { if let it = item(c) { player.insert(it, after: after); after = it } }
+        topUp()
+        ThreePOAssets.log?("3po avatar fps=\(r.rawValue) screen_max=\(window?.screen?.maximumFramesPerSecond ?? 0) tier=loops")
     }
 
     func update(signals s: AvatarSignals, live l: Bool) {
@@ -177,6 +227,7 @@ final class ThreePOPlayerView: NSView {
 
     func tearDown() {
         itemObs = nil
+        if let o = screenObs { NotificationCenter.default.removeObserver(o); screenObs = nil }
         stopLink()
         player.pause()
         player.removeAllItems()
@@ -199,7 +250,7 @@ final class ThreePOPlayerView: NSView {
         while player.items().count < 3, let it = item(.loop(loopState)) { player.insert(it, after: player.items().last) }
     }
     private func item(_ c: AvatarClip) -> ThreePOClipItem? {
-        guard let u = ThreePOAssets.url(c, px: px) else { return nil }
+        guard let u = ThreePOAssets.url(c, px: px, rate: rate) else { return nil }
         let it = ThreePOClipItem(url: u); it.clip = c
         it.add(AVPlayerItemVideoOutput(pixelBufferAttributes: Self.outputAttrs))
         return it
