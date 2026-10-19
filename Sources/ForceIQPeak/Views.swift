@@ -439,8 +439,8 @@ struct CardList: View {
                 if !cards.configured {
                     Text("No coach profile on this Mac yet (overlay peak section). Peak shows nothing until it has one.")
                         .font(.system(size: 13)).foregroundStyle(Color.peakGold)
-                } else if cards.cards.isEmpty {
-                    Text("All clear. Nothing waiting for you.").font(.system(size: 13)).foregroundStyle(Color.white)
+                } else {
+                    HomeStatusRows(signIn: cards.signIn, empty: cards.cards.isEmpty)
                 }
                 ForEach(cards.cards) { c in CardRow(card: c).onTapGesture { Haptic.tick(); cards.tap(c) } }
                 if cards.pipelineHidden > 0 {

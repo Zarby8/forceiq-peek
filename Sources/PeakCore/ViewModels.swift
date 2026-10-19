@@ -115,9 +115,16 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     let performer: CardActionPerforming
     weak var logger: PeakLogging?
 
-    public init(performer: CardActionPerforming, logger: PeakLogging? = nil) { self.performer = performer; self.logger = logger }
+    /// "Command sign-in expired, tap to sign in" (not a card: it names no client). Its tap only asks GOAT.
+    public let signIn: CommandSignInModel
+
+    public init(performer: CardActionPerforming, logger: PeakLogging? = nil, signInTransport: CommandSignInTransport? = nil) {
+        self.performer = performer; self.logger = logger
+        self.signIn = CommandSignInModel(transport: signInTransport, logger: logger)
+    }
 
     public func update(_ s: EngineSnapshot, profile: CoachProfile) {
+        signIn.update(profile.configured ? s.commandSignIn : nil)
         let r = ModuleRegistry.build(s, profile)
         configured = profile.configured
         cards = r.cards; unnamed = r.unnamed; pipelineHidden = r.pipelineHidden

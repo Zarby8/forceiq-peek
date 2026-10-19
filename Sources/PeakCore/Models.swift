@@ -97,6 +97,7 @@ public struct FamilyRow: Equatable, Sendable {
 public struct EngineSnapshot: Equatable, Sendable {
     public var meeting: MeetingRow?
     public var meetingError: String?
+    public var commandSignIn: CommandSignInNotice? = nil   // Command's dashboard sign-in expired (engine auth: "expired")
     public var fixes: [FixRow] = []
     public var fixesRunning: Int = 0
     public var downloadsRunning: Int = 0

@@ -261,6 +261,22 @@ struct SkillCardView: View {
         write(AnyView(chat), "3po-skill-card.png", dir: dir, log: log)
     }
 
+    /// FORCEIQ_PEAK_SNAPSHOT_SIGNIN=1: read the feed once through the normal engine client, render the Command sign-in
+    /// notice, tap it (that only ASKS GOAT for its Sign in to Command confirm; nothing runs) and render the confirm.
+    /// It never taps Sign in to Command.
+    static var signIn: Bool { ProcessInfo.processInfo.environment["FORCEIQ_PEAK_SNAPSHOT_SIGNIN"] == "1" }
+
+    static func runSignIn(cards: CardStackViewModel, engine: EngineClient, profile: CoachProfile, log: (String) -> Void) async {
+        guard let dir else { return }
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let s = await engine.snapshot()
+        cards.update(s, profile: profile)
+        write(AnyView(HomeStatusRows(signIn: cards.signIn, empty: cards.cards.isEmpty)), "command-signin-notice.png", dir: dir, log: log)
+        await cards.signIn.tap()
+        write(AnyView(HomeStatusRows(signIn: cards.signIn, empty: cards.cards.isEmpty)), "command-signin-confirm.png", dir: dir, log: log)
+        log("snapshot signin phase=\(cards.signIn.phase == .notice ? "notice" : "after-tap") sent=\(cards.signIn.sent.map { $0.1 ? "confirm" : "ask" })")
+    }
+
     static func write(_ v: AnyView, _ name: String, dir: URL, log: (String) -> Void) {
         let r = ImageRenderer(content: v.frame(width: 560).padding(16).background(Color.black).environment(\.colorScheme, .dark))
         r.scale = 2

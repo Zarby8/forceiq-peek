@@ -182,7 +182,7 @@ final class EngineClient: ThreePOTransport, Sendable {
         async let f = get("/api/family-delivery-alerts")
         var s = EngineSnapshot()
         let (mc, md) = await m
-        if mc == 200 { (s.meeting, s.meetingError) = EngineParse.meeting(md) } else {
+        if mc == 200 { (s.meeting, s.meetingError) = EngineParse.meeting(md); s.commandSignIn = EngineParse.commandSignIn(md) } else {
             s.meetingError = mc == 404 ? "This Mac's GOAT doesn't have the Peak meeting feed yet." : "GOAT didn't answer for the next meeting."
         }
         let (lc, ld) = await l
@@ -191,7 +191,8 @@ final class EngineClient: ThreePOTransport, Sendable {
         let (ac, ad) = await a
         if ac == 200 { s.approvals = EngineParse.approvals(ad) } else { s.errors.append("approvals") }
         let (fc, fd) = await f
-        if fc == 200 { let x = EngineParse.family(fd); s.familyEnabled = x.enabled; s.family = x.rows }
+        if fc == 200 { let x = EngineParse.family(fd); s.familyEnabled = x.enabled; s.family = x.rows
+                       if s.commandSignIn == nil { s.commandSignIn = EngineParse.commandSignIn(fd) } }
         return s
     }
 }
@@ -273,5 +274,15 @@ final class EngineClient: ThreePOTransport, Sendable {
             guard l.lowercased().hasPrefix("https://") else { return "No valid link to copy." }
             copy(l); return "Family link copied. Nothing was sent."
         }
+    }
+}
+
+// ───────────────────────────── Command sign-in (GOAT's existing flow via /api/act) ─────────────────────────────
+extension EngineClient: CommandSignInTransport {
+    /// POST /api/act {name, args: {}, confirm}. Only CommandSignInModel calls this, only for command_signin.
+    func act(_ name: String, confirm: Bool) async -> (Int, Data) {
+        guard name == CommandSignInNotice.act else { return (0, Data()) }
+        let body: [String: Any] = ["name": name, "args": [String: String](), "confirm": confirm]
+        return await post("/api/act", (try? JSONSerialization.data(withJSONObject: body)) ?? Data())
     }
 }

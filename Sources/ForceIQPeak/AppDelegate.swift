@@ -134,7 +134,7 @@ enum Screens {
         ThreePOAssets.demoReduceMotion = demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_REDUCE_MOTION"] == "1"
         controller = PeakController(prefs: prefs, profile: p, hotkey: KeyboardShortcutsHotkey(name: PeakHotkeyName.make(p)), logger: log)
         performer = Performer(engine: engine, demo: demo)
-        cards = CardStackViewModel(performer: performer, logger: log)
+        cards = CardStackViewModel(performer: performer, logger: log, signInTransport: demo ? nil : engine)
         threePO = ThreePOStore(transport: demo ? DemoThreePOTransport(knobs: demoKnobs) : engine, session: "peak-\(p.coachID)", logger: log)
         threePO.onCopy = { [weak self] s in self?.performer.copy(s) }
         threePO.onOpenApp = { [weak self] name in
@@ -177,7 +177,11 @@ enum Screens {
         if idleTour { threePOIdleTour() }
         if PeakSnapshot.dir != nil {                       // visual proof: render the memory pane + a skill card, then quit
             Task { @MainActor in
-                await PeakSnapshot.run(store: threePO) { [weak self] e in self?.log.log(e) }
+                if PeakSnapshot.signIn {
+                    await PeakSnapshot.runSignIn(cards: cards, engine: engine, profile: profile) { [weak self] e in self?.log.log(e) }
+                } else {
+                    await PeakSnapshot.run(store: threePO) { [weak self] e in self?.log.log(e) }
+                }
                 NSApp.terminate(nil)
             }
         }
