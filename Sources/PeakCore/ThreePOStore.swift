@@ -42,6 +42,12 @@ public enum ProposalPhase: Equatable, Sendable {
     /// Run on a command card (an explicit tap): opens Command's UI / brings FLOW forward; returns the line to show.
     public var onCommandRun: ((ProposalCard) -> String)?
     var pendingPicks: [String: ClientCommand] = [:]
+    /// Command meeting link (flag on): a pick card's button labels → the directory client each one stands for.
+    var pendingLinkPicks: [String: (ClientCommand, [String: DirectoryClient])] = [:]
+    /// This coach's Command directory, in memory only, briefly (DirectoryCache). Read only with the flag on.
+    public let directory = DirectoryCache()
+    /// The engine said the Command sign-in is dead: surface the existing sign-in row (Peak's home). Never a retry loop.
+    public var onCommandSignIn: ((CommandSignInNotice) -> Void)?
     var localSeq = 0
     let transport: ThreePOTransport
     let session: String
@@ -62,10 +68,24 @@ public enum ProposalPhase: Equatable, Sendable {
         guard canSend else { return }
         draft = ""
         if let ctx = commandContext?(), let cmd = ClientCommands.parse(text) {
-            local(cmd, ctx, said: text)
+            if cmd.kind == .startMeeting && ctx.usesMeetingLink {
+                await meetingLink(cmd, ctx, said: text)
+            } else {
+                local(cmd, ctx, said: text)
+            }
             return
         }
         await turn(text)
+    }
+
+    /// forceiq-peak://ask?q=… lands here, whether the chat is open or collapsed: the text goes in the field and the Chat
+    /// pane shows. NEVER sent: only an explicit tap (Return / the send button) calls send(). Logs the event name only.
+    public func prefill(_ text: String) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        draft = t
+        if pane != .chat { pane = .chat }
+        logger?.log("3po prefill")
     }
 
     /// The dictated words, handed over exactly like a typed message (draft → send). If 3PO is mid-reply, they wait in the
@@ -88,8 +108,63 @@ public enum ProposalPhase: Equatable, Sendable {
         logger?.log("3po command kind=\(cmd.kind.rawValue) card=\(r.card.origin.rawValue) local=1")
     }
 
+    /// "Start a meeting with <client>" with the Command meeting link on: resolve the name in this coach's Command
+    /// directory (one GET through the engine unless a fresh copy is in memory). Exact + unique → the link card; several,
+    /// partial or fuzzy → a pick card; none → not found; a directory problem → one plain card. Nothing opens here: only an
+    /// explicit Run tap on the link card does. Logs carry counts and the outcome only (never a name or an id).
+    func meetingLink(_ cmd: ClientCommand, _ ctx: ClientCommandContext, said: String?) async {
+        let (dir, cached) = await directory.load(transport)
+        let id = nextLocalID()
+        guard case .clients(let clients, let dropped) = dir, !clients.isEmpty else {
+            let c = ClientCommands.directoryProblemCard(cmd, dir, id: id)
+            transcript.local(user: said, reply: c.reason, cards: [c])
+            phases[c.id] = .described
+            if case .signedOut(let n) = dir { onCommandSignIn?(n) }
+            logger?.log("3po meeting-link directory=\(dir.outcome) cached=\(cached ? 1 : 0)")
+            return
+        }
+        let m = DirectoryMatcher.match(cmd.spokenClient, in: clients)
+        logger?.log("3po meeting-link match=\(m.outcome) clients=\(clients.count) dropped=\(dropped) candidates=\(Self.count(m)) cached=\(cached ? 1 : 0)")
+        switch m {
+        case .unique(let client):
+            if let c = ClientCommands.meetingLinkCard(cmd, client: client, ctx, id: id, exact: true) {
+                transcript.local(user: said, reply: "Here's what that does for \(client.displayName). Nothing opens until you tap Run.", cards: [c])
+                phases[c.id] = .described
+            } else {
+                let c = ClientCommands.notFoundCard(cmd, id: id)
+                transcript.local(user: said, reply: c.reason, cards: [c]); phases[c.id] = .described
+            }
+        case .ambiguous(let list):
+            let labels = DirectoryMatcher.labels(list)
+            let c = ClientCommands.meetingLinkPickCard(cmd, labels: labels.map(\.0), id: id)
+            transcript.local(user: said, reply: list.count > 1 ? "More than one client could be \u{201C}\(cmd.spokenClient)\u{201D}. Which one?"
+                                                               : "Is this the client you meant? Pick to continue.", cards: [c])
+            phases[c.id] = .described
+            pendingLinkPicks[c.id] = (cmd, Dictionary(labels, uniquingKeysWith: { a, _ in a }))
+        case .none:
+            let c = ClientCommands.notFoundCard(cmd, id: id)
+            transcript.local(user: said, reply: c.reason, cards: [c])
+            phases[c.id] = .described
+        }
+    }
+
+    static func count(_ m: DirectoryMatch) -> Int {
+        switch m { case .unique: return 1; case .ambiguous(let l): return l.count; case .none: return 0 }
+    }
+
     /// A pick card's client tapped: the confirm card for that client (nothing runs).
     public func pickClient(_ id: String, _ client: String) {
+        if let pend = pendingLinkPicks[id] {
+            let (cmd, map) = pend
+            guard phases[id] == .described, let picked = map[client], let ctx = commandContext?() else { return }
+            pendingLinkPicks[id] = nil
+            phases[id] = .done("Picked \(picked.displayName).")
+            guard let c = ClientCommands.meetingLinkCard(cmd, client: picked, ctx, id: nextLocalID(), exact: false) else { return }
+            transcript.local(user: nil, reply: "Here's what that does for \(picked.displayName). Nothing opens until you tap Run.", cards: [c])
+            phases[c.id] = .described
+            logger?.log("3po meeting-link picked=1")
+            return
+        }
         guard let cmd = pendingPicks[id], let ctx = commandContext?(), phases[id] == .described else { return }
         pendingPicks[id] = nil
         phases[id] = .done("Picked \(client).")
@@ -220,7 +295,7 @@ public enum ProposalPhase: Equatable, Sendable {
 
     public func run(_ id: String) async {
         if let c = card(id), c.origin == .command {               // Peak's own command card: one explicit tap opens the UI
-            guard phases[id] == .described || isFailed(id) else { return }
+            guard !c.viewOnly, phases[id] == .described || isFailed(id) else { return }
             logger?.log("3po command run action=\(c.action)")
             phases[id] = .done(onCommandRun?(c) ?? "Nothing ran.")
             return
@@ -301,6 +376,9 @@ public struct DemoThreePOTransport: ThreePOTransport {
         if path == "/api/3po/memory" {
             return (200, Data(#"{"ok":true,"owner":"demo","facts":[{"id":"m_demo00000001","text":"Sample Skater's games are on Saturdays","client":"Sample Skater","clients":["Sample Skater"],"ts":"2026-10-19T02:30:00-04:00","forgotten":false},{"id":"m_demo00000002","text":"the NAS is slow on Monday mornings","client":null,"clients":[],"ts":"2026-10-18T09:00:00-04:00","forgotten":false},{"id":"m_demo00000003","text":"Sample Skater prefers early ice","client":"Sample Skater","clients":["Sample Skater"],"ts":"2026-10-12T09:00:00-04:00","forgotten":true,"forgotten_at":"2026-10-18T10:00:00-04:00"}]}"#.utf8))
         }
+        if path == DirectoryCache.path {            // the meeting-link smoke: a mocked Command directory, fake clients only
+            return (200, Data(DemoData.directoryJSON.utf8))
+        }
         if path.hasPrefix("/api/peak/shift-drop/status/") {
             let steps = ["waiting", "identified", "staged", "running", "succeeded"]
             let s = steps[min(knobs.statusReads, steps.count - 1)]; knobs.statusReads += 1
@@ -331,4 +409,10 @@ public struct DemoThreePOTransport: ThreePOTransport {
         }
         return (404, Data())
     }
+}
+
+public extension DemoData {
+    /// A mocked GET /api/peak/client-directory (generated UUIDs, obviously fake names). One row has a non-UUID id and is
+    /// dropped by the parser; one id has stray case / whitespace and is normalised.
+    static let directoryJSON = #"{"ok":true,"count":4,"dropped":0,"clients":[{"id":" 756D57AD-2DED-4D28-B704-EDFFF0137BC7 ","display_name":"Test Client Alpha"},{"id":"c8191fda-c7f4-410e-ad9e-e8d3fca3f17b","display_name":"Test Client Bravo"},{"id":"c56788b1-9a49-4633-aaf9-3d2054a225b3","display_name":"Test Client Charlie"},{"id":"client-42","display_name":"Test Client Delta"}]}"#
 }

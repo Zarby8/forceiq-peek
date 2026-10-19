@@ -126,7 +126,9 @@ final class VoiceLiveWordsTests: XCTestCase {
         XCTAssertEqual(line.segments.map(\.name), [false, true, false])
         XCTAssertTrue(line.segments.allSatisfy { !$0.final })
         XCTAssertTrue(VoiceLine(confirmed: "Open it", isFinal: true).segments.allSatisfy(\.final))
-        XCTAssertLessThan(VoiceLine.pendingOpacity, 1); XCTAssertGreaterThan(VoiceLine.pendingOpacity, 0.4)   // white, dimmed, never gray
+        // Pending words are never dimmed: the only pending cue is a gold caret, gone once the final pass lands.
+        XCTAssertTrue(line.pending); XCTAssertFalse(VoiceLine(confirmed: "Open it", isFinal: true).pending); XCTAssertFalse(VoiceLine(confirmed: "").pending)
+        XCTAssertEqual(VoiceLine.pendingCaretHex, Brand.goldHex); XCTAssertTrue(Brand.allowedTextHex.contains(VoiceLine.pendingCaretHex))
         XCTAssertEqual(VoiceLine(confirmed: "the cooperative", names: ["Cooper"]).segments.map(\.name), [false])   // not inside a word
     }
 }

@@ -270,12 +270,14 @@ struct PeakRootView: View {
                 if drops.active {
                     DropsView(drops: drops).transition(reduceMotion ? .identity : .asymmetric(insertion: .scale(scale: 0.94, anchor: .top), removal: .identity))
                 } else if showChat {
-                    ThreePOView(store: threePO, profile: controller.profile, prefill: controller.askText,
+                    ThreePOView(store: threePO, profile: controller.profile, askSeq: controller.askSeq,
                                 live: AvatarPolicy.live(visible: panel.visible, globallyVisible: controller.globallyVisible,
                                                         expanded: isExpanded, reduceMotion: reduceMotion), voice: voice)
                         .transition(.slideUpFull(reduceMotion))
                 } else if let ask = controller.askText {
-                    AskView(initial: ask, close: { controller.closeAsk() }).transition(.slideUpFull(reduceMotion))
+                    AskView(initial: ask, close: { controller.closeAsk() })
+                        .id(controller.askSeq)                       // a new link while open re-seeds the field
+                        .transition(.slideUpFull(reduceMotion))
                 } else if let card = cards.describedCard {
                     DescriptionView(card: card, cards: cards)
                         .transition(reduceMotion ? .identity : .asymmetric(insertion: .move(edge: .trailing), removal: .identity))
@@ -458,7 +460,7 @@ struct CardList: View {
                     Text("No coach profile on this Mac yet (overlay peak section). Peak shows nothing until it has one.")
                         .font(.system(size: 13)).foregroundStyle(Color.peakGold)
                 } else {
-                    HomeStatusRows(signIn: cards.signIn, empty: cards.cards.isEmpty)
+                    HomeStatusRows(signIn: cards.signIn, empty: cards.cards.isEmpty, settingsNotice: cards.settingsNotice)
                 }
                 // Each card rises in, staggered; approvals pop; a card that leaves collapses its height (StaggeredEntry,
                 // .cardCollapse). Nothing here runs a card: a tap only opens its description.

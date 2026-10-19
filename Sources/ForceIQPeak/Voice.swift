@@ -413,16 +413,18 @@ actor PeakDictation {
 }
 
 // ───────────────────────────── views ─────────────────────────────
-/// Confirmed words only: white at reduced opacity while pending, pure white when final; client names underlined in gold.
+/// Confirmed words only, pure white at full opacity whether pending or final; client names underlined in gold.
+/// Pending shows as a gold caret after the last word (never a dimmed or gray word).
 struct LiveWordsText: View {
     let line: VoiceLine
     var size: CGFloat = 13
     var body: some View {
-        line.segments.reduce(Text("")) { acc, s in
-            var t = Text(s.text).foregroundStyle(Color.white.opacity(s.final ? 1 : VoiceLine.pendingOpacity))
+        let words = line.segments.reduce(Text("")) { acc, s in
+            var t = Text(s.text).foregroundStyle(Color.white)
             if s.name { t = t.underline(true, color: .peakGold) }
             return acc + t
         }
+        return (line.pending ? words + Text(" " + VoiceLine.pendingCaret).foregroundStyle(Color.peakGold) : words)
         .font(.system(size: size, weight: .medium))
         .animation(.easeOut(duration: 0.12), value: line)
     }
@@ -436,7 +438,7 @@ struct MicButton: View {
         let on = voice.phase.isListening
         let busy = voice.phase == .finishing || voice.phase == .loading
         Button { Haptic.tick(); voice.toggle() } label: {
-            Image(systemName: on ? "mic.fill" : "mic")
+            Image(systemName: on ? "mic.fill" : busy ? "ellipsis" : "mic")
                 .font(.system(size: 13, weight: .bold))
                 .foregroundStyle(on ? Color.black : Color.white)
                 .frame(width: 30, height: 30)
@@ -448,7 +450,6 @@ struct MicButton: View {
                             .phaseAnimator([0.0, 1.0]) { v, p in v.scaleEffect(1 + 0.35 * p).opacity(1 - p) } animation: { _ in .easeOut(duration: 0.9) }
                     }
                 }
-                .opacity(busy ? 0.7 : 1)
         }
         .buttonStyle(.plain)
         .help(on ? "Stop (forceiq-peak://voice)" : "Talk to 3PO (forceiq-peak://voice)")

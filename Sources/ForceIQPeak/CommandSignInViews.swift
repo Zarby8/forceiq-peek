@@ -3,16 +3,37 @@ import PeakCore
 
 /// "Command sign-in expired, tap to sign in": pure white on black, gold outline, gold action. Tapping asks GOAT for
 /// its Sign in to Command confirm (nothing runs); only the Sign in to Command button on that confirm signs in.
-/// The top of the home list: the Command sign-in notice when the engine says so, else "All clear" when empty.
+/// The top of the home list: "Settings file couldn't be read" while settings.json couldn't be used (pure white, no
+/// fade), then the Command sign-in notice when the engine says so, else "All clear" when empty.
 struct HomeStatusRows: View {
     @ObservedObject var signIn: CommandSignInModel
     let empty: Bool
+    var settingsNotice: String? = nil
     var body: some View {
+        if let settingsNotice {
+            SettingsNoticeRow(text: settingsNotice)
+        }
         if signIn.phase != .hidden {
             CommandSignInBanner(model: signIn)
         } else if empty {
             Text("All clear. Nothing waiting for you.").font(.system(size: 13)).foregroundStyle(Color.white)
         }
+    }
+}
+
+/// settings.json exists but couldn't be used: one plain status row, pure white on black, full opacity. No toggle.
+struct SettingsNoticeRow: View {
+    let text: String
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle").foregroundStyle(Color.white)
+            Text(text).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.black)
+        .accessibilityLabel(text)
     }
 }
 

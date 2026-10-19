@@ -26,6 +26,10 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     @Published public private(set) var globallyVisible: Bool
     @Published public private(set) var expanded = false
     @Published public private(set) var askText: String? = nil       // non-nil: the ask field is open, prefilled (never sent)
+    /// Bumped on every ask link, so a link that arrives while the panel is already open still lands (views key off it).
+    @Published public private(set) var askSeq = 0
+    /// An ask link's text for 3PO's field (wireAsk). Called on every link, open or collapsed; it only prefills.
+    public var onAsk: ((String) -> Void)?
     @Published public private(set) var hotkeyEnabled: Bool
     @Published public private(set) var shownDisplays: [String: Bool] = [:]
     /// The one display whose panel expands (the one under the pointer, or the one the user hovered).
@@ -57,10 +61,13 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
 
     /// Opens the ask field prefilled (3PO's input when the 3PO module is on). Nothing is ever sent from here.
     public func openAsk(_ prefill: String?) {
-        expand(); askText = prefill ?? ""
-        if profile.isEnabled(.threePO) { tab = .threePO }
+        expand(); askText = prefill ?? ""; askSeq += 1
+        if profile.isEnabled(.threePO) { tab = .threePO; onAsk?(prefill ?? "") }
         log("state ask=open")
     }
+    /// The ask link → 3PO's field, directly on the store (not on a view's onAppear, which never re-runs while the chat is
+    /// already showing). Prefill only: nothing is sent.
+    public func wireAsk(to store: ThreePOStore) { onAsk = { [weak store] q in store?.prefill(q) } }
     public func closeAsk() { askText = nil }
 
     public func setHotkeyEnabled(_ on: Bool) {
@@ -111,6 +118,8 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     @Published public private(set) var lastResult: String? = nil
     @Published public private(set) var ghost: GhostState = .idle
     @Published public private(set) var approvedPops = 0            // trigger: an approval / run went through (green check pop)
+    /// "Settings file couldn't be read: using defaults" while settings.json couldn't be used (PeakPrefs.settingsNotice).
+    @Published public var settingsNotice: String? = nil
     private var baseGhost: GhostState = .idle
     let performer: CardActionPerforming
     weak var logger: PeakLogging?

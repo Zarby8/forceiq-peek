@@ -64,9 +64,13 @@ Command". Peak uploads nothing, and client video stays local.
 - **3PO chat:** bubbles slide in from their own side (you: trailing, 3PO: leading); the thinking dots stay (busy only);
   each streamed chunk lands at full white (no opacity fade on text); proposal and skill cards pop in; the model pill, Chat / Memory and Peak / 3PO
   slide their selection (matched geometry); the composer ring eases to green 2 pt with a soft halo on focus.
+- **Number rolls** (spend total, voice status line): the new value rolls up 6 pt from a light blur at full opacity and the
+  old one leaves at once (`SwapText`). No `numericText` (it cross-fades the changing digits); Reduce Motion swaps in place.
 - **Ease:** every tap target is at least 28 pt. Esc collapses (the Collapse button carries it), Return sends, ⌘K focuses
   the composer (switching back to Chat).
-- Every move is a finite one-shot on an event (no repeat, no clock, no TimelineView). Text is never opacity-faded, in or out; entries
+- Every move is a finite one-shot on an event (no repeat, no clock, no TimelineView). Text is never opacity-faded, in or out, and
+  never dimmed or gray anywhere, voice included (guards: `testNoDimmedOrGrayTextAnywhere`, `testVoiceTextIsFullWhite`,
+  `testNumberRollNeverFadesDigits`); entries
   rise and sharpen at full opacity and exits leave at once. Reduce Motion: no motion (the shell crossfades). Proof tour (sample names only):
   `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_FEED=sample FORCEIQ_PEAK_DEMO_TOUR=polish GOAT_PEAK_ROOT=<scratch root>`.
 
@@ -75,6 +79,7 @@ Command". Peak uploads nothing, and client video stays local.
 |---|---|
 | `GET /api/peak/profile` | **new**, this Mac only: this coach's `peak` overlay section (engine/peakprofile.py), no secrets |
 | `GET /api/peak/next-meeting` | **new**, this Mac only, read-only: the next Command booking (engine/peakmeeting.py → panels.command_get) |
+| `GET /api/peak/client-directory` | **new**, this Mac only, read-only, asked only with `commandMeetingLink` on: this coach's active Command clients `[{id, display_name}]` (engine/peakdirectory.py → panels.command_get → Command `GET /clients/directory`); ids re-validated as UUIDs; nothing persisted or logged but counts |
 | `GET /api/live` | existing: fixes and download counts |
 | `GET /api/approvals`, `POST /api/approvals/<id>/approve\|ask\|prompt` | existing (approve without confirm only previews strong gates; Peak never sends confirm) |
 | `GET /api/family-delivery-alerts` | existing (flag off → enabled=false, no Command call) |
@@ -92,6 +97,36 @@ process)" to phone.py, so Peak carries no token and no secret.
 - Raycast: `raycast/*.sh` script commands (package "ForceIQ Peak"). At install they're copied to `~/ForceIQ/peak/raycast/`.
   Add that folder once by hand: Raycast Settings → Extensions → + → Add Script Directory.
 
+## Settings (`<state_root>/settings.json`; `GOAT_PEAK_ROOT` overrides the root)
+Peak writes this file itself (menu bar, Settings); you can also hand-edit it. Every key is optional: a missing key (or a
+JSON `null`) gets its default and the keys that are present are kept, so `{"commandMeetingLink": true}` alone works.
+Unknown keys are ignored.
+
+| key | type | default (missing key, no file, or an unreadable file) |
+|---|---|---|
+| `hiddenDisplays` | array of display UUIDs | `[]` (shown on every display) |
+| `globallyHidden` | true/false | `false` (shown) |
+| `hotkeyEnabled` | true/false | unset: the profile's `hotkey.enabled` |
+| `ghostFormat` | `"h264-black"` / `"hevc-alpha"` | `"h264-black"` |
+| `voiceEnabled` | true/false | unset: the profile's `modules.voice` (false by default); an unreadable file: off |
+| `desktopActions` | true/false | `false` (no UI; on only matters in a scratch root with the live opt-in) |
+| `commandMeetingLink` | true/false | `false` (no UI) |
+
+- **No file** is normal (a new Mac, a fresh scratch root): silent defaults, nothing logged, nothing written until a setting
+  changes.
+- **A file that exists but can't be used** fails loudly and fails closed. That covers a file Peak can't read, an empty
+  file, invalid JSON, a top level that isn't an object, or any key with the wrong type (e.g. `"desktopActions": "yes"`,
+  or a number inside `hiddenDisplays`). Then:
+  - **all** settings use the defaults above, and `desktopActions`, `commandMeetingLink` and voice stay **off**
+    (nothing is ever on because the file was bad);
+  - `logs/peak.log` gets one line naming the file and the bad key or parse position, never a value, e.g.
+    `settings unreadable path=…/settings.json error=key 'desktopActions' has the wrong type (expected true/false); using defaults (desktopActions, commandMeetingLink, voice off)`;
+  - the home list shows a plain-white status row: **Settings file couldn't be read: using defaults**;
+  - Peak never crashes. Before its first write over the bad file, it copies the file to
+    `<state_root>/settings.unreadable.json` so hand edits aren't lost. Fix the file and relaunch Peak.
+- Tests: `PrefsLoadTests` (lenient decode, loud failure, safe defaults) and `SettingsNoticeGuardTests` (the row is pure
+  white with no fade, and `desktopActions` has no toggle).
+
 ## Voice (opt-in; off until scored on the coach's own voice)
 - **Toggle only.** The mic button in the 3PO field, `forceiq-peak://voice` or the Raycast command "Talk to 3PO": the first
   press starts, the next press stops. No hold-to-talk, no wake word, no silence auto-stop. While it listens the droid is in
@@ -101,8 +136,10 @@ process)" to phone.py, so Peak carries no token and no secret.
   enable, into `<Peak root>/models` (pinned HF commits; progress line in the 3PO field and Settings). No NVIDIA Open Model
   License models. Audio stays in memory on this Mac: never written, never uploaded.
 - **Live words** in the notch / pill (when Peak is collapsed) and in the 3PO field: confirmed words only (the prefix two
-  decodes agree on, about 0.5 s in), white at reduced opacity until the final pass, then pure white; client names
-  underlined in gold.
+  decodes agree on, about 0.5 s in), pure white at full opacity from the first word (never dimmed or gray); until the
+  final pass a gold caret (▍) trails the last word, then it goes. 'Listening…' is pure white too. Client names
+  underlined in gold. The mic shows "…" while it loads or finishes (never half-faded). The voice status line under the
+  field rolls each new state up at full opacity (`SwapText`; no numericText cross-fade).
 - **Name guard** (PeakCore `VoiceNameGuard`): the boost may replace a word only when it sounds like the name. Months,
   weekdays, numbers, function words and Peak's command words are never replaced ("October", "compare" never become
   "Cooper"); any other dictionary word (macOS `/usr/share/dict/web2`) only by a near-homophone ("Holiday" → "Halliday").
@@ -140,7 +177,8 @@ process)" to phone.py, so Peak carries no token and no secret.
   with its own bundle id, DB and prefs), named by the smoke-only `FORCEIQ_PEAK_FLOW_TARGET_PID` and/or
   `FORCEIQ_PEAK_FLOW_TARGET_BUNDLE`; the frontmost process must then be exactly that instance. FLOW's project window has
   no title and no AXDocument, so the window check also accepts a static text in that window that is exactly the package's
-  name (case aside), and resolves symlinks. `ProductionTargetGuardTests` covers the refusals (pid 11311, the bundle id,
+  name (case aside), and resolves symlinks. A window title must be exactly the package's name; a partial, prefix or
+  longer name (`FLOW-Dem`, `FLOW-Demo-extra` for `FLOW-Demo`) is refused, by title or by text. `ProductionTargetGuardTests` covers the refusals (pid 11311, the bundle id,
   the path) and pins the order.
 - **Real-press smoke** (`peak/scripts/real_press_smoke.sh`): the live press against an isolated FLOW, proven in text by
   an Accessibility read of that FLOW's window list before and after.
@@ -163,6 +201,21 @@ process)" to phone.py, so Peak carries no token and no secret.
   (or `--out`). No screen captures. The script never activates, quits or opens a FLOW (only Peak's step 2 brings the
   isolated FLOW forward, by pid) and never changes the installed Peak, its settings or the engine. Accessibility for the terminal is required (the helper `scripts/real_press_ax.swift` is
   compiled into `$TMPDIR`).
+- **Command meeting link (flag, OFF by default; waits for Command #685's deploy).** With `settings.json`
+  `commandMeetingLink: true` (no UI) or `FORCEIQ_PEAK_COMMAND_MEETING_LINK=1`, and desktop actions off, "start a meeting
+  with <client>" resolves the client in this coach's Command directory (`GET /api/peak/client-directory`, kept in memory
+  for 120 s, a failure for 30 s; never on disk). Only an exact, unique `display_name` match (case- and
+  whitespace-normalised) goes straight to the link card; several, partial or fuzzy matches give a pick card naming the
+  candidates; no match gives a plain not-found card. The card names the client and describes what Run does; Run (an
+  explicit tap) re-validates and opens `forceiq-command://meeting/start?client_id=<lowercase uuid>&source=goat`, which
+  shows Command's own Start / Cancel sheet: nothing starts until Start is tapped in Command. A name never goes into the
+  link. 401 / a dead session → the existing "Command sign-in expired, tap to sign in" row; 403 (client role) → one dead
+  state; nothing retries in a loop. Logs: `3po meeting-link match=unique|ambiguous|none clients=<n> …`, never a name or id.
+  Flag off (or a desktop dry-run / live gate on) → the meeting start is unchanged (room page / schedule; locate-only under
+  the gates). Known gaps (Command): the client_id is lost after a signed-out login, and the link is desktop-only (iOS out
+  of scope). Smoke: `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=meeting-link GOAT_PEAK_ROOT=<scratch root with
+  settings.json {"commandMeetingLink": true}>` types unique / ambiguous / none against a mocked directory (fake clients)
+  and taps Run once (demo: nothing opens).
 - **Live smoke:** `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=voice GOAT_PEAK_ROOT=<scratch root> FORCEIQ_PEAK_VOICE_FEED=<folder
   of .wav>` feeds recorded `say` clips in real time through the mic's conversion path (fake roster) and logs
   `voice turn first_confirmed_ms=… final_ms=… cpu_pct=…` per clip plus a summary.

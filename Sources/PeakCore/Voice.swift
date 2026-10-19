@@ -6,7 +6,7 @@ import Foundation
 // Audio never leaves this Mac and is never written to disk; only the model weights are (under <Peak root>/models).
 
 // ───────────────────────────── gate ─────────────────────────────
-/// Voice is opt-in: off until the coach turns it on in Settings (settings.json `voice_enabled`). With no setting the
+/// Voice is opt-in: off until the coach turns it on in Settings (settings.json `voiceEnabled`). With no setting the
 /// profile's `modules.voice` decides, and that is false by default too (profile.template.json).
 public enum VoiceGate {
     public static func enabled(_ p: CoachProfile, setting: Bool?) -> Bool {
@@ -117,8 +117,12 @@ public struct VoiceLine: Equatable, Sendable {
         }
         return false
     }
-    /// Pending words: white at this opacity (never gray).
-    public static let pendingOpacity = 0.7
+    /// Pending words stay pure white at full opacity (never dimmed, never gray). The only pending cue is this gold
+    /// caret after the last word; it goes when the final pass lands.
+    public static let pendingCaret = "\u{258D}"
+    public static let pendingCaretHex = Brand.goldHex
+    /// True until the final pass: the caret shows.
+    public var pending: Bool { !isEmpty && segments.contains { !$0.final } }
 }
 
 public enum LiveWords {

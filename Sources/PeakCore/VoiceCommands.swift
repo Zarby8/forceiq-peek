@@ -9,6 +9,8 @@ import Foundation
 // code button) is a Cua action: it stays behind settings `desktopActions` (OFF, no UI); Peak presses FLOW's
 // Code Window only in a gated scratch live setup after Run (see DesktopLive.swift).
 // An unclear client gets a pick card instead. Zero tokens; nothing leaves this Mac.
+// With the Command meeting link flag on (CommandMeetingLink.swift, OFF by default), "start a meeting" resolves the client
+// in this coach's Command directory instead, and Run opens Command's own Start sheet (nothing starts until Start there).
 
 public enum ClientCommandKind: String, Sendable { case flowPackage = "flow_package", startMeeting = "start_meeting" }
 
@@ -29,11 +31,17 @@ public struct ClientCommandContext: Sendable {
     public var timeZone: TimeZone
     /// .dryRun only from DesktopActionGate (env + scratch root); Run then locates and reports, nothing else.
     public var desktopMode: DesktopActionMode
+    /// The Command meeting link (CommandMeetingLinkGate; OFF by default). On, and only with desktop actions off, a
+    /// "start a meeting" command resolves the client in this coach's Command directory and Run opens Command's Start
+    /// sheet (CommandMeetingLink.swift). Off: the meeting card is exactly what it was.
+    public var commandMeetingLink: Bool
     public init(roster: [String], meeting: MeetingRow? = nil, desktopActions: Bool = false, flowApp: String? = nil,
-                now: Date = Date(), timeZone: TimeZone = .current, desktopMode: DesktopActionMode = .off) {
+                now: Date = Date(), timeZone: TimeZone = .current, desktopMode: DesktopActionMode = .off, commandMeetingLink: Bool = false) {
         self.roster = roster; self.meeting = meeting; self.desktopActions = desktopActions; self.flowApp = flowApp
-        self.now = now; self.timeZone = timeZone; self.desktopMode = desktopMode
+        self.now = now; self.timeZone = timeZone; self.desktopMode = desktopMode; self.commandMeetingLink = commandMeetingLink
     }
+    /// The meeting link path applies: the flag is on and no desktop dry-run / live gate is active (those stay locate-only).
+    public var usesMeetingLink: Bool { commandMeetingLink && desktopMode == .off }
 }
 
 public enum ClientCommands {
@@ -207,6 +215,73 @@ public enum ClientCommands {
             c.message = "Nothing has run. Run starts a dry run for \(client) (locate and report only)."
             c.outputs = ["A dry-run report for \(client)"]
         }
+        return c
+    }
+}
+
+// ── the Command meeting link (flag on): cards built from this coach's Command directory ──
+public extension ClientCommands {
+    static let meetingLinkAction = "start_meeting_link"
+    static let notFoundAction = "client_not_found"
+    static let directoryProblemAction = "command_directory"
+
+    /// The describe-first card for ONE directory client: names the client, says Run only opens Command's Start sheet and
+    /// that nothing starts until Start is tapped in Command. nil when the id isn't a valid UUID (no link from a name).
+    static func meetingLinkCard(_ cmd: ClientCommand, client: DirectoryClient, _ ctx: ClientCommandContext, id: String,
+                                exact: Bool) -> ProposalCard? {
+        guard let link = CommandMeetingLink.url(clientID: client.id) else { return nil }
+        let name = client.displayName
+        let m = ctx.meeting.flatMap { sameClient($0.client, name) ? $0 : nil }
+        let timeLine = m.map { "Next booking: " + when($0.scheduledAt, now: ctx.now, tz: ctx.timeZone) } ?? "Next booking: none in Command"
+        var c = ProposalCard(id: id, action: meetingLinkAction, label: "Start a meeting with \(name)", client: name,
+                             inputs: ["Client: \(name)",
+                                      exact ? "Matched: exactly one client with this name in your Command directory" : "Matched: you picked this client",
+                                      timeLine] + (cmd.when.map { ["You asked for: \($0)"] } ?? []),
+                             touches: "Opens Command's Start meeting sheet for \(name) (Command's own confirm, with Start and Cancel). "
+                                + "Nothing starts until you tap Start in Command; Cancel there leaves everything as it was. "
+                                + "Peak never joins, records or books.",
+                             outputs: ["Command: the Start meeting sheet for \(name)"],
+                             reason: "You said: \u{201C}\(cmd.said)\u{201D}",
+                             message: "Nothing has run. Run only opens Command's Start sheet.",
+                             status: "proposed", viewOnly: false, previewBody: nil, confirmBody: nil)
+        c.origin = .command
+        c.link = link
+        return c
+    }
+
+    /// Several, partial or fuzzy matches: the coach picks one by name (button labels from DirectoryMatcher.labels).
+    static func meetingLinkPickCard(_ cmd: ClientCommand, labels: [String], id: String) -> ProposalCard {
+        var c = ProposalCard(id: id, action: "pick_client", label: "Start a meeting", client: nil,
+                             inputs: ["You said: \(cmd.said)"], touches: "Nothing (a pick only)", outputs: [],
+                             reason: "Pick the client from your Command directory. The next card shows what Run would do.",
+                             message: "Nothing has run.", status: "pick", viewOnly: false, previewBody: nil, confirmBody: nil)
+        c.origin = .pick; c.picks = labels
+        return c
+    }
+
+    /// No client in the directory sounds like that: a plain card, nothing to run.
+    static func notFoundCard(_ cmd: ClientCommand, id: String) -> ProposalCard {
+        var c = ProposalCard(id: id, action: notFoundAction, label: "Start a meeting", client: nil,
+                             inputs: ["You said: \(cmd.said)"], touches: "Nothing", outputs: [],
+                             reason: "No active client in your Command directory matches \u{201C}\(cmd.spokenClient)\u{201D}.",
+                             message: "Not found. Nothing has run.", status: "not_found", viewOnly: true, previewBody: nil, confirmBody: nil)
+        c.origin = .command
+        return c
+    }
+
+    /// The directory couldn't be read (sign-in expired, a client-role session, Command down): one plain card, no Run.
+    static func directoryProblemCard(_ cmd: ClientCommand, _ r: DirectoryResult, id: String) -> ProposalCard {
+        let why: String, msg: String
+        switch r {
+        case .signedOut(let n): why = n.message; msg = "Nothing has run. Tap \(n.label) on Peak's home, then ask again."
+        case .forbidden(let m): why = m; msg = "Nothing has run. Sign in to Command as a coach or admin, then ask again."
+        case .failed(let m): why = m; msg = "Nothing has run. Try again in a minute."
+        case .clients: why = "Your Command directory is empty."; msg = "Nothing has run."
+        }
+        var c = ProposalCard(id: id, action: directoryProblemAction, label: "Start a meeting", client: nil,
+                             inputs: ["You said: \(cmd.said)"], touches: "Nothing", outputs: [],
+                             reason: why, message: msg, status: r.outcome, viewOnly: true, previewBody: nil, confirmBody: nil)
+        c.origin = .command
         return c
     }
 }
