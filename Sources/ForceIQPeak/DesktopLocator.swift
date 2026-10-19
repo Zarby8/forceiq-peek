@@ -7,7 +7,7 @@ import PeakCore
 // DesktopDryRunTests scans this file and fails if any such API shows up. The single effect is bringForward() for FLOW.
 
 struct AXDesktopLocator: DesktopLocator {
-    var packageRoots: [URL] = [URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Desktop/FLOW")]
+    var packageRoots: [URL] = Self.defaultPackageRoots()
     var axBudget = 8000                // elements per lookup
     var axDeadline: TimeInterval = 4   // seconds per lookup
 
@@ -84,7 +84,15 @@ struct AXDesktopLocator: DesktopLocator {
         }
         let opener = await MainActor.run { NSWorkspace.shared.urlForApplication(toOpen: pkg)?.lastPathComponent }
         let f = DateFormatter(); f.dateFormat = "MMM d h:mm a"
-        return done(true, "\(pkg.lastPathComponent) (modified \(f.string(from: when))) opens with \(opener ?? "no app"); not opened", false, false)
+        var a = done(true, "\(pkg.lastPathComponent) (modified \(f.string(from: when))) opens with \(opener ?? "no app"); not opened", false, false)
+        a.target = pkg.path
+        return a
+    }
+
+    /// ~/Desktop/FLOW, or FORCEIQ_PEAK_FLOW_PACKAGES (a scratch folder for demo proofs, e.g. under ~/ForceIQ/peak-tmp).
+    static func defaultPackageRoots(env: [String: String] = ProcessInfo.processInfo.environment) -> [URL] {
+        if let p = env["FORCEIQ_PEAK_FLOW_PACKAGES"], !p.isEmpty { return [URL(fileURLWithPath: (p as NSString).expandingTildeInPath)] }
+        return [URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Desktop/FLOW")]
     }
 
     /// The client's newest .flowaipkg (name contains the client's last name, or all name words). Listing only.

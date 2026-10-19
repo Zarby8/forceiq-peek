@@ -98,9 +98,10 @@ enum Screens {
     var demoFeedLogged = false
     var voice: VoiceController!
     var lastMeeting: MeetingRow?
-    /// Desktop actions: .off unless FORCEIQ_PEAK_DESKTOP_DRYRUN=1 with a scratch GOAT_PEAK_ROOT (then locate-and-report
-    /// dry runs only). settings.json desktopActions is not read here and has no UI.
-    let desktopMode = DesktopActionGate.mode(env: ProcessInfo.processInfo.environment)
+    /// Desktop actions: .off unless a scratch GOAT_PEAK_ROOT plus FORCEIQ_PEAK_DESKTOP_DRYRUN=1 (locate-and-report dry run),
+    /// or the live env opt-in with settings.json desktopActions=true in that same scratch root (live: FLOW's Code
+    /// Window press only, after Run). Decided once the state root's settings are read; desktopActions has no UI.
+    var desktopMode: DesktopActionMode = .off
     var dryRunPanel: DryRunPanel?
 
     func applicationWillFinishLaunching(_ n: Notification) {
@@ -133,6 +134,7 @@ enum Screens {
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         log.move(to: root)
         prefs = PeakPrefs(stateRoot: root)
+        desktopMode = DesktopActionGate.mode(env: ProcessInfo.processInfo.environment, desktopActions: prefs.desktopActions, stateRoot: root.path)
         GhostAssets.format = prefs.ghostFormat
         ThreePOAssets.log = { [weak self] e in self?.log.log(e) }
         ThreePOAssets.demoReduceMotion = demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_REDUCE_MOTION"] == "1"
@@ -225,9 +227,10 @@ enum Screens {
     }
 
     /// Run on a client-command card (an explicit tap). Opens Command's own UI (room page or schedule) or brings FLOW
-    /// forward; nothing else. Desktop clicks (FLOW's code button) are not wired from Peak (Desktop actions stays off).
+    /// forward; nothing else. With desktop actions gated on (scratch root only), Run starts the dry run, or in live mode
+    /// FLOW's Code Window press for a flow_package_code card (the meeting start stays locate-only).
     func runCommand(_ c: ProposalCard) -> String {
-        if desktopMode == .dryRun { return startDryRun(c) }
+        if desktopMode != .off { return startDryRun(c) }
         if demo { log.log("command run demo=1"); return "Demo mode: nothing opened." }
         if let l = c.link {
             guard let u = URL(string: CommandLink.safe(l)), NSWorkspace.shared.open(u) else { return "Command didn't open. Nothing ran." }
@@ -249,16 +252,20 @@ enum Screens {
     }
 
     func startDryRun(_ c: ProposalCard) -> String {
-        guard desktopMode == .dryRun, let steps = DryRunPlanner.plan(c, apps: desktopApps()), let client = c.client else {
+        let live = desktopMode == .live && c.action == "flow_package_code"      // the meeting start stays locate-only
+        guard desktopMode != .off, let steps = DryRunPlanner.plan(c, apps: desktopApps(), live: live), let client = c.client else {
             return "Nothing to dry-run for this card. Nothing ran."
         }
         if dryRunPanel != nil { return "A dry run is already on screen." }
-        let model = DryRunModel(client: client, action: c.action, steps: steps)
+        let model = DryRunModel(client: client, action: c.action, steps: steps, live: live)
         dryRunPanel = DryRunPanel(model: model) { [weak self] in self?.dryRunPanel?.close(); self?.dryRunPanel = nil }
         let pace = Int(ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DRYRUN_PACE_MS"] ?? "") ?? 0
-        let runner = DryRunRunner(steps: steps, locator: AXDesktopLocator(), stop: model.stop, action: c.action, paceMs: pace)
+        let env = ProcessInfo.processInfo.environment
+        let arm = Int(env["FORCEIQ_PEAK_LIVE_ARM_MS"] ?? "") ?? 1500                // the window to STOP before the press
+        let runner = DryRunRunner(steps: steps, locator: AXDesktopLocator(), stop: model.stop, action: c.action, paceMs: pace,
+                                  presser: live ? AXCodeWindowPresser() : nil, armMs: live ? arm : 0)
         let log = self.log
-        log.log("dryrun run action=\(c.action) client=\(client) steps=\(steps.count) pace_ms=\(pace) t=\(String(format: "%.3f", Date().timeIntervalSince1970))")
+        log.log("dryrun run mode=\(live ? "live" : "dry_run") action=\(c.action) client=\(client) steps=\(steps.count) pace_ms=\(pace)\(live ? " arm_ms=\(arm)" : "") t=\(String(format: "%.3f", Date().timeIntervalSince1970))")
         Task.detached {
             let report = await runner.run { e in
                 let line = e.logLine + " t=\(String(format: "%.3f", Date().timeIntervalSince1970))"
@@ -272,11 +279,13 @@ enum Screens {
                 }
             }
         }
-        return "Dry run started for \(client): locate and report only. STOP is on screen."
+        return live ? "Live run started for \(client): FLOW's Code Window is pressed only after the checks. STOP is on screen."
+                    : "Dry run started for \(client): locate and report only. STOP is on screen."
     }
 
     var dryRunTour: String? {
         let t = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] ?? ""
+        if demo && desktopMode == .live && t == "live-flow" { return t }
         return demo && desktopMode == .dryRun && t.hasPrefix("dryrun-") ? t : nil
     }
 
@@ -296,6 +305,13 @@ enum Screens {
         }
         at(1.5, "chat") { c.activeDisplay = main; c.tab = .threePO; c.expand() }
         at(3.0, "type-send") { store.draft = text; await store.send() }
+        if which == "live-flow" {                       // live: the tour never taps Run; an explicit tap on the card's Run must
+            at(5.0, "await-run-tap") {                  // (the proof script presses Peak's own Run button, id peak-command-run)
+                let card = store.transcript.messages.reversed().lazy.flatMap(\.proposals).first(where: { $0.origin == .command })
+                self.log.log("tour card client=\(card?.client ?? "none") action=\(card?.action ?? "none") waiting for an explicit Run tap")
+            }
+            return
+        }
         at(5.0, "tap-run") {
             guard let card = store.transcript.messages.reversed().lazy.flatMap(\.proposals).first(where: { $0.origin == .command }) else {
                 self.log.log("tour no-command-card"); return

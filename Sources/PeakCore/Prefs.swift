@@ -43,7 +43,8 @@ public final class PeakPrefs: @unchecked Sendable {
         get { lock.lock(); defer { lock.unlock() }; return doc.voiceEnabled }
         set { edit { $0.voiceEnabled = newValue } }
     }
-    /// Cua / desktop clicks from voice commands (e.g. FLOW's code button). OFF until the STOP dry run passes; while off,
+    /// Cua / desktop clicks from voice commands (e.g. FLOW's code button). OFF by default, no UI; on only matters in a scratch
+    /// root with the live env opt-in (FLOW's Code Window press after Run, see DesktopActionGate). While off,
     /// a command card's Run only opens apps and deep links.
     public var desktopActions: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.desktopActions ?? false }

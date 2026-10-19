@@ -160,7 +160,9 @@ final class Events: @unchecked Sendable {
 
     // ── dry run can never perform an action ──
     static let sourcesDir = testsDir.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Sources")
-    static let dryRunFiles = ["PeakCore/DesktopDryRun.swift", "ForceIQPeak/DesktopLocator.swift", "ForceIQPeak/DryRunViews.swift"]
+    /// Everything the dry run (and live mode's locate steps) touch. DesktopLive.swift is the pure press guard. The one
+    /// live AXPress lives in ForceIQPeak/DesktopPresser.swift and nowhere else (DesktopLiveTests pins that).
+    static let dryRunFiles = ["PeakCore/DesktopDryRun.swift", "PeakCore/DesktopLive.swift", "ForceIQPeak/DesktopLocator.swift", "ForceIQPeak/DryRunViews.swift"]
     /// Anything that presses, types, posts events, scripts other apps, opens URLs/apps, launches processes or writes files.
     static let forbidden = ["AXUIElementPerformAction", "kAXPressAction", "kAXRaiseAction", "kAXShowMenuAction", "kAXConfirmAction",
                             "kAXIncrementAction", "kAXDecrementAction", "kAXPickAction", "kAXCancelAction",
@@ -193,8 +195,11 @@ final class Events: @unchecked Sendable {
         let body = core[core.range(of: "public protocol DesktopLocator")!.upperBound...].prefix { $0 != "}" }
         let funcs = body.matches(of: /func ([A-Za-z]+)/).map { String($0.output.1) }
         XCTAssertEqual(funcs, ["locate", "bringForward"])
-        // There is no live mode to switch to.
-        XCTAssertEqual(DesktopActionMode.allCases, [.off, .dryRun])
+        // The modes: off, the dry run, and live (FLOW's Code Window press only; gated, see DesktopLiveTests).
+        XCTAssertEqual(DesktopActionMode.allCases, [.off, .dryRun, .live])
+        // A dry run never has a presser: the app builds one only for live + flow_package_code.
+        let app = try String(contentsOf: Self.sourcesDir.appendingPathComponent("ForceIQPeak/AppDelegate.swift"), encoding: .utf8)
+        XCTAssertTrue(app.contains("presser: live ? AXCodeWindowPresser() : nil"))
     }
 
     func testMeetingDryRunNeverBringsAnythingForwardOrPerforms() async {

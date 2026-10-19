@@ -8,21 +8,35 @@ import Foundation
 // written in another app. The one effect a dry run may have is bringing FLOW forward (what the card's Run already does).
 // A visible STOP aborts at once, between steps or during one; what was stopped is logged.
 //
-// There is no live mode in this build: DesktopActionMode has only .off and .dryRun, and the locator protocol has no
-// perform / click / key API at all (DesktopDryRunTests scans these sources and fails if one becomes reachable).
-// settings.json `desktopActions` stays OFF by default, has no UI toggle, and does not enable anything here.
+// The locator protocol has no perform / click / key API at all (DesktopDryRunTests scans these sources and fails if one
+// becomes reachable). The one live action (pressing FLOW's 'Code Window' menu item) is a separate protocol,
+// DesktopPresser (DesktopLive.swift), with its single AXPress call site in ForceIQPeak/DesktopPresser.swift.
+// settings.json `desktopActions` stays OFF by default and has no UI toggle.
 
-public enum DesktopActionMode: String, CaseIterable, Sendable { case off, dryRun = "dry_run" }
+public enum DesktopActionMode: String, CaseIterable, Sendable { case off, dryRun = "dry_run", live }
 
 public enum DesktopActionGate {
     public static let dryRunEnv = "FORCEIQ_PEAK_DESKTOP_DRYRUN"
-    /// Dry run only when FORCEIQ_PEAK_DESKTOP_DRYRUN=1 AND a scratch GOAT_PEAK_ROOT is set (never the coach's own root).
-    /// The settings flag is deliberately not an input: turning `desktopActions` on in settings.json changes nothing.
-    public static func mode(env: [String: String]) -> DesktopActionMode {
-        guard env[dryRunEnv] == "1", let root = env["GOAT_PEAK_ROOT"], !root.isEmpty else { return .off }
-        let r = (root as NSString).expandingTildeInPath
-        let coach = ("~/ForceIQ/peak" as NSString).expandingTildeInPath
-        return r.hasPrefix(coach + "/") || r == coach ? .off : .dryRun
+    public static let liveEnv = "FORCEIQ_PEAK_DESKTOP_LIVE"
+
+    /// The scratch root from GOAT_PEAK_ROOT (expanded), or nil when unset or the coach's own root (~/ForceIQ/peak or under it).
+    public static func scratchRoot(env: [String: String]) -> String? {
+        guard let root = env["GOAT_PEAK_ROOT"], !root.isEmpty else { return nil }
+        let r = URL(fileURLWithPath: (root as NSString).expandingTildeInPath).standardizedFileURL.path
+        let coach = URL(fileURLWithPath: ("~/ForceIQ/peak" as NSString).expandingTildeInPath).standardizedFileURL.path
+        return r.hasPrefix(coach + "/") || r == coach ? nil : r
+    }
+
+    /// - dry run: FORCEIQ_PEAK_DESKTOP_DRYRUN=1 and a scratch GOAT_PEAK_ROOT (the settings flag is not an input).
+    /// - live: FORCEIQ_PEAK_DESKTOP_LIVE=1 and a scratch GOAT_PEAK_ROOT and settings.json `desktopActions` = true read
+    ///   from that same scratch root (`stateRoot`), and no dry-run opt-in (a dry-run opt-in always wins).
+    /// - otherwise off. The coach's own root never enables anything.
+    public static func mode(env: [String: String], desktopActions: Bool = false, stateRoot: String? = nil) -> DesktopActionMode {
+        guard let scratch = scratchRoot(env: env) else { return .off }
+        if env[dryRunEnv] == "1" { return .dryRun }
+        guard env[liveEnv] == "1", desktopActions, let st = stateRoot,
+              URL(fileURLWithPath: (st as NSString).expandingTildeInPath).standardizedFileURL.path == scratch else { return .off }
+        return .live
     }
 }
 
@@ -61,8 +75,11 @@ public struct LocateAttempt: Equatable, Sendable {
     public var ms: Int
     public var stopped = false
     public var blocked = false
-    public init(strategy: LocateStrategy, found: Bool, detail: String, ms: Int, stopped: Bool = false, blocked: Bool = false) {
+    public var target: String? = nil             // what was located, when a later step needs it (the package path)
+    public init(strategy: LocateStrategy, found: Bool, detail: String, ms: Int, stopped: Bool = false, blocked: Bool = false,
+                target: String? = nil) {
         self.strategy = strategy; self.found = found; self.detail = detail; self.ms = ms; self.stopped = stopped; self.blocked = blocked
+        self.target = target
     }
 }
 
@@ -83,7 +100,10 @@ public protocol DesktopLocator: Sendable {
     func bringForward(_ step: DryRunStep) async -> String
 }
 
-public enum StopPhase: String, Sendable { case betweenSteps = "between_steps", duringStep = "during_step" }
+public enum StopPhase: String, Sendable {
+    case betweenSteps = "between_steps", duringStep = "during_step"
+    case beforePress = "before_press"           // live: STOP after the press was armed, before AXPress — nothing pressed
+}
 
 public struct StopRecord: Equatable, Sendable {
     public var step: Int                        // the step that did not run (between) or was cut (during)
@@ -99,6 +119,7 @@ public struct DryRunStepResult: Equatable, Sendable {
     public var located: LocateAttempt?
     public var note: String?
     public var ms: Int
+    public var press: PressResult? = nil         // live only: the Code Window press (or why it didn't happen)
 }
 
 public enum DryRunEvent: Equatable, Sendable {
@@ -106,6 +127,9 @@ public enum DryRunEvent: Equatable, Sendable {
     case stepStarted(Int)
     case attempt(Int, LocateAttempt)
     case broughtForward(Int, String)            // the one effect a dry run has (FLOW only), with what happened
+    case pressArmed(Int, Int)                   // live: step, ms until the press (STOP still halts it)
+    case pressSkipped(Int, String)              // live: why the press didn't happen (nothing pressed)
+    case pressed(Int, PressResult)              // live: the presser's result
     case stepFinished(Int)
     case stopped(StopRecord)
     case finished
@@ -117,11 +141,18 @@ public struct DryRunReport: Equatable, Sendable {
     public var results: [DryRunStepResult]
     public var stop: StopRecord?
     public var totalMs: Int
+    public var live = false
+    public var pressed: Bool { results.contains { $0.press?.pressed == true } }
     public var summary: String {
         let located = results.filter { $0.located != nil }.count
-        let head = "Dry run for \(client): \(located) of \(results.count) step(s) located. Nothing was clicked, typed or opened."
+        let head = live
+            ? "Live run for \(client): \(located) of \(results.count) step(s) located. "
+                + (pressed ? "Pressed FLOW's Code Window once (AXPress); nothing else was clicked, typed or opened."
+                           : "Nothing was pressed, clicked, typed or opened.")
+            : "Dry run for \(client): \(located) of \(results.count) step(s) located. Nothing was clicked, typed or opened."
         guard let s = stop else { return head }
-        return head + " STOPPED \(s.phase == .betweenSteps ? "before" : "during") step \(s.step) (\(s.stepTitle)) in \(s.latencyMs) ms; skipped: \(s.skipped.isEmpty ? "none" : s.skipped.joined(separator: "; "))."
+        let when = s.phase == .betweenSteps ? "before" : (s.phase == .beforePress ? "right before the press in" : "during")
+        return head + " STOPPED \(when) step \(s.step) (\(s.stepTitle)) in \(s.latencyMs) ms; skipped: \(s.skipped.isEmpty ? "none" : s.skipped.joined(separator: "; "))."
     }
 }
 
@@ -139,7 +170,9 @@ public enum DryRunPlanner {
     public static let signInHints = ["sign in", "log in", "sign-in", "login"]
 
     /// Steps for a confirmed command card (client resolved). nil for anything that isn't a client command.
-    public static func plan(_ card: ProposalCard, apps: DesktopApps = DesktopApps()) -> [DryRunStep]? {
+    /// `live` only retitles FLOW's code-window step (it will be pressed after Run); the meeting plan is the same in every
+    /// mode and is never pressed.
+    public static func plan(_ card: ProposalCard, apps: DesktopApps = DesktopApps(), live: Bool = false) -> [DryRunStep]? {
         guard card.origin == .command, let client = card.client, !client.isEmpty else { return nil }
         switch card.action {
         case "flow_package", "flow_package_code":
@@ -148,7 +181,9 @@ public enum DryRunPlanner {
                      DryRunStep(id: 2, kind: .bringForward, title: "Bring \(apps.flowName) forward for \(client)", client: client,
                                 app: apps.flowName, bundleID: apps.flowBundle, strategies: [])]
             if card.action == "flow_package_code" {
-                s.append(DryRunStep(id: 3, kind: .codeWindowButton, title: "Locate \(apps.flowName)'s code-window button for \(client)'s package",
+                s.append(DryRunStep(id: 3, kind: .codeWindowButton,
+                                    title: live ? "Press \(apps.flowName)'s Code Window for \(client)'s package"
+                                                : "Locate \(apps.flowName)'s code-window button for \(client)'s package",
                                     client: client, app: apps.flowName, bundleID: apps.flowBundle,
                                     strategies: LocateStrategy.allCases, hints: codeHints))
             }
@@ -170,15 +205,23 @@ public enum DryRunPlanner {
 
 /// Runs a plan: steps in order, strategies safe-first, stops at the first located target, checks STOP before every
 /// step and every strategy, and hands the switch to the locator so a long lookup stops mid-step.
+/// Live (a presser is given): after FLOW's code-window step is located by Accessibility and step 1 found the client's
+/// package, the press is armed for `armMs` (STOP halts it), STOP is checked again, and only then the presser runs
+/// (which checks STOP once more right before AXPress). Nothing else is ever pressed; the meeting plan has no press.
 public struct DryRunRunner: Sendable {
     public let steps: [DryRunStep]
     public let locator: any DesktopLocator
+    public let presser: (any DesktopPresser)?
     public let stop: StopSwitch
     public let action: String
     public let pace: UInt64                         // ns between strategies (demo pacing so a STOP can land mid-step); 0 = none
-    public init(steps: [DryRunStep], locator: any DesktopLocator, stop: StopSwitch, action: String, paceMs: Int = 0) {
+    public let arm: UInt64                          // ns between arming the press and pressing (live only)
+    public init(steps: [DryRunStep], locator: any DesktopLocator, stop: StopSwitch, action: String, paceMs: Int = 0,
+                presser: (any DesktopPresser)? = nil, armMs: Int = 0) {
         self.steps = steps; self.locator = locator; self.stop = stop; self.action = action; self.pace = UInt64(max(0, paceMs)) * 1_000_000
+        self.presser = presser; self.arm = UInt64(max(0, armMs)) * 1_000_000
     }
+    public var live: Bool { presser != nil }
 
     static func ms(_ a: Date, _ b: Date = Date()) -> Int { Int((b.timeIntervalSince(a) * 1000).rounded()) }
 
@@ -187,6 +230,10 @@ public struct DryRunRunner: Sendable {
         let client = steps.first?.client ?? ""
         var results: [DryRunStepResult] = []
         onEvent(.started(client: client, steps: steps.count))
+        var packagePath: String?
+        func report(_ stop: StopRecord?) -> DryRunReport {
+            DryRunReport(client: client, action: action, results: results, stop: stop, totalMs: Self.ms(t0), live: live)
+        }
         func halt(_ i: Int, _ phase: StopPhase) -> StopRecord {
             let lat = stop.pressedAt.map { Self.ms($0) } ?? 0
             let r = StopRecord(step: steps[i].id, stepTitle: steps[i].title, phase: phase, latencyMs: max(0, lat),
@@ -196,8 +243,7 @@ public struct DryRunRunner: Sendable {
         }
         for (i, step) in steps.enumerated() {
             if stop.isPressed {
-                let r = halt(i, .betweenSteps)
-                return DryRunReport(client: client, action: action, results: results, stop: r, totalMs: Self.ms(t0))
+                return report(halt(i, .betweenSteps))
             }
             onEvent(.stepStarted(step.id))
             let ts = Date()
@@ -216,17 +262,43 @@ public struct DryRunRunner: Sendable {
                 if a.found || a.blocked { res.located = a.found ? a : nil; break }
                 if pace > 0 { await Self.pause(pace, stop) }
             }
+            if step.kind == .findPackage, let t = res.located?.target { packagePath = t }
+            var armed = false
+            if let presser, step.kind == .codeWindowButton, !stop.isPressed {
+                if let why = Self.pressBlocker(res, packagePath: packagePath, client: client) {
+                    res.note = why
+                    onEvent(.pressSkipped(step.id, why))
+                } else if let pkg = packagePath {
+                    armed = true
+                    onEvent(.pressArmed(step.id, Int(arm / 1_000_000)))
+                    if arm > 0 { await Self.pause(arm, stop) }
+                    if !stop.isPressed {                          // the last check before handing over; the presser checks again
+                        let p = await presser.pressCodeWindow(step, packagePath: pkg, stop: stop)
+                        res.press = p
+                        onEvent(.pressed(step.id, p))
+                    }
+                }
+            }
             res.ms = Self.ms(ts)
             results.append(res)
             if stop.isPressed {
-                let r = halt(i, .duringStep)
-                return DryRunReport(client: client, action: action, results: results, stop: r, totalMs: Self.ms(t0))
+                let phase: StopPhase = armed && res.press?.pressed != true ? .beforePress : .duringStep
+                return report(halt(i, phase))
             }
             onEvent(.stepFinished(step.id))
             if pace > 0 { await Self.pause(pace, stop) }
         }
         onEvent(.finished)
-        return DryRunReport(client: client, action: action, results: results, stop: nil, totalMs: Self.ms(t0))
+        return report(nil)
+    }
+
+    /// Why a live press must not be attempted (nil = arm it): FLOW's code-window target has to be located by
+    /// Accessibility (the presser re-finds that exact AXMenuItem), and the client's package has to have been found.
+    static func pressBlocker(_ res: DryRunStepResult, packagePath: String?, client: String) -> String? {
+        guard let hit = res.located else { return "FLOW's Code Window wasn't located for \(client); nothing pressed" }
+        guard hit.strategy == .accessibility else { return "located by \(hit.strategy.rawValue), not Accessibility; nothing pressed" }
+        guard packagePath != nil else { return "no FLOW package found for \(client); nothing pressed" }
+        return nil
     }
 
     /// Sleep in 5 ms slices so a STOP during the pause is seen within ~5 ms.
@@ -248,6 +320,9 @@ public extension DryRunEvent {
         case .stepStarted(let i): return "dryrun step=\(i) start"
         case .attempt(let i, let a): return "dryrun step=\(i) try=\(a.strategy.rawValue) found=\(a.found ? 1 : 0)\(a.blocked ? " blocked=1" : "")\(a.stopped ? " stopped=1" : "") ms=\(a.ms) detail=\(a.detail)"
         case .broughtForward(let i, let n): return "dryrun step=\(i) forward detail=\(n)"
+        case .pressArmed(let i, let ms): return "live step=\(i) press armed in_ms=\(ms)"
+        case .pressSkipped(let i, let why): return "live step=\(i) press skipped detail=\(why)"
+        case .pressed(let i, let p): return "live step=\(i) press pressed=\(p.pressed ? 1 : 0)\(p.stopped ? " stopped=1" : "") ms=\(p.ms) detail=\(p.detail)"
         case .stepFinished(let i): return "dryrun step=\(i) done"
         case .stopped(let r): return "dryrun STOPPED phase=\(r.phase.rawValue) step=\(r.step) latency_ms=\(r.latencyMs) skipped=\(r.skipped.count) [\(r.skipped.joined(separator: " | "))]"
         case .finished: return "dryrun finished"

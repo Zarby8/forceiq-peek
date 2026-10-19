@@ -107,6 +107,17 @@ process)" to phone.py, so Peak carries no token and no secret.
   `off` / `dry_run`), `desktopActions` stays OFF with no UI, and `DesktopDryRunTests` fails if a perform / click / key /
   open / write API appears in the dry-run sources. Live proof: add `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=dryrun-flow`
   (or `dryrun-meeting`) and optionally `FORCEIQ_PEAK_DRYRUN_PACE_MS=<ms between lookups>` so a STOP can land mid-step.
+- **Desktop action, live: FLOW's Code Window only.** With a scratch `GOAT_PEAK_ROOT` whose `settings.json` has
+  `desktopActions: true` plus `FORCEIQ_PEAK_DESKTOP_LIVE=1` (no dry-run opt-in; never `~/ForceIQ/peak`), Run on an
+  "open <client>'s latest FLOW package and hit the code button" card finds the client's package, brings FLOW forward,
+  locates the code-window target, arms the press (`FORCEIQ_PEAK_LIVE_ARM_MS`, default 1500) and then presses FLOW's
+  `Code Window` menu item with AXPress on that exact element: role `AXMenuItem`, title exactly `Code Window`, one match,
+  enabled, in the frontmost FLOW process, and only if FLOW's front window is that client's package. No coordinate
+  clicks, no synthetic keys. STOP (button, or Esc via a key-down monitor) halts between steps, mid-lookup, during the arm
+  and right before the press (`dryrun STOPPED phase=before_press …`). Nothing runs without the Run tap; the Command
+  meeting start stays locate-only. `desktopActions` stays OFF by default with no UI toggle. `FORCEIQ_PEAK_FLOW_PACKAGES`
+  points the package search at a scratch folder for demo proofs. `DesktopLiveTests` pins the single AXPress call site
+  (`ForceIQPeak/DesktopPresser.swift`); the dry-run sources stay free of any perform API.
 - **Live smoke:** `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=voice GOAT_PEAK_ROOT=<scratch root> FORCEIQ_PEAK_VOICE_FEED=<folder
   of .wav>` feeds recorded `say` clips in real time through the mic's conversion path (fake roster) and logs
   `voice turn first_confirmed_ms=… final_ms=… cpu_pct=…` per clip plus a summary.

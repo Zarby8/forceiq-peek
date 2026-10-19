@@ -5,18 +5,19 @@ import SwiftUI
 // The dry-run window: the plan for one client, live step status, and a big STOP while it runs. Locate and report only.
 
 @MainActor final class DryRunModel: ObservableObject {
-    enum Status: Equatable { case pending, running, located(String), notFound(String), stopped, skipped }
+    enum Status: Equatable { case pending, running, located(String), notFound(String), stopped, skipped, armed(Int), pressed(String) }
     let client: String
     let action: String
     let steps: [DryRunStep]
+    let live: Bool
     let stop = StopSwitch()
     @Published var status: [Int: Status] = [:]
     @Published var running = true
     @Published var summary: String?
     var stopPressedAt: Date?
 
-    init(client: String, action: String, steps: [DryRunStep]) {
-        self.client = client; self.action = action; self.steps = steps
+    init(client: String, action: String, steps: [DryRunStep], live: Bool = false) {
+        self.client = client; self.action = action; self.steps = steps; self.live = live
         for s in steps { status[s.id] = .pending }
     }
 
@@ -30,14 +31,18 @@ import SwiftUI
         switch e {
         case .stepStarted(let i): status[i] = .running
         case .broughtForward(let i, let note): status[i] = .located(note)
+        case .pressArmed(let i, let ms): status[i] = .armed(ms)
+        case .pressSkipped(let i, let why): status[i] = .notFound(why)
+        case .pressed(let i, let p): status[i] = p.pressed ? .pressed(p.detail) : (p.stopped ? .stopped : .notFound(p.detail))
         case .attempt(let i, let a):
             if a.found { status[i] = .located("\(a.strategy.rawValue): \(a.detail)") }
             else if a.stopped { status[i] = .stopped }
             else { status[i] = .notFound("\(a.strategy.rawValue): \(a.detail)") }
         case .stopped(let r):
             for s in steps where s.id >= r.step {
-                if s.id == r.step && r.phase == .duringStep {
-                    if case .located = status[s.id] ?? .pending { continue }
+                if s.id == r.step && r.phase != .betweenSteps {
+                    if case .located = status[s.id] ?? .pending { if r.phase == .duringStep { continue } }
+                    if case .pressed = status[s.id] ?? .pending { continue }
                     status[s.id] = .stopped
                 } else {
                     status[s.id] = .skipped
@@ -57,7 +62,7 @@ struct DryRunView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Desktop dry run · \(model.client)").font(.system(size: 15, weight: .heavy)).foregroundStyle(.white)
+                Text("\(model.live ? "Desktop action (live)" : "Desktop dry run") · \(model.client)").font(.system(size: 15, weight: .heavy)).foregroundStyle(.white)
                 Spacer()
                 if model.running {
                     Button(action: { model.pressStop() }) {
@@ -71,7 +76,9 @@ struct DryRunView: View {
                     Button("Close", action: onClose).accessibilityIdentifier("peak-dryrun-close")
                 }
             }
-            Text("Locate and report only. Nothing is clicked, typed, opened or booked\(model.action.hasPrefix("flow") ? "; FLOW may come forward" : "").")
+            Text(model.live
+                 ? "Presses FLOW's 'Code Window' menu item for \(model.client)'s package after the checks. Nothing else is clicked or typed. STOP or Esc halts it."
+                 : "Locate and report only. Nothing is clicked, typed, opened or booked\(model.action.hasPrefix("flow") ? "; FLOW may come forward" : "").")
                 .font(.system(size: 11)).foregroundStyle(Color.white.opacity(0.8))
             ForEach(model.steps) { s in
                 HStack(alignment: .top, spacing: 8) {
@@ -95,10 +102,11 @@ struct DryRunView: View {
 
     func icon(_ s: DryRunModel.Status) -> String {
         switch s { case .pending: return "·"; case .running: return "…"; case .located: return "✓"; case .notFound: return "✗"
-        case .stopped: return "■"; case .skipped: return "–" }
+        case .stopped: return "■"; case .skipped: return "–"; case .armed: return "⏱"; case .pressed: return "●" }
     }
     func detail(_ s: DryRunModel.Status) -> String? {
-        switch s { case .located(let d), .notFound(let d): return d; case .stopped: return "stopped"; case .skipped: return "skipped (STOP)"
+        switch s { case .located(let d), .notFound(let d), .pressed(let d): return d; case .stopped: return "stopped"; case .skipped: return "skipped (STOP)"
+        case .armed(let ms): return "press armed: pressing in \(ms) ms unless STOP"
         default: return nil }
     }
 }
@@ -106,6 +114,7 @@ struct DryRunView: View {
 /// A floating, non-activating panel at the top right of the main display, so STOP stays visible over FLOW / Command.
 @MainActor final class DryRunPanel {
     let panel: NSPanel
+    private var escMonitors: [Any] = []
     init(model: DryRunModel, onClose: @escaping () -> Void) {
         let host = NSHostingView(rootView: DryRunView(model: model, onClose: onClose))
         let size = NSSize(width: 520, height: 330)
@@ -119,6 +128,17 @@ struct DryRunView: View {
         host.frame = NSRect(origin: .zero, size: size)
         panel.contentView = host
         panel.orderFrontRegardless()
+        // Esc = STOP even while FLOW (not this non-activating panel) has the keyboard: observe key-downs only (a monitor
+        // never sends or alters an event), for as long as the panel is up.
+        let esc: (NSEvent) -> Void = { [weak model] e in
+            guard e.keyCode == 53 else { return }
+            MainActor.assumeIsolated { model?.pressStop() }
+        }
+        if let g = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: esc) { escMonitors.append(g) }
+        if let l = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { e in esc(e); return e }) { escMonitors.append(l) }
     }
-    func close() { panel.orderOut(nil) }
+    func close() {
+        escMonitors.forEach { NSEvent.removeMonitor($0) }; escMonitors = []
+        panel.orderOut(nil)
+    }
 }

@@ -6,7 +6,8 @@ import Foundation
 // Each one only produces a describe-first confirm card naming the client, the meeting and the time, with Run / Ask Claude /
 // Copy prompt. Nothing runs until Run is tapped, and Run only opens Command's own UI (its room page or schedule) or brings
 // FLOW forward. Peak never joins, records, books or reschedules, and never touches the recorder. A desktop click (FLOW's
-// code button) is a Cua action: it stays behind settings `desktop_actions`, OFF until the STOP dry run passes.
+// code button) is a Cua action: it stays behind settings `desktopActions` (OFF, no UI); Peak presses FLOW's
+// Code Window only in a gated scratch live setup after Run (see DesktopLive.swift).
 // An unclear client gets a pick card instead. Zero tokens; nothing leaves this Mac.
 
 public enum ClientCommandKind: String, Sendable { case flowPackage = "flow_package", startMeeting = "start_meeting" }
@@ -185,7 +186,7 @@ public enum ClientCommands {
                              inputs: ["Client: \(client)", "Package: \(client)'s latest FLOW package (~/Desktop/FLOW)", meetingLine,
                                       "Time: now, when you tap Run"],
                              touches: click
-                                 ? "Brings FLOW forward. The code button is a desktop click (Cua): it stays behind Desktop actions (\(ctx.desktopActions ? "on" : "off"), and not wired from Peak until the STOP dry run passes), so you press it in FLOW."
+                                 ? "Brings FLOW forward. The code button is a desktop click (Cua): it stays behind Desktop actions (\(ctx.desktopActions ? "on" : "off"); Peak presses it only in a scratch live setup after Run), so you press it in FLOW."
                                  : "Brings FLOW forward.",
                              outputs: ["FLOW in front"], reason: "You said: \u{201C}\(cmd.said)\u{201D}",
                              message: "Nothing has run. Run only opens FLOW.",
@@ -193,7 +194,13 @@ public enum ClientCommands {
             c.appName = ctx.flowApp ?? "FLOW"
         }
         c.origin = .command
-        if ctx.desktopMode == .dryRun {
+        if ctx.desktopMode == .live && cmd.kind == .flowPackage && cmd.codeButton {
+            c.touches = "Live for \(client): Run finds \(client)'s latest FLOW package, brings FLOW forward, then presses FLOW's "
+                + "'Code Window' menu item (an Accessibility press on that exact item, only if FLOW's front window is \(client)'s package). "
+                + "Nothing else is clicked or typed. STOP (or Esc) halts it at once, even right before the press."
+            c.message = "Nothing has run. Run presses FLOW's Code Window for \(client) after those checks; STOP halts it."
+            c.outputs = ["FLOW's Code Window for \(client)'s package"]
+        } else if ctx.desktopMode == .dryRun || ctx.desktopMode == .live {      // live mode: everything else stays locate-only
             c.touches = "Dry run for \(client): Run plans each step and locates its target (deep link, URL scheme, App Intents, "
                 + "Accessibility, Cua last) and reports. Nothing is clicked, typed, opened or booked" + (cmd.kind == .flowPackage ? "; FLOW may come forward." : ".")
                 + " STOP aborts at once."

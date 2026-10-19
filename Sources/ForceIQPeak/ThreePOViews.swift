@@ -403,6 +403,7 @@ struct ProposalView: View {
                     PeakButton(title: "Open in GOAT", color: .peakGold) { _ = AppLauncher.activateGOAT() }
                 } else {
                     PeakButton(title: "Run", color: .peakGreen, filled: true) { Task { await store.run(card.id) } }
+                        .accessibilityIdentifier(card.origin == .command ? "peak-command-run" : "peak-card-run")
                 }
                 PeakButton(title: "Ask Claude", color: .peakGold) { Task { await store.ask(card.id) } }
                 PeakButton(title: "Copy prompt", color: .peakGold) { store.copy(card.id) }
