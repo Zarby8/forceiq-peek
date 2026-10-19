@@ -3,7 +3,8 @@ import Foundation
 /// Persisted Peak settings, one JSON file under this coach's state root (<state_root>/settings.json).
 /// (KeyboardShortcuts keeps the recorded shortcut itself in the app's UserDefaults; that's the library's storage.)
 public final class PeakPrefs: @unchecked Sendable {
-    struct Doc: Codable { var hiddenDisplays: [String] = []; var hotkeyEnabled: Bool? = nil; var globallyHidden = false; var ghostFormat: String? = nil }
+    struct Doc: Codable { var hiddenDisplays: [String] = []; var hotkeyEnabled: Bool? = nil; var globallyHidden = false; var ghostFormat: String? = nil
+                          var voiceEnabled: Bool? = nil; var desktopActions: Bool? = nil }
     public let url: URL
     private var doc: Doc
     private let lock = NSLock()
@@ -36,6 +37,17 @@ public final class PeakPrefs: @unchecked Sendable {
     public var ghostFormat: GhostFormat {
         get { lock.lock(); defer { lock.unlock() }; return doc.ghostFormat.flatMap(GhostFormat.init(rawValue:)) ?? .h264Black }
         set { edit { $0.ghostFormat = newValue.rawValue } }
+    }
+    /// Voice (toggle dictation into 3PO): nil = never set (the profile's modules.voice decides, false by default).
+    public var voiceEnabled: Bool? {
+        get { lock.lock(); defer { lock.unlock() }; return doc.voiceEnabled }
+        set { edit { $0.voiceEnabled = newValue } }
+    }
+    /// Cua / desktop clicks from voice commands (e.g. FLOW's code button). OFF until the STOP dry run passes; while off,
+    /// a command card's Run only opens apps and deep links.
+    public var desktopActions: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return doc.desktopActions ?? false }
+        set { edit { $0.desktopActions = newValue } }
     }
     public var globallyHidden: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.globallyHidden }

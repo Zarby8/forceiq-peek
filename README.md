@@ -17,7 +17,8 @@ it, so an expanded, idle Peak does no per-frame SwiftUI work.
   Anything that sends, deletes, invoices, books or edits a database is view-only and opens in GOAT.
 - **family**: family-delivery alerts, only when the engine's `GOAT_FAMILY_DELIVERY_ALERTS` is on (default off). Copy link only.
 - **switcher**: the profile's apps, activated or launched by bundle ID. An app that isn't installed shows a gold outline and a gold "Not installed" line (full opacity) and can't be launched.
-- Declared for later: voice, machine_glance.
+- **voice** (opt-in, off by default; Settings → "Voice"): toggle dictation into 3PO. See **Voice** below.
+- Declared for later: machine_glance.
 
 **3PO droid:** BOB Motion **ForceIQ-Peak-3PO-v1**. The chat header plays the live RealityKit rig (`rig/3po.usdz`),
 then the rendered hevc_alpha loops, then the static droid mark, by what loads (`AvatarTier`). States follow the chat:
@@ -72,9 +73,40 @@ process)" to phone.py, so Peak carries no token and no secret.
 - Menu bar "Peak": show/hide, per-display checkboxes (by display UUID, persisted in `<state_root>/settings.json`), About, Quit.
 - URL scheme `forceiq-peak://` (strict; unknown actions are ignored; only the action name is logged):
   `toggle`, `show`, `hide`, `expand`, `collapse`, `ask[?q=…]` (opens the ask field prefilled and never sends),
-  `switch?app=<bundle id from the profile>`, `display?id=<display UUID>&state=on|off`.
+  `switch?app=<bundle id from the profile>`, `display?id=<display UUID>&state=on|off`, `voice` (toggle dictation).
 - Raycast: `raycast/*.sh` script commands (package "ForceIQ Peak"). At install they're copied to `~/ForceIQ/peak/raycast/`.
   Add that folder once by hand: Raycast Settings → Extensions → + → Add Script Directory.
+
+## Voice (opt-in; off until scored on the coach's own voice)
+- **Toggle only.** The mic button in the 3PO field, `forceiq-peak://voice` or the Raycast command "Talk to 3PO": the first
+  press starts, the next press stops. No hold-to-talk, no wake word, no silence auto-stop. While it listens the droid is in
+  its listening state. Settings → "Voice" turns it on (`settings.json` `voiceEnabled`; else the profile's `modules.voice`).
+- **Engine:** FluidAudio 0.17.7 + Parakeet TDT 0.6B v3 (Core ML, ANE), re-decoded every 160 ms; the Parakeet CTC 110M name
+  boost runs once at stop against the live roster (spotter rescue OFF). Models (about 560 MB) download once, on first
+  enable, into `<Peak root>/models` (pinned HF commits; progress line in the 3PO field and Settings). No NVIDIA Open Model
+  License models. Audio stays in memory on this Mac: never written, never uploaded.
+- **Live words** in the notch / pill (when Peak is collapsed) and in the 3PO field: confirmed words only (the prefix two
+  decodes agree on, about 0.5 s in), white at reduced opacity until the final pass, then pure white; client names
+  underlined in gold.
+- **Name guard** (PeakCore `VoiceNameGuard`): the boost may replace a word only when it sounds like the name. Months,
+  weekdays, numbers, function words and Peak's command words are never replaced ("October", "compare" never become
+  "Cooper"); any other dictionary word (macOS `/usr/share/dict/web2`) only by a near-homophone ("Holiday" → "Halliday").
+  The "'s" the boost strips is restored ("Halliday's").
+- **Commands.** The final words go to 3PO exactly like a typed message. "Open <client>'s FLOW package (and hit the code
+  button)" and "Start a meeting with <client>" become a local confirm card (client, meeting, time; Run / Ask Claude / Copy
+  prompt); an unclear client gets a pick card. Run only opens Command's own UI (the booking's room page, else the
+  schedule) or brings FLOW forward. Peak never joins, records or books, and never touches the recorder. The code-button
+  click is a desktop (Cua) action: behind `settings.json` `desktopActions`, OFF, and not wired until the STOP dry run passes.
+- **Live smoke:** `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=voice GOAT_PEAK_ROOT=<scratch root> FORCEIQ_PEAK_VOICE_FEED=<folder
+  of .wav>` feeds recorded `say` clips in real time through the mic's conversion path (fake roster) and logs
+  `voice turn first_confirmed_ms=… final_ms=… cpu_pct=…` per clip plus a summary.
+- **Real voice:** `sttbench --live` (the bake-off harness, `~/ForceIQ/stt-bakeoff`; uses its own `models/` copy, downloaded on first run if missing, and its own fake roster):
+  ```
+  cd ~/ForceIQ/stt-bakeoff && STTBench/.build/out/Products/Release/sttbench --engine tdtv3-ctc --la2 \
+      --ctc-norescue --ctc-guard --models models --live
+  ```
+  Enter starts, Enter stops (Ctrl-C quits); it prints the live words, the final text, first-partial latency (from START,
+  not speech onset) and final latency. The terminal app needs microphone access (System Settings → Privacy → Microphone).
 
 ## Build and test (never installs, launches or adds a login item)
 ```

@@ -9,6 +9,7 @@ public enum PeakURLAction: Equatable, Sendable {
     case switchApp(String)
     case display(uuid: String, on: Bool)
     case threePOModel(ModelPick)          // forceiq-peak://3po?model=auto|haiku|sonnet|opus (picks the 3PO model; never sends)
+    case voice                            // forceiq-peak://voice: toggle dictation (start, or stop and hand the words to 3PO)
 
     /// The only thing ever logged about a URL: the action name (never the query).
     public var name: String {
@@ -22,6 +23,7 @@ public enum PeakURLAction: Equatable, Sendable {
         case .switchApp: return "switch"
         case .display: return "display"
         case .threePOModel: return "3po"
+        case .voice: return "voice"
         }
     }
 }
@@ -58,6 +60,9 @@ public enum PeakURLRouter {
             guard only(["id", "state"]), let id = q["id"], id.range(of: uuidRx, options: .regularExpression) != nil,
                   let st = q["state"]?.lowercased(), st == "on" || st == "off" else { return nil }
             return .display(uuid: id.uppercased(), on: st == "on")
+        case "voice":
+            guard q.isEmpty || (only(["do"]) && q["do"]?.lowercased() == "toggle") else { return nil }
+            return .voice
         case "3po":
             guard only(["model"]), let m = q["model"]?.lowercased(), let pick = ModelPick(rawValue: m) else { return nil }
             return .threePOModel(pick)

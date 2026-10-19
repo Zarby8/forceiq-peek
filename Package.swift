@@ -1,5 +1,6 @@
-// swift-tools-version:6.0
-// ForceIQ Peak (PR 1). One third-party dependency, pinned exactly (see THIRD_PARTY_NOTICES.md and Package.resolved).
+// swift-tools-version:6.1
+// ForceIQ Peak. Two third-party dependencies, pinned exactly (see THIRD_PARTY_NOTICES.md and Package.resolved).
+// 6.1 tools so FluidAudio can be taken with no package traits (its default NemoTextProcessing binary is not linked).
 import PackageDescription
 
 let package = Package(
@@ -9,12 +10,17 @@ let package = Package(
     dependencies: [
         // sindresorhus/KeyboardShortcuts, MIT, exact 3.1.0 (commit 772133d9dbe800fdac0473226822994c5c162c58)
         .package(url: "https://github.com/sindresorhus/KeyboardShortcuts", exact: "3.1.0"),
+        // FluidInference/FluidAudio, Apache-2.0, v0.17.7 (commit 503b4bd1bbf7220882de39fe8ae6716aae4132da). Voice (opt-in).
+        .package(url: "https://github.com/FluidInference/FluidAudio.git",
+                 revision: "503b4bd1bbf7220882de39fe8ae6716aae4132da", traits: []),
     ],
     targets: [
         // Pure logic: models, policy, URL router, geometry, prefs, view models. No AppKit, no network. Unit-tested.
         .target(name: "PeakCore", path: "Sources/PeakCore"),
         .executableTarget(name: "ForceIQPeak",
-                          dependencies: ["PeakCore", .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts")],
+                          dependencies: ["PeakCore",
+                                         .product(name: "KeyboardShortcuts", package: "KeyboardShortcuts"),
+                                         .product(name: "FluidAudio", package: "FluidAudio")],
                           path: "Sources/ForceIQPeak"),
         .testTarget(name: "PeakCoreTests", dependencies: ["PeakCore"], path: "Tests/PeakCoreTests", exclude: ["Fixtures"]),
     ],

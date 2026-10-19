@@ -36,6 +36,13 @@ public enum ProposalPhase: Equatable, Sendable {
     @Published public var micOn = false
     public var onOpenApp: ((String) -> Void)?           // intent open_app → the switcher (allow-listed apps only)
     public var onCopy: ((String) -> Void)?
+    /// Client commands ("Open <client>'s FLOW package…", "Start a meeting with <client>"): the roster, the next meeting and
+    /// the flags. nil = commands off (everything goes to 3PO).
+    public var commandContext: (() -> ClientCommandContext?)?
+    /// Run on a command card (an explicit tap): opens Command's UI / brings FLOW forward; returns the line to show.
+    public var onCommandRun: ((ProposalCard) -> String)?
+    var pendingPicks: [String: ClientCommand] = [:]
+    var localSeq = 0
     let transport: ThreePOTransport
     let session: String
     weak var logger: PeakLogging?
@@ -54,7 +61,42 @@ public enum ProposalPhase: Equatable, Sendable {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSend else { return }
         draft = ""
+        if let ctx = commandContext?(), let cmd = ClientCommands.parse(text) {
+            local(cmd, ctx, said: text)
+            return
+        }
         await turn(text)
+    }
+
+    /// The dictated words, handed over exactly like a typed message (draft → send). If 3PO is mid-reply, they wait in the
+    /// field for the coach to send.
+    public func sendDictation(_ text: String) async {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        draft = t
+        logger?.log("3po dictation words=\(t.split(separator: " ").count)")
+        if canSend { await send() }
+    }
+
+    func nextLocalID() -> String { localSeq += 1; return String(format: "cmd%09d", localSeq) }
+
+    func local(_ cmd: ClientCommand, _ ctx: ClientCommandContext, said: String?) {
+        let r = ClientCommands.route(cmd, ctx, id: nextLocalID())
+        transcript.local(user: said, reply: r.reply, cards: [r.card])
+        phases[r.card.id] = .described
+        if r.card.origin == .pick { pendingPicks[r.card.id] = cmd }
+        logger?.log("3po command kind=\(cmd.kind.rawValue) card=\(r.card.origin.rawValue) local=1")
+    }
+
+    /// A pick card's client tapped: the confirm card for that client (nothing runs).
+    public func pickClient(_ id: String, _ client: String) {
+        guard let cmd = pendingPicks[id], let ctx = commandContext?(), phases[id] == .described else { return }
+        pendingPicks[id] = nil
+        phases[id] = .done("Picked \(client).")
+        let c = ClientCommands.card(cmd, client: client, ctx, id: nextLocalID())
+        transcript.local(user: nil, reply: "Here's what that does for \(client). Nothing runs until you tap Run.", cards: [c])
+        phases[c.id] = .described
+        logger?.log("3po command kind=\(cmd.kind.rawValue) card=command picked=1")
     }
 
     func turn(_ text: String, body custom: Data? = nil) async {
@@ -177,6 +219,12 @@ public enum ProposalPhase: Equatable, Sendable {
     }
 
     public func run(_ id: String) async {
+        if let c = card(id), c.origin == .command {               // Peak's own command card: one explicit tap opens the UI
+            guard phases[id] == .described || isFailed(id) else { return }
+            logger?.log("3po command run action=\(c.action)")
+            phases[id] = .done(onCommandRun?(c) ?? "Nothing ran.")
+            return
+        }
         guard let c = card(id), !c.viewOnly, let body = c.previewBody, phases[id] == .described || isFailed(id) else { return }
         phases[id] = .previewing
         logger?.log("3po proposal preview action=\(c.action)")

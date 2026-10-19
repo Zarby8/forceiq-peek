@@ -86,6 +86,7 @@ struct PeakRootView: View {
     @ObservedObject var panel: PanelState
     @ObservedObject var threePO: ThreePOStore
     @ObservedObject var drops: DropStore
+    @ObservedObject var voice: VoiceController
     let switcher: [SwitcherEntry]
     let mark: GhostMarkRendering
     let glow: GhostGlowRendering
@@ -107,6 +108,10 @@ struct PeakRootView: View {
     var bottomRadius: CGFloat { isExpanded ? 24 : (panel.mode == .notch ? 12 : panel.collapsedSize.height / 2) }
     var shape: PeakShellShape { PeakShellShape(rect: shellRect, topRadius: topRadius, bottomRadius: bottomRadius, notch: panel.mode == .notch) }
     var hoverLift: Bool { panel.hovering && !isExpanded && !reduceMotion }
+    var voiceStrip: Bool {
+        !isExpanded && panel.visible && voice.enabled && controller.activeDisplay.map { $0 == panel.uuid } ?? true
+            && (voice.phase.isListening || voice.phase == .finishing || voice.handing)
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -114,7 +119,15 @@ struct PeakRootView: View {
             content
                 .frame(width: panel.layout.canvas.width, height: panel.layout.canvas.height, alignment: .topLeading)
                 .mask(shape)
+            if voiceStrip {                // dictating with Peak collapsed (Raycast / the deep link): the words under the notch
+                let r = panel.local(panel.layout.collapsed)
+                VoiceStrip(voice: voice).fixedSize(horizontal: false, vertical: true).frame(width: 440)
+                    .position(x: r.midX, y: r.maxY + 26)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .allowsHitTesting(false)
+            }
         }
+        .animation(Motion.quick(reduceMotion), value: voiceStrip)
         .contentShape(shape)
         .onTapGesture { if !isExpanded { Haptic.level(); controller.activeDisplay = panel.uuid; controller.expand() } }
         .scaleEffect(hoverLift ? 1.02 : 1, anchor: UnitPoint(x: (shellRect.midX) / max(1, panel.layout.canvas.width), y: 0))
@@ -250,7 +263,7 @@ struct PeakRootView: View {
                 } else if showChat {
                     ThreePOView(store: threePO, profile: controller.profile, prefill: controller.askText,
                                 live: AvatarPolicy.live(visible: panel.visible, globallyVisible: controller.globallyVisible,
-                                                        expanded: isExpanded, reduceMotion: reduceMotion))
+                                                        expanded: isExpanded, reduceMotion: reduceMotion), voice: voice)
                         .transition(.slideUpFull(reduceMotion))
                 } else if let ask = controller.askText {
                     AskView(initial: ask, close: { controller.closeAsk() }).transition(.slideUpFull(reduceMotion))
@@ -596,9 +609,19 @@ struct SwitcherTile: View {
 
 struct SettingsView: View {
     @ObservedObject var controller: PeakController
+    @ObservedObject var voice: VoiceController
+    var setVoice: (Bool) -> Void = { _ in }
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("ForceIQ Peak").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.white)
+            Toggle(isOn: Binding(get: { voice.enabled }, set: { setVoice($0) })) {
+                Text("Voice (opt-in): talk to 3PO").foregroundStyle(Color.white)
+            }
+            Text("Press the mic in 3PO (or forceiq-peak://voice) to start, press again to stop. Audio stays on this Mac; the speech model (about 560 MB) downloads once into your Peak folder.")
+                .font(.system(size: 11)).foregroundStyle(Color.white).fixedSize(horizontal: false, vertical: true)
+            if voice.enabled, let l = voice.phase.line {
+                Text(l).font(.system(size: 11, weight: .semibold)).foregroundStyle({ if case .failed = voice.phase { return Color.peakGold }; return Color.peakGreen }())
+            }
             Toggle(isOn: Binding(get: { controller.hotkeyEnabled }, set: { controller.setHotkeyEnabled($0) })) {
                 Text("Built-in hotkey").foregroundStyle(Color.white)
             }

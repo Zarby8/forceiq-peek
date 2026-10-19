@@ -193,14 +193,18 @@ struct ThreePOView: View {
     let profile: CoachProfile
     let prefill: String?
     var live = true                                         // AvatarPolicy.live (expanded, visible, no Reduce Motion)
+    @ObservedObject var voice: VoiceController
     var avatar: ThreePOAvatarRendering = AnimatedThreePOAvatar()
     @FocusState private var focused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
+    /// Listening, finishing, or the final words still showing in the field.
+    var dictating: Bool { voice.enabled && (voice.phase.isListening || voice.phase == .finishing || voice.handing) }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                avatar.avatar(size: 32, signals: AvatarSignals.from(store.transcript, voiceEnabled: profile.isEnabled(.voice), micOn: store.micOn),
+                avatar.avatar(size: 32, signals: AvatarSignals.from(store.transcript, voiceEnabled: voice.enabled, micOn: store.micOn),
                               live: live, reduceMotion: reduceMotion)
                     .modifier(OpusPulse(trigger: store.transcript.opusPulses, reduceMotion: reduceMotion))
                 Text("3PO").font(.system(size: 14, weight: .heavy)).foregroundStyle(Color.peakGold)
@@ -249,17 +253,36 @@ struct ThreePOView: View {
                 .onChange(of: store.transcript.messages.count) { _, _ in withAnimation(Motion.quick(reduceMotion)) { proxy.scrollTo("end", anchor: .bottom) } }
             }
             HStack(spacing: 8) {
+                if voice.enabled { MicButton(voice: voice) }
                 TextField("", text: $store.draft, axis: .vertical)
                     .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(Color.white).lineLimit(1...4)
-                    .modifier(GoldPlaceholder(text: "Ask 3PO…", show: store.draft.isEmpty))
+                    .modifier(GoldPlaceholder(text: voice.enabled ? "Ask 3PO… or press the mic" : "Ask 3PO…", show: store.draft.isEmpty && !dictating))
                     .focused($focused)
                     .onSubmit { Task { await store.send() } }
                     .padding(.horizontal, 10).padding(.vertical, 7)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(focused ? Color.peakGreen : Color.peakGold, lineWidth: focused ? 2 : 1))
+                    .overlay(alignment: .topLeading) {
+                        if dictating {          // the live words sit in the field (confirmed only; pure white once final)
+                            Group {
+                                if voice.line.isEmpty {
+                                    Text("Listening…").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.white.opacity(VoiceLine.pendingOpacity))
+                                } else { LiveWordsText(line: voice.line).lineLimit(1...4) }
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 10).padding(.vertical, 7)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.black))
+                            .allowsHitTesting(false)
+                        }
+                    }
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(dictating || focused ? Color.peakGreen : Color.peakGold, lineWidth: dictating || focused ? 2 : 1))
                     .animation(Motion.quick(reduceMotion), value: focused)
                 PeakButton(title: store.transcript.streaming ? "…" : "Send", color: .peakGreen, filled: true, enabled: store.canSend) {
                     Task { await store.send() }
                 }
+            }
+            if voice.enabled, let l = voice.phase.line {
+                Text(l).font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle({ if case .failed = voice.phase { return Color.peakGold }; return Color.white }())
+                    .lineLimit(2).contentTransition(.numericText())
             }
     }
 }
@@ -342,10 +365,10 @@ struct ProposalView: View {
                     ApprovalCheck(trigger: store.approvedPops, size: 15, reduceMotion: reduceMotion)
                         .transition(reduceMotion ? .identity : .scale(scale: 0.2))
                 }
-                Text(card.client ?? "No client named").font(.system(size: 13, weight: .heavy)).foregroundStyle(Color.white)
+                Text(card.client ?? (card.origin == .pick ? "Which client?" : "No client named")).font(.system(size: 13, weight: .heavy)).foregroundStyle(Color.white)
                 Text(card.label).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
                 Spacer()
-                Text(card.viewOnly ? "View only" : "Proposal").font(.system(size: 10, weight: .heavy))
+                Text(card.viewOnly ? "View only" : (card.origin == .pick ? "Pick a client" : (card.origin == .command ? "Confirm" : "Proposal"))).font(.system(size: 10, weight: .heavy))
                     .foregroundStyle(card.viewOnly ? Color.peakGold : Color.peakGreen)
             }
             if !card.reason.isEmpty { Text(card.reason).font(.system(size: 12)).foregroundStyle(Color.white) }
@@ -367,6 +390,13 @@ struct ProposalView: View {
 
     @ViewBuilder var buttons: some View {
         switch phase {
+        case .described where card.origin == .pick:
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(card.picks, id: \.self) { name in
+                    PeakButton(title: name, color: .peakGold) { store.pickClient(card.id, name) }
+                }
+                PeakButton(title: "Copy prompt", color: .peakGold) { store.copy(card.id) }
+            }
         case .described, .failed:
             HStack(spacing: 8) {
                 if card.viewOnly {

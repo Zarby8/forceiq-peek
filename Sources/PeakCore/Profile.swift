@@ -4,7 +4,10 @@ import Foundation
 /// launch from the local engine (GET /api/peak/profile), else the last copy cached under the state root.
 /// Nothing coach-specific lives in Peak's code.
 public struct CoachProfile: Equatable, Sendable, Codable {
-    public struct Roster: Equatable, Sendable, Codable { public var source: String; public var names: [String] }
+    public struct Roster: Equatable, Sendable, Codable {
+        public var source: String; public var names: [String]
+        public init(source: String, names: [String]) { self.source = source; self.names = names }
+    }
     public struct Accounts: Equatable, Sendable, Codable { public var command: String; public var flow: String }
     public struct KeyRef: Equatable, Sendable, Codable {           // a Keychain reference, never the key
         public var keychainService: String; public var account: String

@@ -96,6 +96,8 @@ enum Screens {
     var mouseMonitors: [Any] = []
     var hoveredDisplay: String?
     var demoFeedLogged = false
+    var voice: VoiceController!
+    var lastMeeting: MeetingRow?
 
     func applicationWillFinishLaunching(_ n: Notification) {
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleURL(_:reply:)),
@@ -111,6 +113,10 @@ enum Screens {
                 prof = DemoData.profile(stateRoot: p.stateRoot.isEmpty ? "~/ForceIQ/peak" : p.stateRoot, apps: p.apps)
                 prof.goatBundleID = p.goatBundleID
                 if avatarTour { prof.modules["voice"] = true }    // the avatar tour shows 'listening' (voice stays off elsewhere)
+                if isVoiceTour {
+                    prof.modules["voice"] = true
+                    prof.roster = CoachProfile.Roster(source: "fixture", names: DemoData.voiceRoster)
+                }
             }
             setUp(prof, source: src)
         }
@@ -143,6 +149,7 @@ enum Screens {
             self.dropsStore.dismiss(); self.controller.tab = .threePO; self.threePO.draft = q        // prefilled; Chris sends it
         }
         controller.onModelPick = { [weak self] pick in Task { await self?.threePO.choose(pick) } }
+        setUpVoice(p, root: root)
         if p.isEnabled(.threePO) { Task { await threePO.loadModels(); await threePO.refreshSpend() } }
         log.log("launch profile=\(source) configured=\(p.configured ? "yes" : "no") modules=\(PeakModuleID.allCases.filter { p.isEnabled($0) }.map(\.rawValue).joined(separator: ",")) demo=\(demo ? "on" : "off") glow=\(ShaderGlowRenderer.available ? "metal" : "native") mark=\(GhostAssets.pack.map { $0.pack.replacingOccurrences(of: " ", with: "_") } ?? "placeholder") format=\(GhostAssets.format.rawValue)")
         controller.onSwitchApp = { [weak self] id in
@@ -174,6 +181,52 @@ enum Screens {
                 NSApp.terminate(nil)
             }
         }
+        if isVoiceTour { voiceTour() }
+    }
+
+    // ── voice (toggle dictation into 3PO; opt-in) ──
+    func setUpVoice(_ p: CoachProfile, root: URL) {
+        voice = VoiceController(root: root, logger: log)
+        voice.onListening = { [weak self] on in self?.threePO.micOn = on }       // drives the droid's 'listening'
+        voice.onFinal = { [weak self] text in
+            guard let self else { return }
+            if !(self.controller.expanded && self.controller.tab == .threePO) {
+                if self.controller.activeDisplay == nil { self.controller.activeDisplay = self.screenUnderPointer() }
+                self.controller.tab = .threePO; self.controller.expand()
+            }
+            Task { await self.threePO.sendDictation(text) }                     // exactly like a typed message
+        }
+        controller.onVoiceToggle = { [weak self] in self?.voice.toggle() }
+        threePO.commandContext = { [weak self] in
+            guard let self else { return nil }
+            return ClientCommandContext(roster: self.profile.roster.names, meeting: self.lastMeeting, desktopActions: self.prefs.desktopActions,
+                                        flowApp: self.profile.apps.first { $0.name.lowercased() == "flow" }?.name)
+        }
+        threePO.onCommandRun = { [weak self] c in self?.runCommand(c) ?? "Nothing ran." }
+        let on = VoiceGate.enabled(p, setting: demo ? (isVoiceTour ? true : nil) : prefs.voiceEnabled)
+        voice.configure(enabled: on, roster: p.roster.names)
+        log.log("voice enabled=\(on ? "yes" : "no")")
+    }
+
+    func setVoice(_ on: Bool) {
+        if !demo { prefs.voiceEnabled = on }
+        voice.configure(enabled: VoiceGate.enabled(profile, setting: on), roster: profile.roster.names)
+        log.log("voice setting=\(on ? "on" : "off")")
+    }
+
+    /// Run on a client-command card (an explicit tap). Opens Command's own UI (room page or schedule) or brings FLOW
+    /// forward; nothing else. Desktop clicks (FLOW's code button) are not wired from Peak (Desktop actions stays off).
+    func runCommand(_ c: ProposalCard) -> String {
+        if demo { log.log("command run demo=1"); return "Demo mode: nothing opened." }
+        if let l = c.link {
+            guard let u = URL(string: CommandLink.safe(l)), NSWorkspace.shared.open(u) else { return "Command didn't open. Nothing ran." }
+            return "Command is open for \(c.client ?? "the client"). Join and Record are yours to tap there."
+        }
+        if let name = c.appName, let app = profile.apps.first(where: { $0.name.lowercased() == name.lowercased() }) {
+            controller.handle(.switchApp(app.bundleID))
+            return "FLOW is in front. Press the code button there yourself (desktop clicks stay off)."
+        }
+        return "FLOW isn't in this coach's app list, so nothing opened."
     }
 
     /// First-use costs paid once, off-screen, right after launch instead of on the first tap: the multi-line text
@@ -248,6 +301,53 @@ enum Screens {
     var avatarTour: Bool { demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "3po" }
     var sendTour: Bool { demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "3po-send" }
     var idleTour: Bool { demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "3po-idle" }
+    var isVoiceTour: Bool { demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "voice" }
+
+    /// Voice live smoke (demo mode + FORCEIQ_PEAK_DEMO_TOUR=voice + FORCEIQ_PEAK_VOICE_FEED=<folder of .wav clips>): each
+    /// clip is fed in real time through the mic's conversion path. Clips named *-notch-* run with Peak collapsed and are
+    /// toggled through forceiq-peak://voice; the rest through the mic button's action with the 3PO chat open. Fake roster.
+    func voiceTour() {
+        let dir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["FORCEIQ_PEAK_VOICE_FEED"] ?? "")
+        let clips = ((try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [])
+            .filter { $0.pathExtension.lowercased() == "wav" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+        guard let scr = NSScreen.screens.first else { return }
+        let main = Screens.uuid(scr)
+        let c = controller!, v = voice!, store = threePO!
+        func step(_ name: String) { log.log("tour step=\(name) t=\(String(format: "%.3f", Date().timeIntervalSince1970))") }
+        func sleep(_ s: Double) async { try? await Task.sleep(nanoseconds: UInt64(s * 1_000_000_000)) }
+        Task { @MainActor [self] in
+            await sleep(1.5); step("chat"); c.activeDisplay = main; c.tab = .threePO; c.expand()
+            var waited = 0.0
+            while v.phase != .ready && waited < 900 { await sleep(0.2); waited += 0.2 }
+            step("voice-ready waited_s=\(Int(waited))")
+            await sleep(2.0)
+            for (i, clip) in clips.enumerated() {
+                let notch = clip.lastPathComponent.contains("-notch-")
+                if notch { c.tab = .home; c.collapse(); await sleep(1.5) }
+                else if !(c.expanded && c.tab == .threePO) { c.activeDisplay = main; c.tab = .threePO; c.expand(); await sleep(1.2) }
+                v.feed = clip
+                step("voice-start-\(i + 1) clip=\(clip.deletingPathExtension().lastPathComponent)")
+                if notch { route("forceiq-peak://voice") } else { v.toggle() }
+                await sleep(0.3)
+                let dur = v.lastFeed?.duration ?? 3
+                await sleep(max(0.5, dur - 0.3) + 0.2)                      // end of audio + 200 ms, then the stop toggle
+                step("voice-stop-\(i + 1)")
+                if notch { route("forceiq-peak://voice") } else { v.toggle() }
+                await sleep(1.0)
+                var w = 0.0
+                while store.transcript.streaming && w < 20 { await sleep(0.2); w += 0.2 }
+                await sleep(2.5)
+            }
+            let r = v.results
+            func s(_ xs: [Double]) -> String {
+                guard let p50 = VoiceStats.percentile(xs, 50), let mx = xs.max() else { return "n/a" }
+                return String(format: "p50=%.0f max=%.0f n=%d", p50, mx, xs.count)
+            }
+            log.log("voice summary first_confirmed_ms \(s(r.compactMap(\.first))) | from_onset_ms \(s(r.compactMap(\.firstFromOnset))) | final_ms \(s(r.map(\.final))) | cpu_pct \(s(r.map(\.cpu)))")
+            await sleep(2.0); step("collapse"); c.tab = .home; c.collapse()
+            await sleep(1.0); step("tour-end")
+        }
+    }
 
     /// Visual proof of the 3PO droid (demo mode + FORCEIQ_PEAK_DEMO_TOUR=3po): every state and transition with the
     /// scripted transport (no engine, no tokens): idle → mic (listening) → idle → send on Auto (thinking + the gold
@@ -314,7 +414,8 @@ enum Screens {
     func refresh() {
         if demo {
             let quiet = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "quiet"
-            cards.update(DemoData.snapshot(quiet: quiet), profile: profile)
+            let s = DemoData.snapshot(quiet: quiet); cards.update(s, profile: profile)
+            lastMeeting = isVoiceTour ? DemoData.voiceMeeting() : s.meeting
             if !demoFeedLogged { demoFeedLogged = true; log.log("feed demo=\(quiet ? "quiet" : "sample") ghost=\(cards.ghost.rawValue)") }
             return
         }
@@ -322,6 +423,7 @@ enum Screens {
         Task { @MainActor in
             let s = await engine.snapshot()
             cards.update(s, profile: profile)
+            lastMeeting = s.meeting
             log.log("feed meeting=\(s.meeting != nil ? "yes" : "no") fixes=\(s.fixes.count) approvals=\(s.approvals.count) family=\(s.familyEnabled ? "on" : "off") ghost=\(cards.ghost.rawValue)")
         }
     }
@@ -335,7 +437,7 @@ enum Screens {
             if let h = hosts[s.uuid] { h.relayout(s, geometry: geometry); continue }
             let entries = profile.isEnabled(.switcher) ? AppSwitcher.entries(profile, WorkspaceLocator()) : []
             let h = PanelHost(screen: s, geometry: geometry) { [unowned self] st in
-                AnyView(PeakRootView(controller: controller, cards: cards, panel: st, threePO: threePO, drops: dropsStore, switcher: entries, mark: mark, glow: glow,
+                AnyView(PeakRootView(controller: controller, cards: cards, panel: st, threePO: threePO, drops: dropsStore, voice: voice, switcher: entries, mark: mark, glow: glow,
                                      onSwitch: { [weak self] id in self?.controller.handle(.switchApp(id)) },
                                      onDrop: { [weak self] urls in self?.dropped(urls, uuid: s.uuid) ?? false }))
             }
@@ -508,10 +610,10 @@ enum Screens {
     }
     @objc func menuSettings() {
         if settings == nil {
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 380, height: 160), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 380, height: 300), styleMask: [.titled, .closable], backing: .buffered, defer: false)
             w.title = "ForceIQ Peak"
             w.isReleasedWhenClosed = false
-            w.contentView = NSHostingView(rootView: SettingsView(controller: controller))
+            w.contentView = NSHostingView(rootView: SettingsView(controller: controller, voice: voice, setVoice: { [weak self] on in self?.setVoice(on) }))
             w.center()
             settings = w
         }

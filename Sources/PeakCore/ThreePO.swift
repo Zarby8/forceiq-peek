@@ -77,6 +77,13 @@ public struct ProposalCard: Equatable, Sendable, Identifiable {
     public var viewOnly: Bool
     public var previewBody: Data?        // POST /api/act body without confirm (GOAT's own preview)
     public var confirmBody: Data?        // POST /api/act body with confirm:true (only after the preview, on a second tap)
+    /// engine: a 3PO proposal (Run = GOAT's /api/act preview, then Confirm). command: a client voice/typed command Peak
+    /// recognised itself (Run opens `link` / brings `appName` forward, nothing else). pick: "which client?" (`picks`).
+    public enum Origin: String, Sendable { case engine, command, pick }
+    public var origin: Origin = .engine
+    public var link: String? = nil       // command: the deep link Run opens (Command's room page / schedule; CommandLink-checked)
+    public var appName: String? = nil    // command: the allow-listed app Run brings forward (FLOW)
+    public var picks: [String] = []      // pick: the candidate clients, best first
 }
 
 public enum ProposalPolicy {
@@ -329,6 +336,14 @@ public struct ThreePOTranscript: Equatable, Sendable {
         streaming = true; thinking = true; notes = []
         // Auto: the gold 'consulting Opus' pulse starts on send, not when the engine's advisor event lands (~15 s later).
         consultingOpus = models.pick == .auto
+    }
+
+    /// A zero-token local turn (a client command Peak recognised itself): the user's words, then 3PO's card(s).
+    public mutating func local(user text: String?, reply: String, cards: [ProposalCard]) {
+        if let text { messages.append(ChatMessage(id: nextID, role: .user, text: text, done: true)); nextID += 1 }
+        messages.append(ChatMessage(id: nextID, role: .threePO, text: reply, proposals: cards, modelAlias: "local", local: true, done: true))
+        nextID += 1
+        notes = []
     }
 
     private mutating func reply(_ f: (inout ChatMessage) -> Void) {

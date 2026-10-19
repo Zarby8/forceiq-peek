@@ -36,6 +36,7 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     weak var logger: PeakLogging?
     public var onSwitchApp: ((String) -> Void)?
     public var onModelPick: ((ModelPick) -> Void)?
+    public var onVoiceToggle: (() -> Void)?
     public enum Tab: String, Sendable { case home, threePO = "3po" }
     @Published public var tab: Tab = .home
 
@@ -92,6 +93,7 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         case .switchApp(let id): onSwitchApp?(id); log("state switch")
         case .display(let uuid, let on): setDisplay(uuid, shown: on)
         case .threePOModel(let p): onModelPick?(p)
+        case .voice: onVoiceToggle?()
         }
     }
 
@@ -194,6 +196,13 @@ public enum DemoData {
         p.spend = .init(showAccountLine: true, budgetUSD: 250)
         p.apps = apps
         return p
+    }
+
+    /// The voice smoke's fake roster: two Averys for the pick card, one full name for the boost. Invented names.
+    public static let voiceRoster = ["Tobias Marchetti", "Avery Kowalczyk", "Avery Lindqvist", "Sample Skater"]
+    public static func voiceMeeting(now: Date = Date()) -> MeetingRow {
+        MeetingRow(client: "Tobias Marchetti", scheduledAt: now.addingTimeInterval(42 * 60), durationMinutes: 60, joinURL: nil,
+                   openURL: CommandLink.room(sessionID: "demo_session"))
     }
 
     /// `quiet`: the everyday desk (no meeting, no fixes, no approvals) so the Ghost is .idle and its ambient glow
