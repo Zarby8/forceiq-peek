@@ -126,6 +126,8 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
 
     /// "Command sign-in expired, tap to sign in" (not a card: it names no client). Its tap only asks GOAT.
     public let signIn: CommandSignInModel
+    /// The 5090 light's gate (GPULightModel.hold): Run on an approval that is 5090 GPU work is refused while it isn't green.
+    public var gpuHold: (() -> String?)?
 
     public init(performer: CardActionPerforming, logger: PeakLogging? = nil, signInTransport: CommandSignInTransport? = nil) {
         self.performer = performer; self.logger = logger
@@ -166,6 +168,11 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         guard CardPolicy.isAllowed(action, on: card) else {
             lastResult = card.viewOnlyReason ?? "Not available from Peak."
             logger?.log("card refused kind=\(card.kind.rawValue)")
+            return false
+        }
+        if action == .run, GPUGate.isGPUAction(card), let why = gpuHold?() {
+            lastResult = why
+            logger?.log("card refused=gpu-hold kind=\(card.kind.rawValue)")
             return false
         }
         logger?.log("card action kind=\(card.kind.rawValue) action=\(Self.name(action))")

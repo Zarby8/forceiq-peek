@@ -15,7 +15,7 @@ import SwiftUI
     func still(size: CGFloat) -> AnyView { AnyView(DroidMark().frame(width: size, height: size)) }
 }
 
-/// Original geometric droid glyph, gold #F5C542 on black: a rounded-square head with one wide visor slot and a single
+/// Original geometric droid glyph, Brand gold on black: a rounded-square head with one wide visor slot and a single
 /// lens, two side bolts and a short mast. Deliberately not humanoid (no face, no round eyes, no plating).
 struct DroidMark: View {
     var body: some View {

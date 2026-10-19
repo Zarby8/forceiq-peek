@@ -96,6 +96,8 @@ struct PeakRootView: View {
     @ObservedObject var threePO: ThreePOStore
     @ObservedObject var drops: DropStore
     @ObservedObject var voice: VoiceController
+    @ObservedObject var nextSession: NextSessionModel
+    @ObservedObject var light: GPULightModel
     let switcher: [SwitcherEntry]
     let mark: GhostMarkRendering
     let glow: GhostGlowRendering
@@ -112,7 +114,7 @@ struct PeakRootView: View {
         if panel.mode == .notch && isExpanded { r = r.insetBy(dx: -earRadius, dy: 0) }   // ears sit outside the sheet
         return r
     }
-    var earRadius: CGFloat { panel.mode == .notch ? (isExpanded ? 14 : 8) : 0 }
+    var earRadius: CGFloat { panel.mode == .notch && isExpanded ? 14 : 0 }   // collapsed: no flare past the notch
     var topRadius: CGFloat { panel.mode == .notch ? earRadius : (isExpanded ? 22 : panel.collapsedSize.height / 2) }
     var bottomRadius: CGFloat { isExpanded ? 24 : (panel.mode == .notch ? 12 : panel.collapsedSize.height / 2) }
     var shape: PeakShellShape { PeakShellShape(rect: shellRect, topRadius: topRadius, bottomRadius: bottomRadius, notch: panel.mode == .notch) }
@@ -228,11 +230,21 @@ struct PeakRootView: View {
 
     var badgeCount: Int { cards.cards.filter { $0.kind != .meeting }.count }
 
-    var collapsed: some View {
+    @ViewBuilder var collapsed: some View {
+        if panel.mode == .notch {
+            // Inside the camera housing nothing would be visible anyway: a plain black fill the size of the notch.
+            Color.clear.frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
+        } else {
+            collapsedPill
+        }
+    }
+
+    var collapsedPill: some View {
         HStack(spacing: 6) {
             ghost(panel.collapsedSize.height - 10)
-            if panel.mode == .notch {
-                Spacer().frame(width: panel.notchWidth)
+            if nextSession.showsPill {
+                NextSessionPill(model: nextSession, compact: true)          // names the client; gold on a gap
+                Spacer(minLength: 0)
             } else {
                 Text("ForceIQ Peak").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
                     .matchedGeometryEffect(id: "title", in: ns)
@@ -266,6 +278,7 @@ struct PeakRootView: View {
                 PeakButton(title: "Collapse", color: .white, shortcut: .cancelAction, help: "Collapse (Esc)") { controller.collapse() }
             }
             .padding(.top, panel.mode == .notch ? (panel.layout.notchRect?.height ?? 32) + 4 : 12)
+            GPULightDot(light: light)                         // 5090 light: green, or red (held / unknown), labelled
             Group {
                 if drops.active {
                     DropsView(drops: drops).transition(reduceMotion ? .identity : .asymmetric(insertion: .scale(scale: 0.94, anchor: .top), removal: .identity))
@@ -278,11 +291,20 @@ struct PeakRootView: View {
                     AskView(initial: ask, close: { controller.closeAsk() })
                         .id(controller.askSeq)                       // a new link while open re-seeds the field
                         .transition(.slideUpFull(reduceMotion))
+                } else if nextSession.showingCard {
+                    NextSessionCard(model: nextSession)                      // describe-first: Ask TRON / Copy only
+                        .transition(reduceMotion ? .identity : .asymmetric(insertion: .move(edge: .trailing), removal: .identity))
                 } else if let card = cards.describedCard {
                     DescriptionView(card: card, cards: cards)
                         .transition(reduceMotion ? .identity : .asymmetric(insertion: .move(edge: .trailing), removal: .identity))
                 } else {
-                    CardList(cards: cards).transition(.slideUpFull(reduceMotion))
+                    VStack(alignment: .leading, spacing: 8) {
+                        if nextSession.showsPill {
+                            NextSessionPill(model: nextSession).onTapGesture { Haptic.tick(); nextSession.openCard() }
+                        }
+                        CardList(cards: cards)
+                    }
+                    .transition(.slideUpFull(reduceMotion))
                 }
             }
             .frame(maxHeight: .infinity, alignment: .top)

@@ -3,7 +3,7 @@
 A Ghost-branded strip for macOS. It wraps the notch on a notch display and floats as a pill at top-center on a display
 without one (Studio Display). There's one non-activating, borderless `NSPanel` per `NSScreen`, above the menu bar, on
 every Space and stationary, and it follows `NSApplication.didChangeScreenParametersNotification`. Pure white on pure
-black, green `#5BE37D` and gold `#F5C542` accents, no dim gray text.
+black, green `#4FFF4F` and gold `#F4C430` accents (ForceIQ Brand 2026; defined once in `Sources/PeakCore/Brand.swift`), no dim gray text.
 
 **Ghost mark:** BOB Motion **ForceIQ-Peak-BOB-v1, v1.1** (idle re-timed to a seamless 60-frame loop), h264 on black,
 masked to a circle, played with AVPlayerLooper and driven by the pack's MANIFEST.json. See `Resources/ASSETS.md`.
@@ -78,8 +78,9 @@ Command". Peak uploads nothing, and client video stays local.
 | Endpoint | Status |
 |---|---|
 | `GET /api/peak/profile` | **new**, this Mac only: this coach's `peak` overlay section (engine/peakprofile.py), no secrets |
-| `GET /api/peak/next-meeting` | **new**, this Mac only, read-only: the next Command booking (engine/peakmeeting.py → panels.command_get) |
+| `GET /api/peak/next-meeting` | **new**, this Mac only, read-only: the next Command booking (engine/peakmeeting.py → panels.command_get), plus `today` (today's named sessions) and `gpu_window` (meeting times only, for the 5090 light) |
 | `GET /api/peak/client-directory` | **new**, this Mac only, read-only, asked only with `commandMeetingLink` on: this coach's active Command clients `[{id, display_name}]` (engine/peakdirectory.py → panels.command_get → Command `GET /clients/directory`); ids re-validated as UUIDs; nothing persisted or logged but counts |
+| `GET /api/peak/next-session` | **new**, this Mac only (403 for phones), read-only, asked only with `nextSessionPill` on, at most every 5 min: this coach's next session and gap checks (engine/peaknextsession.py → panels.command_get → Command `GET /schedule/bookings?upcoming_only=true&recent_hours=12` and `GET /invoices/`; Ghost `GET /v1/portal/{id}/meeting-bundles` and `GET /v1/ghost/client/{id}/games` for "since last met"); this coach's roster only; nothing persisted, logs are counts and states only |
 | `GET /api/live` | existing: fixes and download counts |
 | `GET /api/approvals`, `POST /api/approvals/<id>/approve\|ask\|prompt` | existing (approve without confirm only previews strong gates; Peak never sends confirm) |
 | `GET /api/family-delivery-alerts` | existing (flag off → enabled=false, no Command call) |
@@ -112,6 +113,7 @@ Unknown keys are ignored.
 | `desktopActions` | true/false | `false` (no UI; on only matters in a scratch root with the live opt-in) |
 | `cuaActions` | true/false | `false` (no UI; the Cua backend, only inside the three live gates plus `FORCEIQ_PEAK_CUA_LIVE=1`) |
 | `commandMeetingLink` | true/false | `false` (no UI) |
+| `nextSessionPill` | true/false | `false` (no UI) |
 
 - **No file** is normal (a new Mac, a fresh scratch root): silent defaults, nothing logged, nothing written until a setting
   changes.
@@ -248,6 +250,30 @@ Unknown keys are ignored.
   of scope). Smoke: `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=meeting-link GOAT_PEAK_ROOT=<scratch root with
   settings.json {"commandMeetingLink": true}>` types unique / ambiguous / none against a mocked directory (fake clients)
   and taps Run once (demo: nothing opens).
+- **Next-session pill and gap warnings (flag, OFF by default; read-only).** With `settings.json` `nextSessionPill: true`
+  (no UI, no env opt-in), Peak asks `GET /api/peak/next-session` at most every 5 min (30 min after a sign-in loss; 403 →
+  one dead state, no more asks) and keeps the answer in memory only. Flag off → no fetches, no pill. The engine reads
+  Command through its existing auth and back-off (`panels.command_get`, the #23 dead-after-3 gate); Peak carries no token.
+  Everything is scoped to this coach's profile and roster (`peakdrop.roster`); a booking for anyone else is dropped.
+  - **Pill:** names the client and counts down locally (`in 42m`, `now`, `started 5m ago`; a 30 s `TimelineView`, no
+    loop). Collapsed: the pill in pill mode, a gold dot in notch mode. Expanded: the pill sits on top of the home list;
+    tap it for the card.
+  - **Card (describes, never acts):** client, session time, countdown, **since last met** from Ghost (last meeting date,
+    games since, G/A/P, latest game, Ghost score average, team change), and the gaps. It says "Read-only. Nothing here
+    sends, books or changes an invoice."
+  - **Gaps** (each names the client; any *present* gap turns the pill brand gold, `Brand.goldHex`; *unknown* gaps are
+    listed with a note and leave the pill outline green; text is always pure white): (a) breakdown export missing for today's session; (b) invoice missing
+    for today's session (same client and service month, status draft/pending/paid, from Command `/invoices/`); (c) an
+    invoice pending 7 days or more (Command, never Square; 6d23h is not a gap, 7d is).
+  - **Actions:** only **Ask TRON** (copies a prompt for TRON; nothing is sent) and **Copy**. No Run, no family contact, no
+    booking or invoice change.
+  - **Unknown until Command adds** (requested via TRON): (a) a read endpoint for a booking's breakdown export, e.g.
+    `GET /schedule/bookings/{booking_id}/exports`, so (a) is always "unknown" today; (b) `invoice_id` (or `package_id`) on
+    bookings rows so an invoice can be tied to the exact session instead of client + month.
+  - Logs: `next-session outcome=… session=yes|no gaps=<present> unknown=<n> gold=yes|no fetches=<n>`, never a name. Smoke:
+    `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=next-session GOAT_PEAK_ROOT=<scratch root with settings.json
+    {"nextSessionPill": true}>` fetches a mocked feed (fake clients), opens the card, taps Ask TRON and Copy (demo: an
+    in-memory clipboard) and logs counts only.
 - **Live smoke:** `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=voice GOAT_PEAK_ROOT=<scratch root> FORCEIQ_PEAK_VOICE_FEED=<folder
   of .wav>` feeds recorded `say` clips in real time through the mic's conversion path (fake roster) and logs
   `voice turn first_confirmed_ms=… final_ms=… cpu_pct=…` per clip plus a summary.
@@ -283,3 +309,20 @@ measures only that PID and quits it. `GOAT_PEAK_ROOT` also keeps any demo or tes
 repeating keyframes outside the busy-only ThinkingDots.
 
 Per coach: see `ADD-A-COACH.md` and `profile.template.json`. Third-party code: `THIRD_PARTY_NOTICES.md`.
+
+## "What's my day" brief and the 5090 light
+
+- **Brief.** Type `/day` or "what's my day" in 3PO (or say it with the voice toggle; Voice stays off by default). Peak
+  answers locally, with zero tokens and in three sentences: today's Command sessions (each naming the client), what's BLOCKED, and the
+  decisions waiting on you. It reads next-meeting `today`, `/api/approvals` and `/api/live`. A source older than 300 s
+  is labelled `STALE (read 9:30 AM ET, 12 min ago)`. A source that didn't answer is said plainly and nothing is
+  invented. Speech uses only macOS AVSpeechSynthesizer on this Mac, and only while Voice is on. Pressing the voice
+  toggle again stops it mid-sentence.
+- **5090 light.** This is the dot under the expanded header. It's red from 2 h before a meeting through its end, including a
+  meeting in progress. Because the bookings read is upcoming-only, an in-progress meeting comes from Command live on this
+  Mac or from the calendar. The message names the case, e.g. "Meeting in progress (started 9:10 AM ET)" or "Meeting at
+  9:30 AM ET, within 2 h". Otherwise the light is green. It's unknown when there's no read, the read is older than 300 s, Command's live status
+  can't be read, or the calendar is unknown (missing, garbled, access not granted, no fetch time) or STALE (its
+  `fetched_at` is older than 300 s). Unknown is treated as red and labelled. While it isn't green, Peak refuses every 5090 GPU action (the
+  shifts/upscale drop zone, GPU proposals and GPU approvals) with one plain sentence, and nothing runs. Status reads only:
+  Peak never talks to the 5090, its recording service, the service that guards it, or the recorder machine.

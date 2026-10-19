@@ -239,6 +239,11 @@ actor PeakDictation {
     var roster: [String] = []
     var onListening: ((Bool) -> Void)?
     var onFinal: ((String) -> Void)?
+    /// The "What's my day" brief is speaking: the same toggle interrupts it (DayBriefController.interruptIfSpeaking).
+    /// true = the press stopped the speech and is consumed (the mic does not open).
+    var interrupt: (() -> Bool)?
+    /// Voice turned off: silence a brief that is speaking.
+    var onDisabled: (() -> Void)?
     /// Live smoke only: the next clip to feed instead of the mic (demo mode).
     var feed: URL?
     private(set) var lastFeed: FeedSource?
@@ -256,6 +261,7 @@ actor PeakDictation {
         roster = names
         enabled = on
         guard on else {
+            onDisabled?()
             if phase == .listening { toggle() }
             phase = .off; return
         }
@@ -312,6 +318,7 @@ actor PeakDictation {
 
     /// One control: a press starts, the next press stops. No hold-to-talk, no wake word, no silence auto-stop.
     func toggle() {
+        if interrupt?() == true { logger?.log("voice toggle interrupted=brief"); return }
         guard enabled else { logger?.log("voice toggle refused=off"); return }
         switch phase {
         case .ready: start()

@@ -98,6 +98,11 @@ enum Screens {
     var demoFeedLogged = false
     var voice: VoiceController!
     var lastMeeting: MeetingRow?
+    /// The 5090 light (status reads only) and the "What's my day" brief (local TTS, spoken only with Voice on).
+    var gpuLight: GPULightModel!
+    var brief: DayBriefController!
+    let briefSpeaker = SpeechBriefSpeaker()
+    var briefCache = DayBriefCache()
     /// Desktop actions: .off unless a scratch GOAT_PEAK_ROOT plus FORCEIQ_PEAK_DESKTOP_DRYRUN=1 (locate-and-report dry run),
     /// or the live env opt-in with settings.json desktopActions=true in that same scratch root (live: FLOW's Code
     /// Window press only, after Run). Decided once the state root's settings are read; desktopActions has no UI.
@@ -105,6 +110,10 @@ enum Screens {
     /// "Start a meeting with <client>" → Command's Start sheet by deep link (Command #685). OFF unless settings.json
     /// commandMeetingLink is true or FORCEIQ_PEAK_COMMAND_MEETING_LINK=1 (CommandMeetingLinkGate); no UI toggle.
     var commandMeetingLink = false
+    /// The next-session pill + gap warnings (read-only). OFF unless settings.json nextSessionPill is true; no UI toggle.
+    var nextSession: NextSessionModel!
+    /// Demo only: what Ask TRON / Copy would have put on the clipboard (the coach's real clipboard is never touched).
+    var demoClipboard = ""
     var dryRunPanel: DryRunPanel?
 
     func applicationWillFinishLaunching(_ n: Notification) {
@@ -151,6 +160,12 @@ enum Screens {
         performer = Performer(engine: engine, demo: demo)
         cards = CardStackViewModel(performer: performer, logger: log, signInTransport: demo ? nil : engine)
         cards.settingsNotice = prefs.settingsNotice
+        nextSession = NextSessionModel(transport: demo ? DemoThreePOTransport(knobs: demoKnobs) : engine,
+                                       enabled: NextSessionGate.enabled(setting: prefs.nextSessionPill), roster: p.roster.names, logger: log)
+        nextSession.onCopy = { [weak self] s in                               // clipboard only; nothing is ever sent
+            guard let self else { return }
+            if self.demo { self.demoClipboard = s } else { self.performer.copy(s) }
+        }
         threePO = ThreePOStore(transport: demo ? DemoThreePOTransport(knobs: demoKnobs) : engine, session: "peak-\(p.coachID)", logger: log)
         threePO.onCopy = { [weak self] s in self?.performer.copy(s) }
         controller.wireAsk(to: threePO)                                      // ask links prefill 3PO's field, open or collapsed
@@ -166,6 +181,14 @@ enum Screens {
             self.dropsStore.dismiss(); self.controller.tab = .threePO; self.threePO.draft = q        // prefilled; Chris sends it
         }
         controller.onModelPick = { [weak self] pick in Task { await self?.threePO.choose(pick) } }
+        // 5090 light: every 5090 GPU action asks it at tap time; not green (red or unknown) = refused, nothing runs.
+        gpuLight = GPULightModel(logger: log)
+        let gpuHold: () -> String? = { [weak self] in
+            self?.gpuLight.hold() ?? GPUGate.refusal(.unknown("meeting status unavailable"))
+        }
+        dropsStore.gpuHold = gpuHold
+        threePO.gpuHold = gpuHold
+        cards.gpuHold = gpuHold
         setUpVoice(p, root: root)
         if p.isEnabled(.threePO) { Task { await threePO.loadModels(); await threePO.refreshSpend() } }
         log.log("launch profile=\(source) configured=\(p.configured ? "yes" : "no") modules=\(PeakModuleID.allCases.filter { p.isEnabled($0) }.map(\.rawValue).joined(separator: ",")) demo=\(demo ? "on" : "off") glow=\(ShaderGlowRenderer.available ? "metal" : "native") mark=\(GhostAssets.pack.map { $0.pack.replacingOccurrences(of: " ", with: "_") } ?? "placeholder") format=\(GhostAssets.format.rawValue)")
@@ -185,7 +208,7 @@ enum Screens {
         }.store(in: &bag)
         installMouseMonitors()
         refresh()
-        poll = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.refresh() } }
+        poll = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.refresh() } }   // also re-judges the 5090 light
         let queued = pendingURLs; pendingURLs = []
         for u in queued { route(u) }
         if demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "1" { tour() }
@@ -207,7 +230,9 @@ enum Screens {
         log.log("desktop mode=\(desktopMode.rawValue)")
         log.log("desktop cua=\(CuaWiring.shared.backend == nil ? "off" : "on")")
         log.log("command meeting-link=\(commandMeetingLink ? "on" : "off")")
+        log.log("next-session pill=\(nextSession.enabled ? "on" : "off")")
         if meetingLinkTour { meetingLinkTourRun() }
+        if nextSessionTour { nextSessionTourRun() }
         if let t = dryRunTour { dryRunTourRun(t) }
     }
 
@@ -232,6 +257,13 @@ enum Screens {
         }
         threePO.onCommandSignIn = { [weak self] n in self?.cards.signIn.update(n) }      // the existing sign-in row; no retry
         threePO.onCommandRun = { [weak self] c in self?.runCommand(c) ?? "Nothing ran." }
+        // "What's my day": typed or dictated, composed locally; spoken (local TTS) only while Voice is on. The same voice
+        // toggle interrupts it mid-speech; turning Voice off silences it.
+        brief = DayBriefController(speaker: briefSpeaker, voiceOn: { [weak self] in self?.voice.enabled ?? false }, logger: log)
+        voice.interrupt = { [weak self] in self?.brief.interruptIfSpeaking() ?? false }
+        voice.onDisabled = { [weak self] in self?.brief.silence() }
+        threePO.dayBrief = { [weak self] in await self?.composeBrief() ?? "Peak couldn't build the brief. Nothing ran." }
+        threePO.onDayBrief = { [weak self] text in self?.brief.deliver(text) }
         let on = VoiceGate.enabled(p, setting: demo ? (isVoiceTour ? true : nil) : prefs.voiceEnabled)
         voice.configure(enabled: on, roster: p.roster.names)
         log.log("voice enabled=\(on ? "yes" : "no")")
@@ -274,6 +306,51 @@ enum Screens {
         guard NSWorkspace.shared.open(u) else { log.log("command meeting-link open ok=0"); return "Command didn't open. Nothing started." }
         log.log("command meeting-link open ok=1")
         return "Command's Start sheet is open for \(who). Nothing starts until you tap Start there."
+    }
+
+    var nextSessionTour: Bool { demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "next-session" }
+
+    /// Next-session smoke (demo mode + FORCEIQ_PEAK_DEMO_TOUR=next-session; the flag is read from a scratch GOAT_PEAK_ROOT's
+    /// settings.json): the demo transport's mocked feed (fake clients only). Fetches once, opens the pill's card, checks
+    /// every warning offers only Ask TRON / Copy, taps both (demo: an in-memory clipboard), and checks a second tick inside
+    /// 5 min does not fetch. Logs counts and states only, never a client name.
+    func nextSessionTourRun() {
+        guard let scr = NSScreen.screens.first else { return }
+        let main = Screens.uuid(scr)
+        let c = controller!, m = nextSession!
+        func at(_ t: Double, _ name: String, _ f: @escaping @MainActor () async -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + t) { [weak self] in
+                self?.log.log("tour step=\(name) t=\(String(format: "%.3f", Date().timeIntervalSince1970))"); Task { @MainActor in await f() }
+            }
+        }
+        at(1.0, "fetch") {
+            let went = await m.tick()
+            var raw = 0
+            if case let .loaded(_, _, w) = NextSessionResult.parse(200, Data(DemoData.nextSessionJSON().utf8)) { raw = w.count }
+            let named = m.session.map { self.profile.isMyClient($0.client) && (m.pillText(now: Date()) ?? "").hasPrefix($0.client) } ?? false
+            self.log.log("tour next-session flag=\(m.enabled ? "on" : "off") fetched=\(went ? 1 : 0) outcome=\(m.result?.outcome ?? "none") pill=\(m.showsPill ? "shown" : "hidden") named=\(named ? 1 : 0) gold=\(m.gold ? 1 : 0) gaps=\(m.warnings.filter { $0.state == .present }.count) unknown=\(m.warnings.filter { $0.state == .unknown }.count) roster_dropped=\(m.enabled ? raw - m.warnings.count : 0) since=\(m.since?.state ?? "none") since_lines=\(m.since?.lines.count ?? 0)")
+        }
+        at(2.5, "open-card") {
+            c.activeDisplay = main; c.tab = .home; c.expand(); m.openCard()
+            let acts = Set(m.warnings.map { $0.actions.map(\.rawValue).joined(separator: ",") })
+            self.log.log("tour next-session card=\(m.showingCard ? "open" : "closed") warnings=\(m.warnings.count) named_all=\(m.warnings.allSatisfy { self.profile.isMyClient($0.client) && $0.text.contains($0.client) } ? 1 : 0) actions=\(acts.sorted().joined(separator: "|"))")
+        }
+        at(4.0, "ask-tron") {
+            guard let w = m.warnings.first(where: { $0.state == .present }) else { self.log.log("tour next-session no-gap"); return }
+            let r = m.perform(.askTRON, on: w)
+            self.log.log("tour next-session ask-tron copied_chars=\(self.demoClipboard.count) addressed_tron=\(self.demoClipboard.hasPrefix("TRON") ? 1 : 0) says_nothing_sent=\(r.contains("nothing was sent") ? 1 : 0) sent=0")
+        }
+        at(5.5, "copy") {
+            guard let w = m.warnings.first else { return }
+            let r = m.perform(.copy, on: w)
+            self.log.log("tour next-session copy copied_chars=\(self.demoClipboard.count) says_nothing_sent=\(r.contains("Nothing was sent") ? 1 : 0) sent=0")
+        }
+        at(7.0, "repoll") {
+            let went = await m.tick()
+            self.log.log("tour next-session repoll_within_5min=\(went ? 1 : 0) fetches=\(m.fetches)")
+        }
+        at(8.5, "collapse") { m.closeCard(); c.collapse() }
+        at(9.5, "tour-end") { self.log.log("tour next-session end fetches=\(m.fetches)") }
     }
 
     var meetingLinkTour: Bool { demo && commandMeetingLink && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "meeting-link" }
@@ -630,12 +707,40 @@ enum Screens {
         }
     }
 
+    /// The brief: one fresh read (next meeting + today, live, approvals), merged with the last good read of each source
+    /// (so a source that fails now is labelled STALE, or said to be unavailable), then composed in a few sentences.
+    func composeBrief() async -> String {
+        let s = demo ? demoSnapshot() : await engine.snapshot()
+        if !demo {
+            cards.update(s, profile: profile); lastMeeting = s.meeting
+            gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date())
+        }
+        let now = Date()
+        let text = DayBriefComposer.compose(briefCache.ingest(s, now: now), now: now)
+        log.log("brief composed sentences=3")
+        return text
+    }
+
+    /// Demo feed (sample names only) with today's sessions and a gpu_window: the sample meeting 42 min out → red.
+    func demoSnapshot(now: Date = Date()) -> EngineSnapshot {
+        let quiet = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "quiet"
+        var s = DemoData.snapshot(now: now, quiet: quiet)
+        s.takenAt = now; s.liveAt = now; s.approvalsAt = now
+        let m = s.meeting
+        s.today = m.map { [SessionRow(client: $0.client, scheduledAt: $0.scheduledAt, durationMinutes: $0.durationMinutes)] } ?? []
+        s.gpuWindow = GPUWindow(spans: m.map { [GPUSpan(start: $0.scheduledAt, end: $0.scheduledAt.addingTimeInterval(Double($0.durationMinutes) * 60), source: "command")] } ?? [], live: false, calendarAt: now)
+        return s
+    }
+
     func refresh() {
+        gpuLight?.refresh()
         if demo {
+            let s = demoSnapshot(); cards.update(s, profile: profile)
+            gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date())
             let quiet = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "quiet"
-            let s = DemoData.snapshot(quiet: quiet); cards.update(s, profile: profile)
             lastMeeting = isVoiceTour ? DemoData.voiceMeeting() : s.meeting
             if !demoFeedLogged { demoFeedLogged = true; log.log("feed demo=\(quiet ? "quiet" : "sample") ghost=\(cards.ghost.rawValue)") }
+            if !nextSessionTour { Task { await nextSession.tick() } }          // at most every 5 min; flag off: never
             return
         }
         guard controller.globallyVisible else { return }
@@ -643,7 +748,10 @@ enum Screens {
             let s = await engine.snapshot()
             cards.update(s, profile: profile)
             lastMeeting = s.meeting
+            gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date())
+            _ = briefCache.ingest(s, now: Date())            // last good read per source, for a later brief
             log.log("feed meeting=\(s.meeting != nil ? "yes" : "no") fixes=\(s.fixes.count) approvals=\(s.approvals.count) family=\(s.familyEnabled ? "on" : "off") ghost=\(cards.ghost.rawValue)")
+            await nextSession.tick()                                         // at most every 5 min; flag off: never
         }
     }
 
@@ -656,7 +764,7 @@ enum Screens {
             if let h = hosts[s.uuid] { h.relayout(s, geometry: geometry); continue }
             let entries = profile.isEnabled(.switcher) ? AppSwitcher.entries(profile, WorkspaceLocator()) : []
             let h = PanelHost(screen: s, geometry: geometry) { [unowned self] st in
-                AnyView(PeakRootView(controller: controller, cards: cards, panel: st, threePO: threePO, drops: dropsStore, voice: voice, switcher: entries, mark: mark, glow: glow,
+                AnyView(PeakRootView(controller: controller, cards: cards, panel: st, threePO: threePO, drops: dropsStore, voice: voice, nextSession: nextSession, light: gpuLight, switcher: entries, mark: mark, glow: glow,
                                      onSwitch: { [weak self] id in self?.controller.handle(.switchApp(id)) },
                                      onDrop: { [weak self] urls in self?.dropped(urls, uuid: s.uuid) ?? false }))
             }
