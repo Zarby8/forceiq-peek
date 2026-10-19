@@ -111,6 +111,13 @@ the status. **Right-click (or ctrl-click) the wing for the Peak menu**: Show / H
 Built-in hotkey, Shortcut, About, Quit. (A crowded notch-Mac menu bar can also hide a status item; the M5's had no on-screen
 status-item window until the wing left room.)
 
+**What the wing says** (`WingStatus`, pure and tested): idle = PEAK in green. A session inside 60 minutes = the client's first
+name (6 characters, cut with an ellipsis) and whole minutes, e.g. `Spiros 42m`, then `now` from its start until 15 minutes
+after (full name in the sheet, the peek and the VoiceOver label). A small gold dot = a gap needs you (missing / unpaid
+invoice or export, from the next-session feed). A small red dot = the 5090 is held (a meeting live or within 2 h, or the
+meeting status unknown). Presenting = gold PRESENTING, no dots, no names. The countdown re-judges every 30 s only while
+it shows (a coarse tick, no animation). Demo: `FORCEIQ_PEAK_DEMO=1` with `{"nextSessionPill": true}` in the scratch root.
+
 ## Notch alerts (the peek)
 Collapsed Peak is the notch plus its green status wing. An urgent alert drops a one-line black strip out of the notch for
 6 s (8 s for a failed fix), then retracts. Urgent means a meeting starting within 10 minutes or a fix that fails after Peak

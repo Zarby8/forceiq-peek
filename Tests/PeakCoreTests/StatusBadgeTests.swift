@@ -66,7 +66,7 @@ final class StatusBadgeTests: XCTestCase {
         let path = #filePath.replacingOccurrences(of: "Tests/PeakCoreTests/StatusBadgeTests.swift", with: "Sources/ForceIQPeak/Views.swift")
         let v = try String(contentsOfFile: path, encoding: .utf8)
         let wing = v.components(separatedBy: "struct NotchWing").last?.components(separatedBy: "/// Live progress under the notch").first ?? ""
-        XCTAssertTrue(wing.contains("Color.peakGreen") && wing.contains("Color.peakGold") && wing.contains("spec.wingText"))
+        XCTAssertTrue(wing.contains("Color.peakGreen") && wing.contains("Color.peakGold") && wing.contains("spec.text"))
         XCTAssertFalse(wing.contains("opacity") || wing.contains("gray") || wing.contains(".secondary"))
         XCTAssertFalse(v.contains("struct NotchTag"), "the under-notch tab is gone: the wing replaced it")
     }

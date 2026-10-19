@@ -48,16 +48,47 @@ enum Motion {
     }
 }
 
-/// The status wing: one short word in brand green (gold while presenting), centered in the wing. Text on black, no gray.
-struct NotchWing: View {
-    let spec: StatusBadgeSpec
+/// The status wing's state (WingStatus): re-judged on every change, and every 30 s while a session is inside the hour so the
+/// countdown moves (a coarse tick, never an animation).
+struct NotchWingLive: View {
+    @ObservedObject var controller: PeakController
+    @ObservedObject var nextSession: NextSessionModel
+    @ObservedObject var light: GPULightModel
+    func spec(_ now: Date) -> WingSpec {
+        WingStatus.spec(presenting: controller.presenting, session: nextSession.session,
+                        gaps: nextSession.warnings.filter { $0.state == .present }.count, light: light.shown, now: now)
+    }
+    var ticking: Bool { nextSession.session.map { WingStatus.countdown(to: $0.scheduledAt, now: Date()) != nil } ?? false }
     var body: some View {
-        Text(spec.wingText)
-            .font(.system(size: 11, weight: .heavy)).kerning(0.9).lineLimit(1).fixedSize()
-            .foregroundStyle(spec.textHex == Brand.goldHex ? Color.peakGold : Color.peakGreen)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(spec.accessibilityLabel)
+        if ticking {
+            TimelineView(.periodic(from: .now, by: 30)) { ctx in NotchWing(spec: spec(ctx.date)) }
+        } else {
+            NotchWing(spec: spec(Date()))
+        }
+    }
+}
+
+/// The status wing: small shape-only dots stacked at its left edge, then one short word. Brand green (gold while presenting)
+/// on black.
+struct NotchWing: View {
+    let spec: WingSpec
+    var body: some View {
+        HStack(spacing: 5) {
+            if !spec.dots.isEmpty {
+                VStack(spacing: 4) {
+                    ForEach(Array(spec.dots.enumerated()), id: \.offset) { _, hex in
+                        Circle().fill(hex == Brand.redHex ? Color.peakRed : Color.peakGold).frame(width: 7, height: 7)
+                    }
+                }
+            }
+            Text(spec.text)
+                .font(.system(size: 11, weight: .heavy)).kerning(0.6).lineLimit(1).minimumScaleFactor(0.75)
+                .foregroundStyle(spec.textHex == Brand.goldHex ? Color.peakGold : Color.peakGreen)
+        }
+        .padding(.leading, 10).padding(.trailing, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spec.accessibilityLabel)
     }
 }
 
@@ -300,7 +331,7 @@ struct PeakRootView: View {
             // "PRESENTING" while presenting), in the menu bar row, merged with the notch.
             ZStack(alignment: .topLeading) {
                 Color.clear.frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
-                NotchWing(spec: StatusBadge.spec(presenting: controller.presenting))
+                NotchWingLive(controller: controller, nextSession: nextSession, light: light)
                     .frame(width: panel.layout.wing.width, height: panel.layout.wing.height)     // the wing is the leftmost part
             }
         } else {
