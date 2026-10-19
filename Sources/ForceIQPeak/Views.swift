@@ -53,7 +53,22 @@ enum Motion {
 struct PeekInline: View {
     let alert: PeakAlert
     let notchWidth: CGFloat
+    var onAction: () -> Void = {}
     var dot: Color { alert.kind.dotHex == Brand.greenHex ? Color.peakGreen : Color.peakGold }
+    /// The one-tap button (Start / Review), black on a brand-color capsule; absent when the alert has no action.
+    @ViewBuilder var actionButton: some View {
+        if let title = alert.action.buttonTitle {
+            Button(action: onAction) {
+                Text(title).font(.system(size: 11, weight: .heavy)).foregroundStyle(Color.black).lineLimit(1).fixedSize()
+                    .padding(.horizontal, 10).frame(height: 22)
+                    .background(Capsule().fill(dot))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(alert.action == .startMeeting ? "Start: opens the session in Command" : "Review: opens the approval")
+            .help(alert.action == .startMeeting ? "Opens Command's session page. Nothing starts until you tap Start or Record there."
+                                                 : "Opens the approval's description. You still tap Run yourself.")
+        }
+    }
     var body: some View {
         Group {
             if notchWidth > 0 {
@@ -64,13 +79,18 @@ struct PeekInline: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 14)
                     Color.clear.frame(width: notchWidth)
-                    Text(alert.trail).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1).minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 14)
+                    HStack(spacing: 8) {
+                        Text(alert.trail).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1).minimumScaleFactor(0.75)
+                        actionButton
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 14).padding(.trailing, 8)
                 }
             } else {
                 HStack(spacing: 8) {
                     Circle().fill(dot).frame(width: 8, height: 8)
                     Text("\(alert.lead) \(alert.trail)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                    actionButton
                 }
             }
         }
@@ -306,7 +326,8 @@ struct PeakRootView: View {
                     .transition(Motion.sheet(reduceMotion))
             } else if peekShowing, let a = controller.peek {
                 let p = panel.local(panel.layout.peek)
-                PeekInline(alert: a, notchWidth: panel.notchWidth).frame(width: p.width, height: p.height)
+                PeekInline(alert: a, notchWidth: panel.notchWidth, onAction: { Haptic.level(); controller.performPeekAction() })
+                    .frame(width: p.width, height: p.height)
                     .padding(.leading, p.minX).padding(.top, p.minY)
                     .transition(Motion.sheet(reduceMotion))
             } else {

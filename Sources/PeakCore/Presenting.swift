@@ -21,6 +21,8 @@ public enum Presenting {
 
     /// The alert as it may appear on a shared screen: no client, only the plain line.
     public static func redact(_ a: PeakAlert) -> PeakAlert {
-        PeakAlert(id: a.id, kind: a.kind, client: "", line: a.plainLine, holdSeconds: a.holdSeconds, plainLine: a.plainLine)
+        // Start only opens Command's room page, which shows nothing here; Review would land on a sheet that hides every card.
+        PeakAlert(id: a.id, kind: a.kind, client: "", line: a.plainLine, holdSeconds: a.holdSeconds, plainLine: a.plainLine,
+                  cardID: a.action == .startMeeting ? a.cardID : nil, action: a.action == .startMeeting ? .startMeeting : .none)
     }
 }

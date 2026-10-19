@@ -55,6 +55,8 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     private var autoSuppressed = false              // the coach turned presenting off during this meeting
     /// A tap on the peek: the app opens whatever the alert is about (a meeting alert opens the next-session card).
     public var onPeekOpen: ((PeakAlert) -> Void)?
+    /// The alert's button (Start / Review): the app does the one action for that card, and gets the display it dropped on.
+    public var onPeekAction: ((PeakAlert, String?) -> Void)?
     private var peekTask: Task<Void, Never>?
 
     public init(prefs: PeakPrefs, profile: CoachProfile, hotkey: HotkeyRegistering, logger: PeakLogging? = nil) {
@@ -94,6 +96,14 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         guard let a = peek else { expand(); return }
         if let d = peekDisplay { activeDisplay = d }
         expand(); onPeekOpen?(a)
+    }
+    /// The peek's button. Only an alert that carries an action does anything; the peek retracts first.
+    public func performPeekAction() {
+        guard let a = peek, a.action != .none else { return }
+        let display = peekDisplay
+        dismissPeek()
+        log("state peek-action=\(a.action.rawValue)")
+        onPeekAction?(a, display)
     }
     private func schedulePeekRetract(_ seconds: Double) {
         peekTask?.cancel()
@@ -268,6 +278,21 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         lastResult = await performer.perform(action, on: card)
         if action == .run && performer.lastOK { approvedPops += 1 }
         ghost = .receipt                      // one-shot; the view hands back to the data state when it finishes
+        return true
+    }
+
+    /// The peek's Start button: the meeting card's Run, once, without opening its description first (Chris approved this one
+    /// exception: Run only opens Command's room page, and Join and Record stay taps inside Command). Meeting cards only, never a
+    /// view-only card, never an approval or fix.
+    @discardableResult
+    public func quickStart(_ card: PeakCard) async -> Bool {
+        guard card.kind == .meeting, CardPolicy.isAllowed(.run, on: card) else {
+            logger?.log("card quick-start refused kind=\(card.kind.rawValue)")
+            return false
+        }
+        logger?.log("card quick-start kind=meeting")
+        lastResult = await performer.perform(.run, on: card)
+        if performer.lastOK { approvedPops += 1 }
         return true
     }
 

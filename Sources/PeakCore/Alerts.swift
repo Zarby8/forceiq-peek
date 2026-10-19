@@ -28,6 +28,16 @@ public enum PeakAlertKind: String, Sendable {
     }
 }
 
+/// The one tap an alert's button does. Start: the meeting card's Run, which only opens Command's room page (it does not join
+/// or record; you tap those in Command). Review: lands on that approval's description, where Run is still a second, explicit
+/// tap (describe first). Nothing else is ever done from the peek.
+public enum PeakAlertAction: String, Sendable {
+    case none, startMeeting = "start-meeting", reviewApproval = "review-approval"
+    public var buttonTitle: String? {
+        switch self { case .none: return nil; case .startMeeting: return "Start"; case .reviewApproval: return "Review" }
+    }
+}
+
 public struct PeakAlert: Equatable, Sendable, Identifiable {
     public let id: String
     public let kind: PeakAlertKind
@@ -36,6 +46,9 @@ public struct PeakAlert: Equatable, Sendable, Identifiable {
     public let holdSeconds: Double
     /// The same alert without the client, for a shared screen (Presenting.redact).
     public let plainLine: String
+    /// The card this alert is about (its one-tap action works on it) and what the button does.
+    public let cardID: String?
+    public let action: PeakAlertAction
     /// The inline peek's two halves: the client on the left of the notch, what happened on the right. With no client (presenting)
     /// the plain line splits after its first two words ("A session" | "in 9 min").
     public var lead: String { client.isEmpty ? PeakAlert.words(line).lead : client }
@@ -47,9 +60,11 @@ public struct PeakAlert: Equatable, Sendable, Identifiable {
         let w = s.split(separator: " ", omittingEmptySubsequences: true)
         return (w.prefix(2).joined(separator: " "), w.dropFirst(2).joined(separator: " "))
     }
-    public init(id: String, kind: PeakAlertKind, client: String, line: String, holdSeconds: Double, plainLine: String? = nil) {
+    public init(id: String, kind: PeakAlertKind, client: String, line: String, holdSeconds: Double, plainLine: String? = nil,
+                cardID: String? = nil, action: PeakAlertAction = .none) {
         self.id = id; self.kind = kind; self.client = client; self.line = line; self.holdSeconds = holdSeconds
         self.plainLine = plainLine ?? kind.defaultPlainLine
+        self.cardID = cardID; self.action = cardID == nil ? .none : action
     }
 }
 
@@ -139,7 +154,8 @@ public struct AlertPolicy: Sendable {
             let secs = at.timeIntervalSince(ctx.now)
             guard secs > 0, secs <= Self.leadSeconds, !shown.contains(c.id) else { continue }
             let mins = max(1, Int((secs / 60).rounded(.up)))
-            fresh.append(PeakAlert(id: c.id, kind: .meetingSoon, client: c.client, line: "\(c.client) in \(mins) min", holdSeconds: Self.meetingHold, plainLine: "A session in \(mins) min"))
+            fresh.append(PeakAlert(id: c.id, kind: .meetingSoon, client: c.client, line: "\(c.client) in \(mins) min", holdSeconds: Self.meetingHold, plainLine: "A session in \(mins) min",
+                                   cardID: c.id, action: .startMeeting))
         }
         let fixesKnown = s.liveAt != nil                                         // this read really included GOAT's live doc
         for f in s.fixes where fixesKnown && f.state == "failed" {
@@ -165,7 +181,8 @@ public struct AlertPolicy: Sendable {
             for c in cards where c.kind == cardKind {
                 guard !shown.contains(c.id) else { continue }
                 if !primedSources.contains(source) { shown.insert(c.id); continue }
-                fresh.append(PeakAlert(id: c.id, kind: kind, client: c.client, line: "\(c.client): \(say)", holdSeconds: Self.infoHold, plainLine: plain))
+                fresh.append(PeakAlert(id: c.id, kind: kind, client: c.client, line: "\(c.client): \(say)", holdSeconds: Self.infoHold, plainLine: plain,
+                                       cardID: kind == .approval ? c.id : nil, action: kind == .approval ? .reviewApproval : .none))
             }
             primedSources.insert(source)
         }

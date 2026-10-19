@@ -172,6 +172,20 @@ enum Screens {
         cards.settingsNotice = prefs.settingsNotice
         nextSession = NextSessionModel(transport: demo ? DemoThreePOTransport(knobs: demoKnobs) : engine,
                                        enabled: NextSessionGate.enabled(setting: prefs.nextSessionPill), roster: p.roster.names, logger: log)
+        controller.onPeekAction = { [weak self] a, display in
+            guard let self else { return }
+            guard let id = a.cardID, let card = self.cards.cards.first(where: { $0.id == id }) else {
+                if let d = display { self.controller.activeDisplay = d }
+                self.controller.expand(); return                         // the card is gone (meeting over, approval handled): just open Peek
+            }
+            switch a.action {
+            case .startMeeting: Task { @MainActor in await self.cards.quickStart(card) }
+            case .reviewApproval:
+                if let d = display { self.controller.activeDisplay = d }
+                self.cards.tap(card); self.controller.tab = .home; self.controller.expand()
+            case .none: break
+            }
+        }
         controller.onPeekOpen = { [weak self] a in                           // a meeting alert lands on the next-session card
             if a.kind == .meetingSoon { self?.nextSession.openCard() }
         }
@@ -747,7 +761,7 @@ enum Screens {
         let p = NSEvent.mouseLocation
         if let s = NSScreen.screens.first(where: { $0.frame.contains(p) }), controller.panelVisible(on: Screens.uuid(s)) { return Screens.uuid(s) }
         return hosts.first { controller.panelVisible(on: $0.key) && $0.value.layout.mode == .notch }?.key
-            ?? hosts.keys.first { controller.panelVisible(on: $0) }
+            ?? NSScreen.screens.map(Screens.uuid).first { controller.panelVisible(on: $0) }       // the primary display first, not a random one
     }
 
     /// One policy call per feed read: peek an urgent alert (meeting within 10 min, a fix that just failed) unless the policy

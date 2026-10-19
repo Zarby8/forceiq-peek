@@ -123,6 +123,16 @@ invoice or export, from the next-session feed). A small red dot = the 5090 is he
 meeting status unknown). Presenting = gold PRESENTING, no dots, no names. The countdown re-judges every 30 s only while
 it shows (a coarse tick, no animation). Demo: `FORCEIQ_PEAK_DEMO=1` with `{"nextSessionPill": true}` in the scratch root.
 
+## One-tap actions on the peek
+A peek can carry one button. **Start** (a meeting alert) is the meeting card's Run: it opens that session's page in Command and
+nothing else (Join and Record stay taps inside Command); it works without opening the card's description first, and it is
+the only action that does. **Review** (a new-approval alert) lands on that approval's description with Run one explicit tap
+away (describe first). No other alert has a button; presenting keeps Start and drops Review; a view-only card never runs.
+The button is in the notch layout and in the Studio Display pill layout. When the pointer is on no display, the alert shows on
+the notch display, else the primary one. Logs say `state peek-action=start-meeting` and `card quick-start kind=meeting`,
+never the client. `commandMeetingLink` (settings.json only, no UI) is separate: it is for the voice / ask "start a meeting
+with <client>" path and does nothing until voice is on.
+
 ## Settings window
 Right-click the PEEK wing, then **Settings…** (Cmd-,). Every control writes through to settings.json at once: present while
 Command is live and presenting now, Do not disturb (1 hour / until tomorrow / off, with when it ends), quiet hours with start
