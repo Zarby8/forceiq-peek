@@ -1,0 +1,13 @@
+{
+  "_comment": "Peak keys for a coach's overlay/profile.json (merge into the existing profile; the rest of the profile is unchanged). Values are REFERENCES: never put a key in a profile. Only Chris's profile sets spend.show_account_line true.",
+  "peak": {
+    "root": "~/ForceIQ/peak",
+    "anthropic": {"keychain_service": "forceiq-anthropic", "keychain_account": "anthropic", "env": "ANTHROPIC_API_KEY"},
+    "anthropic_admin": {"keychain_service": "forceiq-anthropic-admin", "keychain_account": "admin", "env": "ANTHROPIC_ADMIN_KEY"},
+    "budget_usd": 250.0,
+    "warn_fraction": 0.8,
+    "default_pick": "sonnet",
+    "model_overrides": {}
+  },
+  "spend": {"show_account_line": false}
+}
