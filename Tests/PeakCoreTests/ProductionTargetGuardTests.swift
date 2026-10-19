@@ -137,6 +137,30 @@ import XCTest
         XCTAssertFalse(PressGuard.frontWindowIsPackage(cand("FLOW", [], doc: "file:///Users/x/Other.flowaipkg"), packagePath: link.path))
     }
 
+    // ── only the exact package name matches: a partial or prefix name (title or static text) is refused ──
+    func testWindowGuardRefusesPartialOrPrefixPackageName() throws {
+        let pkg = "/Users/x/.forceiq/demo/FLOW-Demo.flowaipkg"
+        func cand(_ title: String?, _ texts: [String] = []) -> PressCandidate {
+            PressCandidate(role: "AXMenuItem", title: "Code Window", enabled: true, pid: 9, bundleID: uat, frontmostPid: 9,
+                           documentPath: nil, windowTitle: title, windowTexts: texts)
+        }
+        // the exact name is accepted, by title or (title-less window) by static text
+        XCTAssertTrue(PressGuard.frontWindowIsPackage(cand("FLOW-Demo"), packagePath: pkg))
+        XCTAssertTrue(PressGuard.frontWindowIsPackage(cand("", ["FLOW-DEMO"]), packagePath: pkg))
+        let partial = ["FLOW-Dem", "FLOW-Demo-extra", "FLOW-Demo 2", "FLOW-Demo.bak", "My FLOW-Demo", "LOW-Demo", "xFLOW-Demo",
+                       "FLOW-Demo — FLOW-Demo-extra", "FLOW-DemoFLOW-Demo"]
+        for p in partial {
+            XCTAssertFalse(PressGuard.frontWindowIsPackage(cand(p), packagePath: pkg), "title '\(p)' must be refused")
+            XCTAssertFalse(PressGuard.frontWindowIsPackage(cand("", [p]), packagePath: pkg), "text '\(p)' must be refused")
+            XCTAssertFalse(PressGuard.frontWindowIsPackage(cand("", [p.uppercased()]), packagePath: pkg), "text '\(p.uppercased())' must be refused")
+            let why = try XCTUnwrap(PressGuard.refusal(cand(p), flowBundle: uat, packagePath: pkg, client: "Sample Skater"), p)
+            XCTAssertTrue(why.hasSuffix("nothing pressed"), why)
+        }
+        // a longer package is not matched by a window showing its prefix, either
+        XCTAssertFalse(PressGuard.frontWindowIsPackage(cand("FLOW-Demo"), packagePath: "/Users/x/.forceiq/demo/FLOW-Demo-extra.flowaipkg"))
+        XCTAssertFalse(PressGuard.frontWindowIsPackage(cand("", ["FLOW-DEMO"]), packagePath: "/Users/x/.forceiq/demo/FLOW-Demo-extra.flowaipkg"))
+    }
+
     // ── the smoke script refuses production before it looks at or launches anything ──
     func testSmokeScriptRefusesProduction() throws {
         let script = Self.sources.deletingLastPathComponent().appendingPathComponent("scripts/real_press_smoke.sh")

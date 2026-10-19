@@ -49,7 +49,7 @@ public enum PressGuard {
     }
 
     /// FLOW's front window shows exactly this package: its AXDocument is the package; or (no document) its title
-    /// contains the package's full name; or (no document and an empty / missing title, as FLOW's project window has) one
+    /// is exactly the package's full name (a partial, prefix or longer title that merely contains it is refused); or (no document and an empty / missing title, as FLOW's project window has) one
     /// of the window's static texts is exactly the package's full name, case aside (FLOW's header shows it upper-cased).
     /// Symlinks are resolved on both sides, so a scratch link named for the client finds the package it points at.
     public static func frontWindowIsPackage(_ c: PressCandidate, packagePath: String) -> Bool {
@@ -63,7 +63,7 @@ public enum PressGuard {
         let bases = Set([pkgURL.deletingPathExtension().lastPathComponent,
                          URL(fileURLWithPath: want).deletingPathExtension().lastPathComponent]).filter { $0.count >= 8 }
         guard !bases.isEmpty else { return false }
-        if let t = c.windowTitle, !t.isEmpty { return bases.contains { t == $0 || t.contains($0) } }
+        if let t = c.windowTitle, !t.isEmpty { return bases.contains(t) }   // exact: never a prefix / partial / contained name
         guard c.windowTitle != nil else { return false }
         return c.windowTexts.contains { text in
             let x = text.trimmingCharacters(in: .whitespacesAndNewlines)
