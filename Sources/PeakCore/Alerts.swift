@@ -189,6 +189,8 @@ public struct AlertPolicy: Sendable {
     }
 }
 
+public enum DoNotDisturbChoice: Sendable { case oneHour, tomorrowMorning, off }
+
 public enum DoNotDisturb {
     /// The next 07:00 local after `now` ("until tomorrow morning").
     public static func tomorrowMorning(after now: Date, calendar: Calendar = .current) -> Date {

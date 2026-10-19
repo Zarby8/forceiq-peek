@@ -118,6 +118,13 @@ invoice or export, from the next-session feed). A small red dot = the 5090 is he
 meeting status unknown). Presenting = gold PRESENTING, no dots, no names. The countdown re-judges every 30 s only while
 it shows (a coarse tick, no animation). Demo: `FORCEIQ_PEAK_DEMO=1` with `{"nextSessionPill": true}` in the scratch root.
 
+## Settings window
+Right-click the PEAK wing, then **Settings…** (Cmd-,). Every control writes through to settings.json at once: present while
+Command is live and presenting now, Do not disturb (1 hour / until tomorrow / off, with when it ends), quiet hours with start
+and end times, the next-session countdown and gaps, the PEAK badge in the menu bar (these two apply when Peak restarts, and the
+window says so), Voice, the built-in hotkey and the shortcut. `SettingsModel` (PeakCore) holds the logic and is tested; the
+view is white text on black with gold section titles.
+
 ## Notch alerts (the peek)
 Collapsed Peak is the notch plus its green status wing. An urgent alert widens the collapsed shape INLINE in the menu bar row (notch height, ~145 pt each side of the notch, the way Boring Notch's
 sneak peek works) for 6 s (8 s for a failed fix): the client on the left of the notch, what happened on the right, then it retracts. What peeks: a meeting starting within 10 minutes; a fix that fails after Peak is up; Command's sign-in expiring

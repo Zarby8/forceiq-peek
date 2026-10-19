@@ -791,30 +791,70 @@ struct SwitcherTile: View {
 }
 
 struct SettingsView: View {
+    @ObservedObject var model: SettingsModel
     @ObservedObject var controller: PeakController
     @ObservedObject var voice: VoiceController
     var setVoice: (Bool) -> Void = { _ in }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("ForceIQ Peak").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.white)
-            Toggle(isOn: Binding(get: { voice.enabled }, set: { setVoice($0) })) {
-                Text("Voice (opt-in): talk to 3PO").foregroundStyle(Color.white)
-            }
-            Text("Press the mic in 3PO (or forceiq-peak://voice) to start, press again to stop. Audio stays on this Mac; the speech model (about 560 MB) downloads once into your Peak folder.")
-                .font(.system(size: 11)).foregroundStyle(Color.white).fixedSize(horizontal: false, vertical: true)
-            if voice.enabled, let l = voice.phase.line {
-                Text(l).font(.system(size: 11, weight: .semibold)).foregroundStyle({ if case .failed = voice.phase { return Color.peakGold }; return Color.peakGreen }())
-            }
-            Toggle(isOn: Binding(get: { controller.hotkeyEnabled }, set: { controller.setHotkeyEnabled($0) })) {
-                Text("Built-in hotkey").foregroundStyle(Color.white)
-            }
-            HStack {
-                Text("Show / hide shortcut").foregroundStyle(Color.white)
-                HotkeyRecorder()
-            }
-            Text("Raycast and anything else on this Mac can also use forceiq-peak:// links.").font(.system(size: 11)).foregroundStyle(Color.white)
+
+    func label(_ t: String) -> some View { Text(t).foregroundStyle(Color.white) }
+    func note(_ t: String) -> some View {
+        Text(t).font(.system(size: 11)).foregroundStyle(Color.white).fixedSize(horizontal: false, vertical: true)
+    }
+    func section(_ title: String, @ViewBuilder _ content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased()).font(.system(size: 11, weight: .heavy)).kerning(0.8).foregroundStyle(Color.peakGold)
+            content()
         }
-        .padding(18).frame(width: 380).background(Color.black)
+    }
+    func time(_ get: @escaping () -> Int, _ set: @escaping (Int) -> Void) -> some View {
+        DatePicker("", selection: Binding(get: { SettingsModel.date(minutes: get()) }, set: { set(SettingsModel.minutes(of: $0)) }),
+                   displayedComponents: .hourAndMinute).labelsHidden().colorScheme(.dark)
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Text("ForceIQ Peak").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.white)
+                section("Presenting") {
+                    Toggle(isOn: Binding(get: { model.presenting }, set: { model.setPresenting($0) })) { label("Presenting now: hide every client detail") }
+                    Toggle(isOn: $model.autoPresenting) { label("Present automatically while Command is live") }
+                    note("Meetings run in the Command app and the client sees the screen. Turn it off during a meeting and it stays off until that meeting ends.")
+                }
+                section("Alerts") {
+                    label("Do not disturb: \(model.dndLine())")
+                    HStack(spacing: 8) {
+                        PeakButton(title: "1 hour", color: .peakGold) { model.setDoNotDisturb(.oneHour) }
+                        PeakButton(title: "Until tomorrow", color: .peakGold) { model.setDoNotDisturb(.tomorrowMorning) }
+                        PeakButton(title: "Off", color: .peakGold) { model.setDoNotDisturb(.off) }
+                    }
+                    Toggle(isOn: $model.quietEnabled) { label("Quiet hours every day") }
+                    if model.quietEnabled {
+                        HStack(spacing: 8) {
+                            time({ model.quietStart }, { model.quietStart = $0 }); label("to"); time({ model.quietEnd }, { model.quietEnd = $0 })
+                        }
+                    }
+                    note("Alerts peek in the notch row: a meeting within 10 minutes, a failed fix, Command sign-in expiring, a new approval, a family delivery, a finished shift download. None of them while you dictate or a session is live.")
+                }
+                section("Show") {
+                    Toggle(isOn: $model.nextSessionPill) { label("Next session countdown and gaps (needs Command sign-in)") }
+                    Toggle(isOn: $model.menuBarItem) { label("PEAK badge in the menu bar") }
+                    if model.restartNeeded { Text("These two take effect when Peak restarts.").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.peakGold) }
+                }
+                section("Voice and shortcut") {
+                    Toggle(isOn: Binding(get: { voice.enabled }, set: { setVoice($0) })) { label("Voice (opt-in): talk to 3PO") }
+                    note("Press the mic in 3PO (or forceiq-peak://voice) to start, press again to stop. Audio stays on this Mac; the speech model (about 560 MB) downloads once into your Peak folder.")
+                    if voice.enabled, let l = voice.phase.line {
+                        Text(l).font(.system(size: 11, weight: .semibold)).foregroundStyle({ if case .failed = voice.phase { return Color.peakGold }; return Color.peakGreen }())
+                    }
+                    Toggle(isOn: Binding(get: { controller.hotkeyEnabled }, set: { controller.setHotkeyEnabled($0) })) { label("Built-in hotkey") }
+                    HStack { label("Show / hide shortcut"); HotkeyRecorder() }
+                    note("Raycast and anything else on this Mac can also use forceiq-peak:// links. Right-click the PEAK wing for the Peak menu.")
+                }
+            }
+            .padding(18)
+        }
+        .frame(width: 420, height: 560).background(Color.black)
+        .preferredColorScheme(.dark)
     }
 }
 

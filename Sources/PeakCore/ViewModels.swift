@@ -114,6 +114,17 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         applyPresenting()
     }
 
+    /// Do not disturb from the menu or Settings: alerts stop peeking until then (the cards are still on the sheet).
+    public func setDoNotDisturb(_ choice: DoNotDisturbChoice, now: Date = Date(), calendar: Calendar = .current) {
+        switch choice {
+        case .oneHour: prefs.dndUntil = now.addingTimeInterval(3600)
+        case .tomorrowMorning: prefs.dndUntil = DoNotDisturb.tomorrowMorning(after: now, calendar: calendar)
+        case .off: prefs.dndUntil = nil
+        }
+        dismissPeek()
+        log("state dnd=\(choice == .off ? "off" : "on")")
+    }
+
     /// GOAT's `gpu_window.live` from each feed read: Command is live on this Mac (nil = unreadable: nothing changes).
     public func setCommandLive(_ live: Bool?) {
         guard let live, live != commandLive else { return }
@@ -121,6 +132,9 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         if !live { autoSuppressed = false }
         applyPresenting()
     }
+
+    /// Re-judge presenting after a setting that feeds it changed (Settings: auto-presenting).
+    public func reevaluatePresenting() { applyPresenting() }
 
     private func applyPresenting() {
         let p = PresentingPolicy.effective(manual: manualPresenting, autoEnabled: prefs.autoPresenting, commandLive: commandLive, suppressed: autoSuppressed)

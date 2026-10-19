@@ -201,6 +201,11 @@ public final class PeakPrefs: @unchecked Sendable {
         guard let s = doc.quietHoursStart, let e = doc.quietHoursEnd else { return nil }
         return QuietHours(start: s, end: e)
     }
+    /// Set or clear the quiet-hours window (both keys together).
+    public func setQuietHours(_ q: QuietHours?) {
+        func clock(_ m: Int) -> String { String(format: "%02d:%02d", m / 60, m % 60) }
+        edit { d in d.quietHoursStart = q.map { clock($0.startMinute) }; d.quietHoursEnd = q.map { clock($0.endMinute) } }
+    }
     /// One-tap do-not-disturb from the menu: no alert peeks until this instant. nil / past = off.
     public var dndUntil: Date? {
         get { lock.lock(); defer { lock.unlock() }; return doc.dndUntil.map(Date.init(timeIntervalSince1970:)) }

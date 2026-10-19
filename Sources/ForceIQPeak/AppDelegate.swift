@@ -91,6 +91,7 @@ enum Screens {
     var cards: CardStackViewModel!
     var hosts: [String: PanelHost] = [:]
     var statusItem: NSStatusItem?
+    var settingsModel: SettingsModel?
     var settings: NSWindow?
     var bag = Set<AnyCancellable>()
     var poll: Timer?
@@ -981,7 +982,7 @@ enum Screens {
         hk.state = controller.hotkeyEnabled ? .on : .off
         hk.target = self
         m.addItem(hk)
-        let st = NSMenuItem(title: "Shortcut…", action: #selector(menuSettings), keyEquivalent: ",")
+        let st = NSMenuItem(title: "Settings…", action: #selector(menuSettings), keyEquivalent: ",")
         st.target = self
         m.addItem(st)
         let about = NSMenuItem(title: "About ForceIQ Peak", action: #selector(menuAbout), keyEquivalent: "")
@@ -1008,14 +1009,8 @@ enum Screens {
     }
     /// Alerts stop peeking until then (the meeting and fix cards are still on the sheet). One tap, no settings window.
     @objc func menuDND(_ sender: NSMenuItem) {
-        let now = Date()
-        switch sender.tag {
-        case 1: prefs.dndUntil = now.addingTimeInterval(3600)
-        case 2: prefs.dndUntil = DoNotDisturb.tomorrowMorning(after: now)
-        default: prefs.dndUntil = nil
-        }
-        controller.dismissPeek()
-        log.log("state dnd=\(sender.tag == 0 ? "off" : "on")")
+        controller.setDoNotDisturb(sender.tag == 1 ? .oneHour : sender.tag == 2 ? .tomorrowMorning : .off)
+        settingsModel?.refresh()
     }
     @objc func menuHotkey() { controller.setHotkeyEnabled(!controller.hotkeyEnabled) }
     @objc func menuDisplay(_ sender: NSMenuItem) {
@@ -1027,10 +1022,12 @@ enum Screens {
     }
     @objc func menuSettings() {
         if settings == nil {
-            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 380, height: 300), styleMask: [.titled, .closable], backing: .buffered, defer: false)
+            let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 560), styleMask: [.titled, .closable], backing: .buffered, defer: false)
             w.title = "ForceIQ Peak"
             w.isReleasedWhenClosed = false
-            w.contentView = NSHostingView(rootView: SettingsView(controller: controller, voice: voice, setVoice: { [weak self] on in self?.setVoice(on) }))
+            let model = SettingsModel(prefs: prefs, controller: controller)
+            settingsModel = model
+            w.contentView = NSHostingView(rootView: SettingsView(model: model, controller: controller, voice: voice, setVoice: { [weak self] on in self?.setVoice(on) }))
             w.center()
             settings = w
         }
