@@ -48,6 +48,12 @@ public enum ProposalPhase: Equatable, Sendable {
     public let directory = DirectoryCache()
     /// The engine said the Command sign-in is dead: surface the existing sign-in row (Peak's home). Never a retry loop.
     public var onCommandSignIn: ((CommandSignInNotice) -> Void)?
+    /// "What's my day" ("/day", "what's my day", typed or dictated): composes the brief locally (zero tokens). nil = off.
+    public var dayBrief: (() async -> String)?
+    /// The brief is on screen; the app speaks it only when Voice is on (DayBriefController).
+    public var onDayBrief: ((String) -> Void)?
+    /// The 5090 light's gate (GPULightModel.hold): a 3PO proposal that is 5090 GPU work is refused while it isn't green.
+    public var gpuHold: (() -> String?)?
     var localSeq = 0
     let transport: ThreePOTransport
     let session: String
@@ -67,6 +73,13 @@ public enum ProposalPhase: Equatable, Sendable {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard canSend else { return }
         draft = ""
+        if let brief = dayBrief, DayBriefCommand.matches(text) {
+            logger?.log("3po brief local=1")
+            let reply = await brief()
+            transcript.local(user: text, reply: reply, cards: [])
+            onDayBrief?(reply)
+            return
+        }
         if let ctx = commandContext?(), let cmd = ClientCommands.parse(text) {
             if cmd.kind == .startMeeting && ctx.usesMeetingLink {
                 await meetingLink(cmd, ctx, said: text)
@@ -301,6 +314,7 @@ public enum ProposalPhase: Equatable, Sendable {
             return
         }
         guard let c = card(id), !c.viewOnly, let body = c.previewBody, phases[id] == .described || isFailed(id) else { return }
+        if heldForGPU(c) { return }
         phases[id] = .previewing
         logger?.log("3po proposal preview action=\(c.action)")
         let (code, d) = await transport.post("/api/act", body)
@@ -309,6 +323,7 @@ public enum ProposalPhase: Equatable, Sendable {
 
     public func confirm(_ id: String) async {
         guard let c = card(id), !c.viewOnly, let body = c.confirmBody, case .previewed = phases[id] else { return }
+        if heldForGPU(c) { return }
         phases[id] = .confirming
         logger?.log("3po proposal confirm action=\(c.action)")
         let (code, d) = await transport.post("/api/act", body)
@@ -318,6 +333,14 @@ public enum ProposalPhase: Equatable, Sendable {
         } else {
             phases[id] = .failed(Self.message(d, fallback: "GOAT didn't run it."))
         }
+    }
+
+    /// true (the card shows the plain refusal; nothing is posted) when the card is 5090 GPU work and the light holds it.
+    func heldForGPU(_ c: ProposalCard) -> Bool {
+        guard GPUGate.isGPUAction(c), let why = gpuHold?() else { return false }
+        phases[c.id] = .failed(why)
+        logger?.log("3po proposal refused=gpu-hold")
+        return true
     }
 
     public func cancel(_ id: String) { if phases[id] != nil { phases[id] = .described } }

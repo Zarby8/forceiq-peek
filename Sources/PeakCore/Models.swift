@@ -105,5 +105,12 @@ public struct EngineSnapshot: Equatable, Sendable {
     public var familyEnabled = false
     public var family: [FamilyRow] = []
     public var errors: [String] = []
+    // "What's my day" + the 5090 light (DayBrief.swift, GPULight.swift). nil = not in this read (old engine / failed).
+    public var today: [SessionRow]? = nil              // next-meeting `today`: this coach's named sessions today
+    public var gpuWindow: GPUWindow? = nil             // next-meeting `gpu_window`: times the 5090 must hold around
+    public var fixesNeeded: [BriefItem] = []           // /api/live `fixes_needed` (BLOCKED)
+    public var liveAt: Date? = nil                     // /api/live doc's own write time
+    public var approvalsAt: Date? = nil                // /api/approvals listing time
+    public var takenAt: Date? = nil                    // when Peak made this read
     public init() {}
 }

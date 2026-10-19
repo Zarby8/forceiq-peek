@@ -97,6 +97,7 @@ struct PeakRootView: View {
     @ObservedObject var drops: DropStore
     @ObservedObject var voice: VoiceController
     @ObservedObject var nextSession: NextSessionModel
+    @ObservedObject var light: GPULightModel
     let switcher: [SwitcherEntry]
     let mark: GhostMarkRendering
     let glow: GhostGlowRendering
@@ -271,6 +272,7 @@ struct PeakRootView: View {
                 PeakButton(title: "Collapse", color: .white, shortcut: .cancelAction, help: "Collapse (Esc)") { controller.collapse() }
             }
             .padding(.top, panel.mode == .notch ? (panel.layout.notchRect?.height ?? 32) + 4 : 12)
+            GPULightDot(light: light)                         // 5090 light: green, or red (held / unknown), labelled
             Group {
                 if drops.active {
                     DropsView(drops: drops).transition(reduceMotion ? .identity : .asymmetric(insertion: .scale(scale: 0.94, anchor: .top), removal: .identity))

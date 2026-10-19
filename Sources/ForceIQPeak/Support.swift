@@ -181,15 +181,25 @@ final class EngineClient: ThreePOTransport, Sendable {
         async let a = get("/api/approvals")
         async let f = get("/api/family-delivery-alerts")
         var s = EngineSnapshot()
+        s.takenAt = Date()
         let (mc, md) = await m
-        if mc == 200 { (s.meeting, s.meetingError) = EngineParse.meeting(md); s.commandSignIn = EngineParse.commandSignIn(md) } else {
+        if mc == 200 {
+            (s.meeting, s.meetingError) = EngineParse.meeting(md); s.commandSignIn = EngineParse.commandSignIn(md)
+            let o = (try? JSONSerialization.jsonObject(with: md)) as? [String: Any] ?? [:]
+            s.today = EngineParse.today(o); s.gpuWindow = GPUWindow.parse(o)
+        } else {
             s.meetingError = mc == 404 ? "This Mac's GOAT doesn't have the Peak meeting feed yet." : "GOAT didn't answer for the next meeting."
         }
         let (lc, ld) = await l
-        if lc == 200 { let x = EngineParse.live(ld); s.fixes = x.fixes; s.fixesRunning = x.fixing; s.downloadsRunning = x.downloading }
-        else { s.errors.append("live") }
+        if lc == 200 {
+            let x = EngineParse.live(ld); s.fixes = x.fixes; s.fixesRunning = x.fixing; s.downloadsRunning = x.downloading
+            let o = (try? JSONSerialization.jsonObject(with: ld)) as? [String: Any] ?? [:]
+            s.fixesNeeded = EngineParse.fixesNeeded(o); s.liveAt = EngineParse.docAt(o)
+        } else { s.errors.append("live") }
         let (ac, ad) = await a
-        if ac == 200 { s.approvals = EngineParse.approvals(ad) } else { s.errors.append("approvals") }
+        if ac == 200, let o = (try? JSONSerialization.jsonObject(with: ad)) as? [String: Any], o["items"] is [Any] {
+            s.approvals = EngineParse.approvals(ad); s.approvalsAt = EngineParse.docAt(o)
+        } else { s.errors.append("approvals") }
         let (fc, fd) = await f
         if fc == 200 { let x = EngineParse.family(fd); s.familyEnabled = x.enabled; s.family = x.rows
                        if s.commandSignIn == nil { s.commandSignIn = EngineParse.commandSignIn(fd) } }

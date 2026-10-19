@@ -78,7 +78,7 @@ Command". Peak uploads nothing, and client video stays local.
 | Endpoint | Status |
 |---|---|
 | `GET /api/peak/profile` | **new**, this Mac only: this coach's `peak` overlay section (engine/peakprofile.py), no secrets |
-| `GET /api/peak/next-meeting` | **new**, this Mac only, read-only: the next Command booking (engine/peakmeeting.py → panels.command_get) |
+| `GET /api/peak/next-meeting` | **new**, this Mac only, read-only: the next Command booking (engine/peakmeeting.py → panels.command_get), plus `today` (today's named sessions) and `gpu_window` (meeting times only, for the 5090 light) |
 | `GET /api/peak/client-directory` | **new**, this Mac only, read-only, asked only with `commandMeetingLink` on: this coach's active Command clients `[{id, display_name}]` (engine/peakdirectory.py → panels.command_get → Command `GET /clients/directory`); ids re-validated as UUIDs; nothing persisted or logged but counts |
 | `GET /api/peak/next-session` | **new**, this Mac only (403 for phones), read-only, asked only with `nextSessionPill` on, at most every 5 min: this coach's next session and gap checks (engine/peaknextsession.py → panels.command_get → Command `GET /schedule/bookings?upcoming_only=true&recent_hours=12` and `GET /invoices/`; Ghost `GET /v1/portal/{id}/meeting-bundles` and `GET /v1/ghost/client/{id}/games` for "since last met"); this coach's roster only; nothing persisted, logs are counts and states only |
 | `GET /api/live` | existing: fixes and download counts |
@@ -277,3 +277,17 @@ measures only that PID and quits it. `GOAT_PEAK_ROOT` also keeps any demo or tes
 repeating keyframes outside the busy-only ThinkingDots.
 
 Per coach: see `ADD-A-COACH.md` and `profile.template.json`. Third-party code: `THIRD_PARTY_NOTICES.md`.
+
+## "What's my day" brief and the 5090 light
+
+- **Brief.** Type `/day` or "what's my day" in 3PO (or say it with the voice toggle; Voice stays off by default). Peak
+  answers locally, with zero tokens and in three sentences: today's Command sessions (each naming the client), what's BLOCKED, and the
+  decisions waiting on you. It reads next-meeting `today`, `/api/approvals` and `/api/live`. A source older than 300 s
+  is labelled `STALE (read 9:30 AM ET, 12 min ago)`. A source that didn't answer is said plainly and nothing is
+  invented. Speech uses only macOS AVSpeechSynthesizer on this Mac, and only while Voice is on. Pressing the voice
+  toggle again stops it mid-sentence.
+- **5090 light.** This is the dot under the expanded header. It's red when a meeting is on now, or starts within 2 h (Command
+  bookings, Command live on this Mac, or the calendar), and green otherwise. Unknown means no read, a read older than 300 s, or Command live
+  unreadable. Unknown is treated as red and labelled. While it isn't green, Peak refuses every 5090 GPU action (the shifts/upscale drop zone, GPU
+  proposals and GPU approvals) with one plain sentence, and nothing runs. Status reads only: Peak never talks to the 5090, its
+  recording service, the service that guards it, or the recorder machine.

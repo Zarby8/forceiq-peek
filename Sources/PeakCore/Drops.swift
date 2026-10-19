@@ -92,6 +92,9 @@ public enum DropPhase: Equatable, Sendable {
     private var polls = 0
     public var onAsk: ((String) -> Void)?
     public var onCopy: ((String) -> Void)?
+    /// The 5090 light's gate (GPULightModel.hold): nil = allowed, else the refusal. The shifts zone starts a Dagu upscale
+    /// on the 5090, so its preview, Run and Confirm each ask at the moment of the tap; a held tap changes nothing.
+    public var gpuHold: (() -> String?)?
     let transport: ThreePOTransport
     weak var logger: PeakLogging?
     public init(transport: ThreePOTransport, logger: PeakLogging? = nil) { self.transport = transport; self.logger = logger }
@@ -108,6 +111,14 @@ public enum DropPhase: Equatable, Sendable {
 
     func body(_ o: [String: Any]) -> Data { (try? JSONSerialization.data(withJSONObject: o, options: [.sortedKeys])) ?? Data() }
 
+    /// true (and the phase shows the plain refusal) when this zone is 5090 GPU work and the light holds it.
+    func heldForGPU(_ zone: DropZone) -> Bool {
+        guard GPUGate.isGPUAction(zone), let why = gpuHold?() else { return false }
+        phase = .failed(why)
+        logger?.log("drop refused=gpu-hold zone=\(zone.rawValue)")
+        return true
+    }
+
     /// Preview only reads (title: a scratch re-render). An explicit tap on a zone.
     public func preview(_ zone: DropZone, game: String? = nil) async {
         let url: URL
@@ -116,6 +127,7 @@ public enum DropPhase: Equatable, Sendable {
         case .choosing(let u, _, let choices, _): guard let g = game, choices.contains(g) else { return }; url = u
         default: return
         }
+        if heldForGPU(zone) { return }
         phase = .previewing(zone)
         logger?.log("drop preview zone=\(zone.rawValue)")
         var b: [String: Any] = ["path": url.path]
@@ -130,6 +142,7 @@ public enum DropPhase: Equatable, Sendable {
     /// Run: asks the engine to apply WITHOUT confirm (it only answers with what it would do).
     public func run() async {
         guard case .described(let p) = phase, p.canApply, !p.targetExists else { return }
+        if heldForGPU(p.zone) { return }
         let (c, d) = await transport.post("/api/peak/\(p.zone.rawValue)/apply", body(["token": p.token]))
         let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any]
         if c == 200, (o?["needs_confirm"] as? Bool) == true {
@@ -139,6 +152,7 @@ public enum DropPhase: Equatable, Sendable {
 
     public func confirm() async {
         guard case .confirming(let p, _) = phase else { return }
+        if heldForGPU(p.zone) { return }
         phase = .applying(p)
         logger?.log("drop apply zone=\(p.zone.rawValue)")
         var b: [String: Any] = ["token": p.token, "confirm": true]

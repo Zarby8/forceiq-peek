@@ -14,6 +14,10 @@ public enum Brand {
     public static func rgb(_ hex: UInt32) -> (r: Double, g: Double, b: Double) {
         (Double((hex >> 16) & 0xFF) / 255, Double((hex >> 8) & 0xFF) / 255, Double(hex & 0xFF) / 255)
     }
+
+    /// Red, for SHAPES only (the 5090 light's dot and its glow). Never a text colour, so it is not in allowedTextHex:
+    /// every label beside a red dot stays pure white. Added with the 5090 light (Peak had no red token before).
+    public static let redHex: UInt32 = 0xFF3B30
 }
 
 /// UI tokens the views read, so the no-gray rule is testable: placeholders are gold, a disabled control is a gold
