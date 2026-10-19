@@ -249,6 +249,11 @@ enum Screens {
         var a = DesktopApps()
         if let f = profile.apps.first(where: { $0.name.lowercased() == "flow" }) { a.flowName = f.name; a.flowBundle = f.bundleID }
         if let c = profile.apps.first(where: { $0.name.lowercased() == "command" }) { a.commandName = c.name; a.commandBundle = c.bundleID }
+        // smoke only: an isolated, non-production FLOW instance (FORCEIQ_PEAK_FLOW_TARGET_PID / _BUNDLE). Production stays refused.
+        if let t = FlowSmokeTarget.from(env: ProcessInfo.processInfo.environment),
+           let b = t.bundleID ?? t.pid.flatMap({ NSRunningApplication(processIdentifier: $0)?.bundleIdentifier }) {
+            if ProductionGuard.isProductionBundle(b) { log.log("desktop smoke target refused: production FLOW") } else { a.flowBundle = b }
+        }
         return a
     }
 
@@ -263,7 +268,7 @@ enum Screens {
         let pace = Int(ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DRYRUN_PACE_MS"] ?? "") ?? 0
         let env = ProcessInfo.processInfo.environment
         let arm = Int(env["FORCEIQ_PEAK_LIVE_ARM_MS"] ?? "") ?? 1500                // the window to STOP before the press
-        let runner = DryRunRunner(steps: steps, locator: AXDesktopLocator(), stop: model.stop, action: c.action, paceMs: pace,
+        let runner = DryRunRunner(steps: steps, locator: AXDesktopLocator(refuseProduction: live), stop: model.stop, action: c.action, paceMs: pace,
                                   presser: live ? AXCodeWindowPresser() : nil, armMs: live ? arm : 0)
         let log = self.log
         log.log("dryrun run mode=\(live ? "live" : "dry_run") action=\(c.action) client=\(client) steps=\(steps.count) pace_ms=\(pace)\(live ? " arm_ms=\(arm)" : "") t=\(String(format: "%.3f", Date().timeIntervalSince1970))")

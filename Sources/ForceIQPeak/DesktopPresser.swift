@@ -7,6 +7,9 @@ import PeakCore
 // (FLOW frontmost, exactly one match, enabled, FLOW's front window is the client's package). STOP is checked right
 // before the press. No coordinate clicks, no synthetic typing, no posted events: DesktopDryRunTests pins this file to a
 // single AXUIElementPerformAction call (the AXPress action), inside pressCodeWindow, after the guard and the STOP check.
+// Production FLOW is never pressed: ProductionGuard refuses the bundle id com.forceiq.flowai, /Applications/FLOW.app, every
+// running production-bundle pid and FORCEIQ_PEAK_PROTECTED_PIDS; with a smoke target (FORCEIQ_PEAK_FLOW_TARGET_PID /
+// _BUNDLE) the frontmost process must be exactly that isolated FLOW instance.
 
 struct AXCodeWindowPresser: DesktopPresser {
     func pressCodeWindow(_ step: DryRunStep, packagePath: String, stop: StopSwitch) async -> PressResult {
@@ -15,11 +18,23 @@ struct AXCodeWindowPresser: DesktopPresser {
         if stop.isPressed { return PressResult(pressed: false, stopped: true, detail: "STOP before the press; nothing pressed", ms: ms()) }
         guard step.kind == .codeWindowButton else { return PressResult(pressed: false, detail: "not FLOW's code-window step; nothing pressed", ms: ms()) }
         guard AXIsProcessTrusted() else { return PressResult(pressed: false, detail: "Peak has no Accessibility permission; nothing pressed", ms: ms()) }
-        let front = await MainActor.run { () -> (pid: pid_t, bundle: String?)? in
-            NSWorkspace.shared.frontmostApplication.map { ($0.processIdentifier, $0.bundleIdentifier) }
+        let front = await MainActor.run { () -> (pid: pid_t, bundle: String?, path: String?)? in
+            NSWorkspace.shared.frontmostApplication.map { ($0.processIdentifier, $0.bundleIdentifier, $0.bundleURL?.path) }
+        }
+        let env = ProcessInfo.processInfo.environment
+        let protected = await MainActor.run { ProductionPids.running() }.union(ProductionGuard.protectedPids(env: env))
+        let target = FlowSmokeTarget.from(env: env)
+        if let why = target?.refusal(protectedPids: protected) {
+            return PressResult(pressed: false, detail: "refused: \(why); nothing pressed", ms: ms())
+        }
+        if let front, let why = ProductionGuard.reason(pid: front.pid, bundleID: front.bundle, bundlePath: front.path, protectedPids: protected) {
+            return PressResult(pressed: false, detail: "refused: the frontmost app is \(why); nothing pressed", ms: ms())
         }
         guard let front, front.bundle == step.bundleID else {
             return PressResult(pressed: false, detail: "FLOW is not the frontmost app; nothing pressed", ms: ms())
+        }
+        if let target, !target.matches(pid: front.pid, bundleID: front.bundle) {
+            return PressResult(pressed: false, detail: "the frontmost FLOW (pid \(front.pid)) isn't the smoke target; nothing pressed", ms: ms())
         }
         let app = AXUIElementCreateApplication(front.pid)
         AXUIElementSetMessagingTimeout(app, 0.5)
@@ -32,7 +47,8 @@ struct AXCodeWindowPresser: DesktopPresser {
             enabled: first.flatMap { MenuItems.bool($0, kAXEnabledAttribute) } ?? false,
             pid: front.pid, bundleID: front.bundle, frontmostPid: front.pid, matches: items.count,
             documentPath: win.flatMap { MenuItems.string($0, kAXDocumentAttribute) },
-            windowTitle: win.flatMap { MenuItems.string($0, kAXTitleAttribute) })
+            windowTitle: win.flatMap { MenuItems.string($0, kAXTitleAttribute) },
+            windowTexts: win.map { w in (MenuItems.string(w, kAXTitleAttribute) ?? "").isEmpty ? MenuItems.staticTexts(w) : [] } ?? [])
         if let why = PressGuard.refusal(candidate, flowBundle: step.bundleID, packagePath: packagePath, client: step.client) {
             return PressResult(pressed: false, detail: why, ms: ms())
         }
@@ -61,6 +77,20 @@ enum MenuItems {
         }
         return out
     }
+    /// Short AXStaticText values in one window (bounded, read-only): how a title-less FLOW window shows its package.
+    static func staticTexts(_ win: AXUIElement, budget: Int = 3000) -> [String] {
+        var out: [String] = []
+        var queue: [(AXUIElement, Int)] = [(win, 0)]
+        var head = 0
+        while head < queue.count && head < budget && out.count < 200 {
+            let (el, depth) = queue[head]; head += 1
+            if string(el, kAXRoleAttribute) == "AXStaticText" {
+                for a in [kAXValueAttribute, kAXTitleAttribute] { if let s = string(el, a), !s.isEmpty, s.count <= 120 { out.append(s) } }
+            }
+            if depth < 14 { queue += children(el).map { ($0, depth + 1) } }
+        }
+        return out
+    }
     static func copy(_ el: AXUIElement, _ attr: String) -> CFTypeRef? {
         var v: CFTypeRef?
         return AXUIElementCopyAttributeValue(el, attr as CFString, &v) == .success ? v : nil
@@ -72,4 +102,11 @@ enum MenuItems {
         return (v as! AXUIElement)
     }
     static func children(_ el: AXUIElement) -> [AXUIElement] { (copy(el, kAXChildrenAttribute) as? [AXUIElement]) ?? [] }
+}
+
+/// Pids of every running production FLOW (by bundle id). Read-only.
+enum ProductionPids {
+    @MainActor static func running() -> Set<Int32> {
+        Set(ProductionGuard.productionBundleIDs.flatMap { NSRunningApplication.runningApplications(withBundleIdentifier: $0) }.map(\.processIdentifier))
+    }
 }
