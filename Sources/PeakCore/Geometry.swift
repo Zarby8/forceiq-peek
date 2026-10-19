@@ -28,6 +28,9 @@ public struct PeakLayout: Equatable, Sendable {
     public var chat: CGRect = .zero        // the expanded sheet on the 3PO tab (taller)
     public var canvas: CGRect = .zero      // the ONE fixed panel frame: every state draws inside it (no per-frame setFrame)
     public var peek: CGRect = .zero        // the alert shell that drops out of the notch for a few seconds, then retracts
+    /// Notch mode: a 2 pt line hanging just under the notch (the notch itself has no pixels), for live progress.
+    /// Not a hit rect: it never takes a click.
+    public var progressLine: CGRect = .zero
     public var peekStripHeight: CGFloat = 0
     /// The bottom band of the peek (below the notch / pill row) where its one line of text sits.
     public var peekStrip: CGRect { CGRect(x: peek.minX, y: peek.minY, width: peek.width, height: peekStripHeight) }
@@ -99,6 +102,7 @@ public struct PeakGeometry: PeakGeometryProviding {
     func finish(_ l: PeakLayout, chat: CGRect, peek: CGRect, edge: CGRect, _ s: ScreenDescriptor) -> PeakLayout {
         var out = l
         out.chat = chat; out.peek = peek; out.edgeTrigger = edge; out.peekStripHeight = peekSize.height
+        if let n = l.notchRect { out.progressLine = CGRect(x: n.minX + 12, y: n.minY - 5, width: max(0, n.width - 24), height: 2) }
         let u = l.collapsed.union(l.expanded).union(chat).union(peek)
         var c = CGRect(x: u.minX - glowMargin, y: u.minY - glowMargin, width: u.width + 2 * glowMargin, height: s.frame.maxY - (u.minY - glowMargin))
         c.origin.x = max(c.minX, s.frame.minX); if c.maxX > s.frame.maxX { c.size.width = s.frame.maxX - c.minX }

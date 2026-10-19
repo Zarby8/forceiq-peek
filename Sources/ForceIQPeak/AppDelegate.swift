@@ -722,9 +722,12 @@ enum Screens {
     /// Demo feed (sample names only) with today's sessions and a gpu_window: the sample meeting 42 min out → red.
     func demoSnapshot(now: Date = Date()) -> EngineSnapshot {
         let quiet = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "quiet"
-        let soon = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "soon"     // the sample meeting 9 min out
+        let feed = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"]
+        let soon = feed == "soon"                                                               // the sample meeting 9 min out
         var s = DemoData.snapshot(now: now, quiet: quiet, meetingInMinutes: soon ? 9 : 42.3)
         s.takenAt = now; s.liveAt = now; s.approvalsAt = now
+        if feed == "download" { s.downloadsRunning = 1; s.downloadPercents = [38] }              // the progress line, determinate
+        if feed == "working" { s.fixesRunning = 1 }                                              // the progress line, dashed
         let m = s.meeting
         s.today = m.map { [SessionRow(client: $0.client, scheduledAt: $0.scheduledAt, durationMinutes: $0.durationMinutes)] } ?? []
         s.gpuWindow = GPUWindow(spans: m.map { [GPUSpan(start: $0.scheduledAt, end: $0.scheduledAt.addingTimeInterval(Double($0.durationMinutes) * 60), source: "command")] } ?? [], live: false, calendarAt: now)

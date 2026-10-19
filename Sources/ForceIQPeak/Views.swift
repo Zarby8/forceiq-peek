@@ -48,6 +48,27 @@ enum Motion {
     }
 }
 
+/// Live progress under the notch: gold on black, a shape only (never text). Determinate = a gold fill over a faint gold
+/// track; unknown = a static dashed line ("working", no claim how far). Nothing animates, so it costs nothing while it shows.
+struct NotchProgressLine: View {
+    let progress: LiveProgress
+    var body: some View {
+        GeometryReader { g in
+            if let f = progress.fraction {
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Color.peakGold.opacity(0.25))
+                    Capsule().fill(Color.peakGold).frame(width: max(g.size.height, g.size.width * f))
+                }
+            } else {
+                Path { p in p.move(to: CGPoint(x: 0, y: g.size.height / 2)); p.addLine(to: CGPoint(x: g.size.width, y: g.size.height / 2)) }
+                    .stroke(Color.peakGold, style: StrokeStyle(lineWidth: g.size.height, dash: [8, 5]))
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(progress.summary)
+    }
+}
+
 /// The ONE shell: a notch (concave top ears, flush with the screen edge) or a pill / sheet (rounded), whose rect and
 /// corner radii are animatable. Collapsed, home and chat are three sets of values for the same shape, so open/close is
 /// one continuous spring of a path inside a fixed-size panel (no window resize, no relayout of the content).
@@ -108,6 +129,7 @@ struct PeakRootView: View {
 
     var isExpanded: Bool { controller.expanded && controller.activeDisplay == panel.uuid }
     var showChat: Bool { isExpanded && controller.tab == .threePO && controller.profile.isEnabled(.threePO) }
+    var progressShowing: Bool { panel.mode == .notch && panel.visible && !isExpanded && !peekShowing && cards.progress.working }
     var peekShowing: Bool { !isExpanded && controller.peek != nil && controller.peekDisplay == panel.uuid }
     var surface: PeakLayout.Surface { isExpanded ? (showChat ? .chat : .home) : (peekShowing ? .peek : .collapsed) }
     var shellRect: CGRect {
@@ -131,6 +153,12 @@ struct PeakRootView: View {
             content
                 .frame(width: panel.layout.canvas.width, height: panel.layout.canvas.height, alignment: .topLeading)
                 .mask(shape)
+            if progressShowing {           // GOAT is working: a thin gold line hanging under the notch (drawn outside the notch mask)
+                let r = panel.local(panel.layout.progressLine)
+                NotchProgressLine(progress: cards.progress).frame(width: r.width, height: r.height)
+                    .padding(.leading, r.minX).padding(.top, r.minY)
+                    .allowsHitTesting(false)
+            }
             if voiceStrip {                // dictating with Peak collapsed (Raycast / the deep link): the words under the notch
                 let r = panel.local(panel.layout.collapsed)
                 VoiceStrip(voice: voice).fixedSize(horizontal: false, vertical: true).frame(width: 440)

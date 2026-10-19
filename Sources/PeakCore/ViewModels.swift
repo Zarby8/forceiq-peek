@@ -153,6 +153,7 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     @Published public private(set) var configured = true
     @Published public private(set) var lastResult: String? = nil
     @Published public private(set) var ghost: GhostState = .idle
+    @Published public private(set) var progress = LiveProgress.idle   // the thin gold line under the notch
     @Published public private(set) var approvedPops = 0            // trigger: an approval / run went through (green check pop)
     /// "Settings file couldn't be read: using defaults" while settings.json couldn't be used (PeakPrefs.settingsNotice).
     @Published public var settingsNotice: String? = nil
@@ -176,6 +177,7 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         configured = profile.configured
         cards = r.cards; unnamed = r.unnamed; pipelineHidden = r.pipelineHidden
         baseGhost = GhostState.from(s)
+        progress = LiveProgress(s)
         if ghost != .typing && ghost != .receipt { ghost = baseGhost }
         if case .describing(let id) = phase, !cards.contains(where: { $0.id == id }) { phase = .list }
     }

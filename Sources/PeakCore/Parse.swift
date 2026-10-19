@@ -27,9 +27,10 @@ public enum EngineParse {
                            joinURL: nil, openURL: open), err)
     }
 
-    /// GET /api/live → fixes + running counts (downloads only count toward the "working" Ghost state).
-    public static func live(_ d: Data) -> (fixes: [FixRow], fixing: Int, downloading: Int) {
-        guard let o = obj(d) else { return ([], 0, 0) }
+    /// GET /api/live → fixes + running counts (downloads only count toward the "working" Ghost state) + the percent each
+    /// running download reports (a row without a numeric percent contributes none, so nothing is ever estimated).
+    public static func live(_ d: Data) -> (fixes: [FixRow], fixing: Int, downloading: Int, percents: [Double]) {
+        guard let o = obj(d) else { return ([], 0, 0, []) }
         let fixes: [FixRow] = ((o["fixes"] as? [[String: Any]]) ?? []).map { f in
             let who = str(f["who"]).isEmpty ? (strs(f["clients"]).first ?? "") : str(f["who"])
             return FixRow(title: str(f["title"]).isEmpty ? str(f["what"]) : str(f["title"]), client: who,
@@ -37,9 +38,14 @@ public enum EngineParse {
         }
         let c = (o["counts"] as? [String: Any]) ?? [:]
         let fixing = (c["fixing"] as? Int) ?? fixes.filter { $0.state == "running" }.count
+        let rows = (o["downloads"] as? [[String: Any]]) ?? []
         let downloading = (c["downloading"] as? Int)
-            ?? ((o["downloads"] as? [[String: Any]]) ?? []).filter { ["running", "downloading", "queued"].contains(str($0["state"])) }.count
-        return (fixes, fixing, downloading)
+            ?? rows.filter { ["running", "downloading", "queued"].contains(str($0["state"])) }.count
+        let percents: [Double] = rows.filter { str($0["state"]) == "running" }.compactMap { r in
+            guard let n = r["percent"] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID() else { return nil }
+            return n.doubleValue
+        }
+        return (fixes, fixing, downloading, percents)
     }
 
     /// GET /api/approvals

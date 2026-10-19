@@ -111,6 +111,12 @@ of the notch also opens Peak (that strip never takes a click, so the menu bar st
 lifts on hover; the notch never scales or brightens, so nothing paints outside it. Demo: `FORCEIQ_PEAK_DEMO=1
 FORCEIQ_PEAK_DEMO_FEED=soon GOAT_PEAK_ROOT=<scratch root>` puts the sample meeting 9 min out.
 
+**Progress line.** While GOAT is working (a fix running, a shift download running; nothing else, per the Live Activity rule)
+a 2 pt gold line hangs just under the notch (the notch itself has no pixels). It is a gold fill over a faint track when every
+running download reports a percent and no fix is running; otherwise a static dashed line that says "working" without claiming
+how far. Percents come only from GOAT's live doc, never estimated. It is a shape (no text), never animates, takes no click,
+and is hidden while the sheet or a peek is open. Demo: `FORCEIQ_PEAK_DEMO_FEED=download` (38%) or `working` (dashed).
+
 ## Settings (`<state_root>/settings.json`; `GOAT_PEAK_ROOT` overrides the root)
 Peak writes this file itself (menu bar, Settings); you can also hand-edit it. Every key is optional: a missing key (or a
 JSON `null`) gets its default and the keys that are present are kept, so `{"commandMeetingLink": true}` alone works.

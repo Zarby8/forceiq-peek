@@ -101,6 +101,7 @@ public struct EngineSnapshot: Equatable, Sendable {
     public var fixes: [FixRow] = []
     public var fixesRunning: Int = 0
     public var downloadsRunning: Int = 0
+    public var downloadPercents: [Double] = []         // percent (0-100) of each running download that reports one
     public var approvals: [ApprovalRow] = []
     public var familyEnabled = false
     public var family: [FamilyRow] = []
