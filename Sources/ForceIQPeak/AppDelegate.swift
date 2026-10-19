@@ -708,6 +708,7 @@ enum Screens {
     /// The brief: one fresh read (next meeting + today, live, approvals), merged with the last good read of each source
     /// (so a source that fails now is labelled STALE, or said to be unavailable), then composed in a few sentences.
     func composeBrief() async -> String {
+        if controller.presenting { log.log("brief held=presenting"); return Presenting.briefLine }
         let s = demo ? demoSnapshot() : await engine.snapshot()
         if !demo {
             cards.update(s, profile: profile); lastMeeting = s.meeting
@@ -814,7 +815,7 @@ enum Screens {
         for (id, h) in hosts {
             h.setVisible(controller.panelVisible(on: id))
             let e = isExpanded(id)
-            h.surface = e ? (controller.tab == .threePO && profile.isEnabled(.threePO) ? .chat : .home)
+            h.surface = e ? (controller.tab == .threePO && profile.isEnabled(.threePO) && !controller.presenting ? .chat : .home)
                 : (controller.peek != nil && controller.peekDisplay == id ? .peek : .collapsed)
             if lastSurface[id] != h.surface {
                 lastSurface[id] = h.surface
@@ -878,6 +879,7 @@ enum Screens {
 
     /// A file dropped on the shell: the drops module (title-slide fix / Dagu Shifts) takes it, describe-first.
     func dropped(_ urls: [URL], uuid: String) -> Bool {
+        guard !controller.presenting else { log.log("drop refused=presenting"); return false }
         guard profile.isEnabled(.drops), let u = urls.first else { log.log("drop refused=module-off"); return false }
         log.log("drop received count=\(urls.count)")
         controller.activeDisplay = uuid
@@ -911,7 +913,7 @@ enum Screens {
     // ── menu bar ──
     func buildStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.title = "Peak"
+        item.button?.title = controller.presenting ? Presenting.statusTitle : "Peak"
         item.button?.toolTip = "ForceIQ Peak"
         item.menu = makeMenu()
         statusItem = item
@@ -938,6 +940,10 @@ enum Screens {
             m.addItem(it)
         }
         m.addItem(.separator())
+        let present = NSMenuItem(title: Presenting.menuTitle, action: #selector(menuPresenting), keyEquivalent: "")
+        present.state = controller.presenting ? .on : .off
+        present.target = self
+        m.addItem(present)
         let dnd = NSMenuItem(title: "Do not disturb", action: nil, keyEquivalent: "")
         let sub = NSMenu(title: "Do not disturb")
         for (title, tag) in [("For 1 hour", 1), ("Until tomorrow morning", 2), ("Off", 0)] {
@@ -966,11 +972,16 @@ enum Screens {
         for it in menu.items {
             if it.action == #selector(menuToggle) { it.state = controller.globallyVisible ? .on : .off }
             if it.action == #selector(menuHotkey) { it.state = controller.hotkeyEnabled ? .on : .off }
+            if it.action == #selector(menuPresenting) { it.state = controller.presenting ? .on : .off }
             if it.action == #selector(menuDisplay(_:)), let id = it.representedObject as? String { it.state = controller.isDisplayShown(id) ? .on : .off }
         }
     }
 
     @objc func menuToggle() { controller.toggle() }
+    @objc func menuPresenting() {
+        controller.setPresenting(!controller.presenting)
+        statusItem?.button?.title = controller.presenting ? Presenting.statusTitle : "Peak"
+    }
     /// Alerts stop peeking until then (the meeting and fix cards are still on the sheet). One tap, no settings window.
     @objc func menuDND(_ sender: NSMenuItem) {
         let now = Date()

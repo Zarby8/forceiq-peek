@@ -16,8 +16,11 @@ public struct PeakAlert: Equatable, Sendable, Identifiable {
     public let client: String
     public let line: String
     public let holdSeconds: Double
-    public init(id: String, kind: PeakAlertKind, client: String, line: String, holdSeconds: Double) {
+    /// The same alert without the client, for a shared screen (Presenting.redact).
+    public let plainLine: String
+    public init(id: String, kind: PeakAlertKind, client: String, line: String, holdSeconds: Double, plainLine: String? = nil) {
         self.id = id; self.kind = kind; self.client = client; self.line = line; self.holdSeconds = holdSeconds
+        self.plainLine = plainLine ?? (kind == .meetingSoon ? "A session is coming up" : "A fix failed")
     }
 }
 
@@ -97,7 +100,7 @@ public struct AlertPolicy: Sendable {
             let secs = at.timeIntervalSince(ctx.now)
             guard secs > 0, secs <= Self.leadSeconds, !shown.contains(c.id) else { continue }
             let mins = max(1, Int((secs / 60).rounded(.up)))
-            fresh.append(PeakAlert(id: c.id, kind: .meetingSoon, client: c.client, line: "\(c.client) in \(mins) min", holdSeconds: Self.meetingHold))
+            fresh.append(PeakAlert(id: c.id, kind: .meetingSoon, client: c.client, line: "\(c.client) in \(mins) min", holdSeconds: Self.meetingHold, plainLine: "A session in \(mins) min"))
         }
         let fixesKnown = s.liveAt != nil                                         // this read really included GOAT's live doc
         for f in s.fixes where fixesKnown && f.state == "failed" {

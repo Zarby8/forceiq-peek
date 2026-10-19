@@ -46,6 +46,8 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     /// An alert peeking out of the notch (AlertPolicy decides; this only holds it for `holdSeconds`, then retracts it).
     @Published public private(set) var peek: PeakAlert? = nil
     @Published public private(set) var peekDisplay: String? = nil
+    /// Presenting mode: nothing client-private on screen (Presenting.swift). Persisted in settings.json.
+    @Published public private(set) var presenting: Bool
     /// A tap on the peek: the app opens whatever the alert is about (a meeting alert opens the next-session card).
     public var onPeekOpen: ((PeakAlert) -> Void)?
     private var peekTask: Task<Void, Never>?
@@ -53,6 +55,7 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     public init(prefs: PeakPrefs, profile: CoachProfile, hotkey: HotkeyRegistering, logger: PeakLogging? = nil) {
         self.prefs = prefs; self.profile = profile; self.hotkey = hotkey; self.logger = logger
         globallyVisible = !prefs.globallyHidden
+        presenting = prefs.presenting
         hotkeyEnabled = prefs.builtInHotkeyEnabled(default: profile.hotkey.enabled)
         if hotkeyEnabled { hotkey.register { [weak self] in self?.hotkeyPressed() } }
     }
@@ -68,6 +71,7 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     /// Drop an alert out of the notch on `display`. Only a visible, collapsed Peak shows one; it retracts by itself.
     public func showPeek(_ a: PeakAlert, on display: String?) {
         guard globallyVisible, !expanded else { return }
+        let a = presenting ? Presenting.redact(a) : a
         peek = a; peekDisplay = display
         log("state peek=\(a.kind.rawValue)")
         schedulePeekRetract(a.holdSeconds)
@@ -93,6 +97,14 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
             guard !Task.isCancelled, let self, self.peek?.id == id else { return }
             self.dismissPeek()
         }
+    }
+
+    /// Turn presenting mode on or off. Turning it on clears anything client-private that is already showing.
+    public func setPresenting(_ on: Bool) {
+        guard on != presenting else { return }
+        presenting = on; prefs.presenting = on
+        if on { dismissPeek(); closeAsk(); tab = .home }
+        log("state presenting=\(on ? "on" : "off")")
     }
 
     /// Opens the ask field prefilled (3PO's input when the 3PO module is on). Nothing is ever sent from here.

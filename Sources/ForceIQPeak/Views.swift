@@ -128,7 +128,7 @@ struct PeakRootView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var isExpanded: Bool { controller.expanded && controller.activeDisplay == panel.uuid }
-    var showChat: Bool { isExpanded && controller.tab == .threePO && controller.profile.isEnabled(.threePO) }
+    var showChat: Bool { isExpanded && !controller.presenting && controller.tab == .threePO && controller.profile.isEnabled(.threePO) }
     var progressShowing: Bool { panel.mode == .notch && panel.visible && !isExpanded && !peekShowing && cards.progress.working }
     var peekShowing: Bool { !isExpanded && controller.peek != nil && controller.peekDisplay == panel.uuid }
     var surface: PeakLayout.Surface { isExpanded ? (showChat ? .chat : .home) : (peekShowing ? .peek : .collapsed) }
@@ -143,7 +143,7 @@ struct PeakRootView: View {
     var shape: PeakShellShape { PeakShellShape(rect: shellRect, topRadius: topRadius, bottomRadius: bottomRadius, notch: panel.mode == .notch) }
     var hoverLift: Bool { HoverLift.applies(mode: panel.mode, hovering: panel.hovering, expanded: isExpanded || peekShowing, reduceMotion: reduceMotion) }
     var voiceStrip: Bool {
-        !isExpanded && panel.visible && voice.enabled && controller.activeDisplay.map { $0 == panel.uuid } ?? true
+        !isExpanded && !controller.presenting && panel.visible && voice.enabled && controller.activeDisplay.map { $0 == panel.uuid } ?? true
             && (voice.phase.isListening || voice.phase == .finishing || voice.handing)
     }
 
@@ -293,7 +293,7 @@ struct PeakRootView: View {
     var collapsedPill: some View {
         HStack(spacing: 6) {
             ghost(panel.collapsedSize.height - 10)
-            if nextSession.showsPill {
+            if nextSession.showsPill && !controller.presenting {
                 NextSessionPill(model: nextSession, compact: true)          // names the client; gold on a gap
                 Spacer(minLength: 0)
             } else {
@@ -319,7 +319,7 @@ struct PeakRootView: View {
                 ghost(30)
                 Text("ForceIQ Peak").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.white)
                     .matchedGeometryEffect(id: "title", in: ns)
-                if controller.profile.isEnabled(.threePO) { TabPills(controller: controller, current: controller.tab) }
+                if controller.profile.isEnabled(.threePO) && !controller.presenting { TabPills(controller: controller, current: controller.tab) }
                 Spacer()
                 if badgeCount > 0 {
                     Text("\(badgeCount) waiting").font(.system(size: 11, weight: .heavy)).foregroundStyle(Color.black)
@@ -331,7 +331,9 @@ struct PeakRootView: View {
             .padding(.top, panel.mode == .notch ? (panel.layout.notchRect?.height ?? 32) + 4 : 12)
             GPULightDot(light: light)                         // 5090 light: green, or red (held / unknown), labelled
             Group {
-                if drops.active {
+                if controller.presenting {
+                    PresentingNotice { controller.setPresenting(false) }       // nothing client-private anywhere on the sheet
+                } else if drops.active {
                     DropsView(drops: drops).transition(reduceMotion ? .identity : .asymmetric(insertion: .scale(scale: 0.94, anchor: .top), removal: .identity))
                 } else if showChat {
                     ThreePOView(store: threePO, profile: controller.profile, askSeq: controller.askSeq,
@@ -363,6 +365,19 @@ struct PeakRootView: View {
             if !showChat && !drops.active { SwitcherRow(entries: switcher, onSwitch: onSwitch) }
         }
         .padding(.horizontal, 16).padding(.bottom, 12)
+    }
+}
+
+/// Shown instead of every client-bearing view while presenting: one plain line and one way back.
+struct PresentingNotice: View {
+    let showDetails: () -> Void
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(Presenting.notice).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.white)
+            PeakButton(title: "Show details", color: .peakGold, filled: true) { showDetails() }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 8)
     }
 }
 

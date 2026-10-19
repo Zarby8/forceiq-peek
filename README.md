@@ -117,6 +117,14 @@ running download reports a percent and no fix is running; otherwise a static das
 how far. Percents come only from GOAT's live doc, never estimated. It is a shape (no text), never animates, takes no click,
 and is hidden while the sheet or a peek is open. Demo: `FORCEIQ_PEAK_DEMO_FEED=download` (38%) or `working` (dashed).
 
+**Presenting mode** (menu bar: "Presenting (hide client details)"). For a shared screen: alerts say only "A session in 9 min" /
+"A fix failed", the sheet shows one plain notice (plus a Show details button) instead of cards, the next-session card, 3PO,
+the ask field and file drops, the Studio pill drops its client countdown, dictated words aren't echoed under the notch, and
+"what's my day" answers that it is hidden. It is the one place the "every item names its client" rule is suspended. The
+menu-bar title reads "Peak · presenting" as a reminder. It is persisted (`presenting` in settings.json), and a settings file
+Peak can't read turns it ON, never off. Proof: `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_FEED=soon FORCEIQ_PEAK_DEMO_TOUR=1`
+with `{"presenting": true}` in the scratch root.
+
 ## Settings (`<state_root>/settings.json`; `GOAT_PEAK_ROOT` overrides the root)
 Peak writes this file itself (menu bar, Settings); you can also hand-edit it. Every key is optional: a missing key (or a
 JSON `null`) gets its default and the keys that are present are kept, so `{"commandMeetingLink": true}` alone works.
@@ -135,6 +143,7 @@ Unknown keys are ignored.
 | `nextSessionPill` | true/false | `false` (no UI) |
 | `quietHoursStart`, `quietHoursEnd` | `"HH:mm"` (24 h, local) | unset (no quiet window; both keys needed; start later than end wraps midnight; a bad time is an invalid key) |
 | `dndUntil` | seconds since 1970 | unset (the menu's Do not disturb writes it) |
+| `presenting` | true/false | `false`; an unreadable file: **on** (the one fail-safe-to-hidden key) |
 
 - **No file** is normal (a new Mac, a fresh scratch root): silent defaults, nothing logged, nothing written until a setting
   changes.
