@@ -145,6 +145,13 @@ menu-bar badge turns gold and reads "PEAK · PRESENTING" as a reminder. It is pe
 Peak can't read turns it ON, never off. Proof: `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_FEED=soon FORCEIQ_PEAK_DEMO_TOUR=1`
 with `{"presenting": true}` in the scratch root.
 
+**Auto-presenting.** Meetings run in the Command app and the client sees the screen, so presenting turns itself on while
+Command is live on this Mac (GOAT's `gpu_window.live`, i.e. `ops.meeting_live`; never a Zoom or screen-share detector) and off
+when it ends. An unreadable status changes nothing. Turn it off during a meeting (menu or Show details) and it stays off until
+that meeting ends; the next meeting is automatic again. Turning it on by hand is sticky (persisted); automatic presenting is
+never written down. `autoPresenting: false` in settings.json disables it. Proof: `FORCEIQ_PEAK_DEMO=1
+FORCEIQ_PEAK_DEMO_FEED=live GOAT_PEAK_ROOT=<scratch>` (log: `state presenting=on reason=command-live`).
+
 ## Settings (`<state_root>/settings.json`; `GOAT_PEAK_ROOT` overrides the root)
 Peak writes this file itself (menu bar, Settings); you can also hand-edit it. Every key is optional: a missing key (or a
 JSON `null`) gets its default and the keys that are present are kept, so `{"commandMeetingLink": true}` alone works.
@@ -163,6 +170,7 @@ Unknown keys are ignored.
 | `nextSessionPill` | true/false | `false` (no UI) |
 | `quietHoursStart`, `quietHoursEnd` | `"HH:mm"` (24 h, local) | unset (no quiet window; both keys needed; start later than end wraps midnight; a bad time is an invalid key) |
 | `dndUntil` | seconds since 1970 | unset (the menu's Do not disturb writes it) |
+| `autoPresenting` | true/false | `true` (present while Command is live; an unreadable file leaves it on) |
 | `presenting` | true/false | `false`; an unreadable file: **on** (the one fail-safe-to-hidden key) |
 
 - **No file** is normal (a new Mac, a fresh scratch root): silent defaults, nothing logged, nothing written until a setting

@@ -48,6 +48,11 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     @Published public private(set) var peekDisplay: String? = nil
     /// Presenting mode: nothing client-private on screen (Presenting.swift). Persisted in settings.json.
     @Published public private(set) var presenting: Bool
+    /// True while presenting only because Command is live (not turned on by hand).
+    @Published public private(set) var presentingAuto = false
+    private var manualPresenting: Bool
+    private var commandLive = false
+    private var autoSuppressed = false              // the coach turned presenting off during this meeting
     /// A tap on the peek: the app opens whatever the alert is about (a meeting alert opens the next-session card).
     public var onPeekOpen: ((PeakAlert) -> Void)?
     private var peekTask: Task<Void, Never>?
@@ -55,6 +60,7 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     public init(prefs: PeakPrefs, profile: CoachProfile, hotkey: HotkeyRegistering, logger: PeakLogging? = nil) {
         self.prefs = prefs; self.profile = profile; self.hotkey = hotkey; self.logger = logger
         globallyVisible = !prefs.globallyHidden
+        manualPresenting = prefs.presenting
         presenting = prefs.presenting
         hotkeyEnabled = prefs.builtInHotkeyEnabled(default: profile.hotkey.enabled)
         if hotkeyEnabled { hotkey.register { [weak self] in self?.hotkeyPressed() } }
@@ -99,12 +105,30 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         }
     }
 
-    /// Turn presenting mode on or off. Turning it on clears anything client-private that is already showing.
+    /// Turn presenting mode on or off by hand (menu, Show details). On is sticky (persisted); off during a Command meeting stays
+    /// off until that meeting ends. Turning it on clears anything client-private that is already showing.
     public func setPresenting(_ on: Bool) {
-        guard on != presenting else { return }
-        presenting = on; prefs.presenting = on
-        if on { dismissPeek(); closeAsk(); tab = .home }
-        log("state presenting=\(on ? "on" : "off")")
+        if on { manualPresenting = true; autoSuppressed = false }
+        else { manualPresenting = false; if prefs.autoPresenting && commandLive { autoSuppressed = true } }
+        prefs.presenting = manualPresenting
+        applyPresenting()
+    }
+
+    /// GOAT's `gpu_window.live` from each feed read: Command is live on this Mac (nil = unreadable: nothing changes).
+    public func setCommandLive(_ live: Bool?) {
+        guard let live, live != commandLive else { return }
+        commandLive = live
+        if !live { autoSuppressed = false }
+        applyPresenting()
+    }
+
+    private func applyPresenting() {
+        let p = PresentingPolicy.effective(manual: manualPresenting, autoEnabled: prefs.autoPresenting, commandLive: commandLive, suppressed: autoSuppressed)
+        presentingAuto = p && !manualPresenting
+        guard p != presenting else { return }
+        presenting = p
+        if p { dismissPeek(); closeAsk(); tab = .home }
+        log("state presenting=\(p ? "on" : "off")\(p && presentingAuto ? " reason=command-live" : "")")
     }
 
     /// Opens the ask field prefilled (3PO's input when the 3PO module is on). Nothing is ever sent from here.

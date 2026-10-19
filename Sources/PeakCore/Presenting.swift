@@ -5,6 +5,15 @@ import Foundation
 /// 3PO / the ask field / drops, the Studio pill drops its client countdown, dictated words aren't echoed under the notch,
 /// and "what's my day" says it is hidden. This is the one place the "every item names its client" rule is suspended, because
 /// naming the client is exactly what a shared screen must not do. Persisted, so a relaunch never un-hides a shared screen.
+/// When presenting is on: when the coach turned it on, or while Command is live on this Mac (meetings run in the Command app, and
+/// the client sees the screen), unless the coach turned it off for this meeting. The signal is GOAT's `gpu_window.live`
+/// (ops.meeting_live: is Command live on this Mac); an unreadable status changes nothing.
+public enum PresentingPolicy {
+    public static func effective(manual: Bool, autoEnabled: Bool, commandLive: Bool, suppressed: Bool) -> Bool {
+        manual || (autoEnabled && commandLive && !suppressed)
+    }
+}
+
 public enum Presenting {
     public static let notice = "Presenting. Client details are hidden."
     public static let briefLine = "Presenting. Your day is hidden."

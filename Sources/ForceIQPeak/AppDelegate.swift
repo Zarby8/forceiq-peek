@@ -718,7 +718,7 @@ enum Screens {
         let s = demo ? demoSnapshot() : await engine.snapshot()
         if !demo {
             cards.update(s, profile: profile); lastMeeting = s.meeting
-            gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date())
+            gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date()); controller.setCommandLive(s.gpuWindow?.live)
         }
         let now = Date()
         let text = DayBriefComposer.compose(briefCache.ingest(s, now: now), now: now)
@@ -737,7 +737,7 @@ enum Screens {
         if feed == "working" { s.fixesRunning = 1 }                                              // the progress line, dashed
         let m = s.meeting
         s.today = m.map { [SessionRow(client: $0.client, scheduledAt: $0.scheduledAt, durationMinutes: $0.durationMinutes)] } ?? []
-        s.gpuWindow = GPUWindow(spans: m.map { [GPUSpan(start: $0.scheduledAt, end: $0.scheduledAt.addingTimeInterval(Double($0.durationMinutes) * 60), source: "command")] } ?? [], live: false, calendarAt: now)
+        s.gpuWindow = GPUWindow(spans: m.map { [GPUSpan(start: $0.scheduledAt, end: $0.scheduledAt.addingTimeInterval(Double($0.durationMinutes) * 60), source: "command")] } ?? [], live: feed == "live", calendarAt: now)
         return s
     }
 
@@ -774,7 +774,7 @@ enum Screens {
         if demo {
             let s = demoSnapshot(); cards.update(s, profile: profile)
             considerAlert(s)
-            gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date())
+            gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date()); controller.setCommandLive(s.gpuWindow?.live)
             let quiet = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "quiet"
             lastMeeting = isVoiceTour ? DemoData.voiceMeeting() : s.meeting
             if !demoFeedLogged { demoFeedLogged = true; log.log("feed demo=\(quiet ? "quiet" : "sample") ghost=\(cards.ghost.rawValue)") }
@@ -787,7 +787,7 @@ enum Screens {
             cards.update(s, profile: profile)
             considerAlert(s)
             lastMeeting = s.meeting
-            gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date())
+            gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date()); controller.setCommandLive(s.gpuWindow?.live)
             _ = briefCache.ingest(s, now: Date())            // last good read per source, for a later brief
             log.log("feed meeting=\(s.meeting != nil ? "yes" : "no") fixes=\(s.fixes.count) approvals=\(s.approvals.count) family=\(s.familyEnabled ? "on" : "off") ghost=\(cards.ghost.rawValue)")
             await nextSession.tick()                                         // at most every 5 min; flag off: never
