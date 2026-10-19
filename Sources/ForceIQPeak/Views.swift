@@ -48,6 +48,39 @@ enum Motion {
     }
 }
 
+/// The alert, inline in the menu bar row: a dot (green for a meeting, gold for a failed fix) and the client on the left of the
+/// notch, what happened on the right. On a display without a notch (the pill) it is one centered line. Pure white text.
+struct PeekInline: View {
+    let alert: PeakAlert
+    let notchWidth: CGFloat
+    var dot: Color { alert.kind == .fixFailed ? Color.peakGold : Color.peakGreen }
+    var body: some View {
+        Group {
+            if notchWidth > 0 {
+                HStack(spacing: 0) {
+                    HStack(spacing: 8) {
+                        Circle().fill(dot).frame(width: 8, height: 8)
+                        Text(alert.lead).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1).minimumScaleFactor(0.8)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 14)
+                    Color.clear.frame(width: notchWidth)
+                    Text(alert.trail).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 14)
+                }
+            } else {
+                HStack(spacing: 8) {
+                    Circle().fill(dot).frame(width: 8, height: 8)
+                    Text("\(alert.lead) \(alert.trail)").font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(alert.line)
+        .accessibilityHint("Opens ForceIQ Peak")
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
 /// The status wing's state (WingStatus): re-judged on every change, and every 30 s while a session is inside the hour so the
 /// countdown moves (a coarse tick, never an animation).
 struct NotchWingLive: View {
@@ -181,9 +214,9 @@ struct PeakRootView: View {
         if panel.mode == .notch && isExpanded { r = r.insetBy(dx: -earRadius, dy: 0) }   // ears sit outside the sheet
         return r
     }
-    var earRadius: CGFloat { panel.mode == .notch && (isExpanded || peekShowing) ? 14 : 0 }   // collapsed: no flare past the notch
-    var topRadius: CGFloat { panel.mode == .notch ? earRadius : (isExpanded ? 22 : (peekShowing ? 20 : panel.collapsedSize.height / 2)) }
-    var bottomRadius: CGFloat { isExpanded ? 24 : (peekShowing ? 20 : (panel.mode == .notch ? 12 : panel.collapsedSize.height / 2)) }
+    var earRadius: CGFloat { panel.mode == .notch && isExpanded ? 14 : 0 }   // collapsed and the inline peek: no flare past the notch
+    var topRadius: CGFloat { panel.mode == .notch ? earRadius : (isExpanded ? 22 : panel.collapsedSize.height / 2) }
+    var bottomRadius: CGFloat { isExpanded ? 24 : (panel.mode == .notch ? 12 : panel.collapsedSize.height / 2) }
     var shape: PeakShellShape { PeakShellShape(rect: shellRect, topRadius: topRadius, bottomRadius: bottomRadius, notch: panel.mode == .notch) }
     var hoverLift: Bool { HoverLift.applies(mode: panel.mode, hovering: panel.hovering, expanded: isExpanded || peekShowing, reduceMotion: reduceMotion) }
     var voiceStrip: Bool {
@@ -271,31 +304,17 @@ struct PeakRootView: View {
                 expanded.frame(width: r.width, height: r.height, alignment: .top)
                     .padding(.leading, r.minX).padding(.top, r.minY)
                     .transition(Motion.sheet(reduceMotion))
+            } else if peekShowing, let a = controller.peek {
+                let p = panel.local(panel.layout.peek)
+                PeekInline(alert: a, notchWidth: panel.notchWidth).frame(width: p.width, height: p.height)
+                    .padding(.leading, p.minX).padding(.top, p.minY)
+                    .transition(Motion.sheet(reduceMotion))
             } else {
                 let r = panel.local(panel.layout.collapsed)
                 collapsed.padding(.leading, r.minX).padding(.top, r.minY)
                     .transition(.sharpen(reduceMotion))
-                if peekShowing, let a = controller.peek {
-                    let p = panel.local(panel.layout.peekStrip)
-                    peekLine(a).frame(width: p.width, height: p.height)
-                        .padding(.leading, p.minX).padding(.top, p.minY)
-                        .transition(Motion.sheet(reduceMotion))
-                }
             }
         }
-    }
-
-    /// One plain line under the notch: a dot (green for a meeting, gold for a failed fix), then the alert in white.
-    func peekLine(_ a: PeakAlert) -> some View {
-        HStack(spacing: 10) {
-            Circle().fill(a.kind == .fixFailed ? Color.peakGold : Color.peakGreen).frame(width: 9, height: 9)
-            Text(a.line).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
-        }
-        .padding(.horizontal, 20)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(a.line)
-        .accessibilityHint("Opens ForceIQ Peak")
-        .accessibilityAddTraits(.isButton)
     }
 
     /// Collapsed + idle pills hold a still frame; hover, expand or a state change wake the mark (MarkPolicy).

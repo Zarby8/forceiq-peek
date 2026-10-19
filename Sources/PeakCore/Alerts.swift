@@ -18,6 +18,17 @@ public struct PeakAlert: Equatable, Sendable, Identifiable {
     public let holdSeconds: Double
     /// The same alert without the client, for a shared screen (Presenting.redact).
     public let plainLine: String
+    /// The inline peek's two halves: the client on the left of the notch, what happened on the right. With no client (presenting)
+    /// the plain line splits after its first two words ("A session" | "in 9 min").
+    public var lead: String { client.isEmpty ? PeakAlert.words(line).lead : client }
+    public var trail: String {
+        client.isEmpty ? PeakAlert.words(line).trail
+            : String(line.dropFirst(client.count)).trimmingCharacters(in: CharacterSet(charactersIn: " :"))
+    }
+    static func words(_ s: String) -> (lead: String, trail: String) {
+        let w = s.split(separator: " ", omittingEmptySubsequences: true)
+        return (w.prefix(2).joined(separator: " "), w.dropFirst(2).joined(separator: " "))
+    }
     public init(id: String, kind: PeakAlertKind, client: String, line: String, holdSeconds: Double, plainLine: String? = nil) {
         self.id = id; self.kind = kind; self.client = client; self.line = line; self.holdSeconds = holdSeconds
         self.plainLine = plainLine ?? (kind == .meetingSoon ? "A session is coming up" : "A fix failed")

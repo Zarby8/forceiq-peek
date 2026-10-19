@@ -27,7 +27,10 @@ public struct PeakLayout: Equatable, Sendable {
     public let expanded: CGRect            // the expanded sheet (home: cards + switcher)
     public var chat: CGRect = .zero        // the expanded sheet on the 3PO tab (taller)
     public var canvas: CGRect = .zero      // the ONE fixed panel frame: every state draws inside it (no per-frame setFrame)
-    public var peek: CGRect = .zero        // the alert shell that drops out of the notch for a few seconds, then retracts
+    /// The alert shell: the collapsed shape widened INLINE in the menu bar row (exactly the notch's height, centered on the
+    /// notch) for a few seconds, the way Boring Notch's sneak peek works: the client on the left of the notch, what happened
+    /// on the right. Then it retracts.
+    public var peek: CGRect = .zero
     /// Notch mode: the always-on status wing, in the menu bar row flush against the notch's left edge and exactly as tall as
     /// the notch, so the black shape reads as one wider notch (the way Boring Notch and DynamicNotchKit draw their compact
     /// state). It is part of `collapsed`, so hover and click on it open Peak.
@@ -35,9 +38,6 @@ public struct PeakLayout: Equatable, Sendable {
     /// Notch mode: a 2 pt line hanging just under the notch (the notch itself has no pixels), for live progress.
     /// Not a hit rect: it never takes a click.
     public var progressLine: CGRect = .zero
-    public var peekStripHeight: CGFloat = 0
-    /// The bottom band of the peek (below the notch / pill row) where its one line of text sits.
-    public var peekStrip: CGRect { CGRect(x: peek.minX, y: peek.minY, width: peek.width, height: peekStripHeight) }
     /// Notch mode: a thin strip along the very top screen edge, a little wider than the notch. The pointer pinned there
     /// opens Peak, but this strip never takes a click (it is not part of any hit rect), so the menu bar stays usable.
     public var edgeTrigger: CGRect = .zero
@@ -67,7 +67,8 @@ public struct PeakGeometry: PeakGeometryProviding {
     public var glowMargin: CGFloat = 28                  // room for the rim glow / shadow / pop outside the shell
     public var pillSize = CGSize(width: 196, height: 32)
     public var pillTopGap: CGFloat = 4
-    public var peekSize = CGSize(width: 380, height: 40)       // the strip BELOW the menu bar row (notch mode adds the notch height)
+    public var peekWidth: CGFloat = 540                        // notch mode: ~145 pt of text each side of the 250 pt notch
+    public var pillPeekWidth: CGFloat = 440
     public var edgeTriggerSlack: CGFloat = 40                  // how far past each notch edge the top-edge trigger reaches
     public var edgeTriggerHeight: CGFloat = 3
     public var wingWidth: CGFloat = 96                          // fits "PRESENTING"
@@ -85,8 +86,8 @@ public struct PeakGeometry: PeakGeometryProviding {
             let expanded = CGRect(x: notch.midX - w / 2, y: top - expandedSize.height, width: w, height: expandedSize.height)
             let cw = max(chatSize.width, collapsed.width)
             let chat = CGRect(x: notch.midX - cw / 2, y: top - chatSize.height, width: cw, height: chatSize.height)
-            let pw = max(peekSize.width, collapsed.width), ph = notch.height + peekSize.height
-            let peek = CGRect(x: notch.midX - pw / 2, y: top - ph, width: pw, height: ph)
+            let pw = max(peekWidth, collapsed.width)
+            let peek = CGRect(x: notch.midX - pw / 2, y: notch.minY, width: pw, height: notch.height)
             let edge = CGRect(x: collapsed.minX - edgeTriggerSlack, y: top - edgeTriggerHeight,
                               width: collapsed.width + 2 * edgeTriggerSlack, height: edgeTriggerHeight)
             return finish(PeakLayout(mode: .notch, notchRect: notch, collapsed: collapsed, expanded: clamp(expanded, s.frame)),
@@ -98,8 +99,7 @@ public struct PeakGeometry: PeakGeometryProviding {
                               width: expandedSize.width, height: expandedSize.height)
         let chat = CGRect(x: s.frame.midX - chatSize.width / 2, y: top - pillTopGap - chatSize.height,
                           width: chatSize.width, height: chatSize.height)
-        let pph = pillSize.height + peekSize.height
-        let peek = CGRect(x: s.frame.midX - peekSize.width / 2, y: top - pillTopGap - pph, width: peekSize.width, height: pph)
+        let peek = CGRect(x: s.frame.midX - pillPeekWidth / 2, y: collapsed.minY, width: pillPeekWidth, height: pillSize.height)
         return finish(PeakLayout(mode: .pill, notchRect: nil, collapsed: collapsed, expanded: clamp(expanded, s.frame)),
                       chat: clamp(chat, s.frame), peek: clamp(peek, s.frame), edge: .zero, s)
     }
@@ -107,7 +107,7 @@ public struct PeakGeometry: PeakGeometryProviding {
     /// The fixed canvas: the union of every state plus the glow margin, pinned to the screen's top edge.
     func finish(_ l: PeakLayout, chat: CGRect, peek: CGRect, edge: CGRect, _ s: ScreenDescriptor) -> PeakLayout {
         var out = l
-        out.chat = chat; out.peek = peek; out.edgeTrigger = edge; out.peekStripHeight = peekSize.height
+        out.chat = chat; out.peek = peek; out.edgeTrigger = edge
         if let n = l.notchRect {
             out.wing = CGRect(x: n.minX - wingWidth, y: n.minY, width: wingWidth, height: n.height)
             out.progressLine = CGRect(x: l.collapsed.minX + 12, y: n.minY - 5, width: max(0, l.collapsed.width - 24), height: 2)

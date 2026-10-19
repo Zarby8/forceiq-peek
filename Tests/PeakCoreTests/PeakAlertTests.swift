@@ -35,16 +35,39 @@ import XCTest
     }
 
     // ── geometry ──
-    func testPeekDropsBelowTheNotchAndStaysInTheCanvas() {
+    func testPeekIsTheCollapsedShapeWidenedInlineInTheMenuBarRow() {
         let l = PeakGeometry().layout(for: m5)
+        let n = l.notchRect!
         XCTAssertEqual(l.collapsed.height, 43, "the collapsed shape is exactly the notch's height")
-        XCTAssertEqual(l.peek.maxY, 1330, "the peek hangs from the top edge")
-        XCTAssertEqual(l.peek.midX, l.notchRect!.midX, accuracy: 0.5)
-        XCTAssertGreaterThanOrEqual(l.peek.width, l.collapsed.width)
-        XCTAssertEqual(l.peekStrip.maxY, l.notchRect!.minY, accuracy: 0.5, "the text band starts under the notch row")
-        XCTAssertEqual(l.peekStrip.minY, l.peek.minY, accuracy: 0.5)
+        XCTAssertEqual(l.peek.height, n.height, "inline: never taller than the notch, nothing hangs below it")
+        XCTAssertEqual(l.peek.maxY, 1330, "flush with the top edge"); XCTAssertEqual(l.peek.minY, n.minY)
+        XCTAssertEqual(l.peek.midX, n.midX, accuracy: 0.5, "centered on the notch: the client left, what happened right")
+        XCTAssertTrue(l.peek.contains(l.collapsed), "it grows out of the collapsed shape")
+        XCTAssertEqual((l.peek.width - n.width) / 2, 145, accuracy: 0.5)
         XCTAssertTrue(l.canvas.contains(l.peek))
         XCTAssertEqual(l.hitRect(.peek), l.peek)
+    }
+
+    func testStudioDisplayPeekIsTheWiderPillInTheSameRow() {
+        let l = PeakGeometry().layout(for: studio)
+        XCTAssertEqual(l.mode, .pill)
+        XCTAssertEqual(l.edgeTrigger, .zero)
+        XCTAssertFalse(l.triggers(at: CGPoint(x: studio.frame.midX, y: studio.frame.maxY - 1)))
+        XCTAssertEqual(l.peek.height, l.collapsed.height); XCTAssertEqual(l.peek.minY, l.collapsed.minY)
+        XCTAssertEqual(l.peek.midX, l.collapsed.midX, accuracy: 0.5); XCTAssertGreaterThan(l.peek.width, l.collapsed.width)
+        XCTAssertTrue(l.canvas.contains(l.peek))
+    }
+
+    func testAnAlertSplitsIntoTheClientAndWhatHappened() {
+        let m = PeakAlert(id: "a", kind: .meetingSoon, client: "Sample Skater", line: "Sample Skater in 9 min", holdSeconds: 1, plainLine: "A session in 9 min")
+        XCTAssertEqual(m.lead, "Sample Skater"); XCTAssertEqual(m.trail, "in 9 min")
+        let f = PeakAlert(id: "b", kind: .fixFailed, client: "Demo Player", line: "Demo Player: a fix failed", holdSeconds: 1)
+        XCTAssertEqual(f.lead, "Demo Player"); XCTAssertEqual(f.trail, "a fix failed")
+        let r = Presenting.redact(m)
+        XCTAssertEqual(r.lead, "A session"); XCTAssertEqual(r.trail, "in 9 min", "presenting: no client on either side")
+        let rf = Presenting.redact(f)
+        XCTAssertEqual(rf.lead, "A fix"); XCTAssertEqual(rf.trail, "failed")
+        XCTAssertFalse(rf.lead.contains("Demo") || rf.trail.contains("Demo"))
     }
 
     func testEdgeTriggerIsAThinStripAtTheTopEdgeThatNeverTakesAClick() {
@@ -58,16 +81,6 @@ import XCTest
         }
         XCTAssertLessThan(l.edgeTrigger.minX, l.collapsed.minX); XCTAssertGreaterThan(l.edgeTrigger.maxX, l.collapsed.maxX)
         XCTAssertEqual(l.edgeTrigger.height, 3)
-    }
-
-    func testStudioDisplayHasNoEdgeTriggerAndItsPeekHangsFromThePill() {
-        let l = PeakGeometry().layout(for: studio)
-        XCTAssertEqual(l.mode, .pill)
-        XCTAssertEqual(l.edgeTrigger, .zero)
-        XCTAssertFalse(l.triggers(at: CGPoint(x: studio.frame.midX, y: studio.frame.maxY - 1)))
-        XCTAssertLessThanOrEqual(l.peek.maxY, studio.frame.maxY)
-        XCTAssertLessThan(l.peekStrip.maxY, l.collapsed.minY + 0.5, "the text band sits below the pill")
-        XCTAssertTrue(l.canvas.contains(l.peek))
     }
 
     // ── hover lift ──
@@ -271,7 +284,7 @@ import XCTest
 
     func testPeekShellColorsAreBrandTokensOnly() throws {
         let views = try String(contentsOfFile: #filePath.replacingOccurrences(of: "Tests/PeakCoreTests/PeakAlertTests.swift", with: "Sources/ForceIQPeak/Views.swift"), encoding: .utf8)
-        let line = views.components(separatedBy: "func peekLine").last?.components(separatedBy: "Collapsed + idle").first ?? ""
+        let line = views.components(separatedBy: "struct PeekInline").last?.components(separatedBy: "/// The status wing's state").first ?? ""
         XCTAssertTrue(line.contains("Color.white")); XCTAssertTrue(line.contains("Color.peakGold") && line.contains("Color.peakGreen"))
         XCTAssertFalse(line.contains("opacity") || line.contains(".secondary") || line.contains("gray") || line.contains("0x"), "pure white, no gray, no stray hex")
     }

@@ -119,8 +119,8 @@ meeting status unknown). Presenting = gold PRESENTING, no dots, no names. The co
 it shows (a coarse tick, no animation). Demo: `FORCEIQ_PEAK_DEMO=1` with `{"nextSessionPill": true}` in the scratch root.
 
 ## Notch alerts (the peek)
-Collapsed Peak is the notch plus its green status wing. An urgent alert drops a one-line black strip out of the notch for
-6 s (8 s for a failed fix), then retracts. Urgent means a meeting starting within 10 minutes or a fix that fails after Peak
+Collapsed Peak is the notch plus its green status wing. An urgent alert widens the collapsed shape INLINE in the menu bar row (notch height, ~145 pt each side of the notch, the way Boring Notch's
+sneak peek works) for 6 s (8 s for a failed fix): the client on the left of the notch, what happened on the right, then it retracts. Urgent means a meeting starting within 10 minutes or a fix that fails after Peak
 is up (fixes already failing at launch are not news). Each line names its client; the dot is green for a meeting and gold for
 a failed fix; text is pure white. A tap opens the sheet (a meeting alert lands on the next-session card when the pill is
 on); the pointer resting on it holds it 3 s at a time. Nothing peeks while Peak is open, while dictating, during a live
