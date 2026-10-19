@@ -9,7 +9,6 @@ public enum Presenting {
     public static let notice = "Presenting. Client details are hidden."
     public static let briefLine = "Presenting. Your day is hidden."
     public static let menuTitle = "Presenting (hide client details)"
-    public static let statusTitle = "Peak · presenting"
 
     /// The alert as it may appear on a shared screen: no client, only the plain line.
     public static func redact(_ a: PeakAlert) -> PeakAlert {

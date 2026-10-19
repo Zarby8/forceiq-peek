@@ -87,7 +87,7 @@ import XCTest
     }
 
     func testThePresentingStringsAreShortAndNameNoClient() {
-        for t in [Presenting.notice, Presenting.briefLine, Presenting.menuTitle, Presenting.statusTitle] {
+        for t in [Presenting.notice, Presenting.briefLine, Presenting.menuTitle] {
             XCTAssertFalse(t.isEmpty); XCTAssertLessThan(t.count, 50)
         }
     }

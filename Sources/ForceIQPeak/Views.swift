@@ -48,6 +48,22 @@ enum Motion {
     }
 }
 
+/// The always-on tab under the notch: a black capsule hanging from the notch's bottom edge (square top, round bottom) with
+/// "PEAK" in brand green (gold "PEAK · PRESENTING" while presenting). Text on black, brand tokens only.
+struct NotchTag: View {
+    let spec: StatusBadgeSpec
+    var body: some View {
+        Text(spec.text)
+            .font(.system(size: 10, weight: .heavy)).kerning(0.9).lineLimit(1).fixedSize()
+            .foregroundStyle(spec.textHex == Brand.goldHex ? Color.peakGold : Color.peakGreen)
+            .padding(.horizontal, 10).frame(height: 15)
+            .background(UnevenRoundedRectangle(bottomLeadingRadius: 8, bottomTrailingRadius: 8).fill(Color.black))
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spec.accessibilityLabel)
+            .accessibilityAddTraits(.isButton)
+    }
+}
+
 /// Live progress under the notch: gold on black, a shape only (never text). Determinate = a gold fill over a faint gold
 /// track; unknown = a static dashed line ("working", no claim how far). Nothing animates, so it costs nothing while it shows.
 struct NotchProgressLine: View {
@@ -129,6 +145,7 @@ struct PeakRootView: View {
 
     var isExpanded: Bool { controller.expanded && controller.activeDisplay == panel.uuid }
     var showChat: Bool { isExpanded && !controller.presenting && controller.tab == .threePO && controller.profile.isEnabled(.threePO) }
+    var tagShowing: Bool { panel.mode == .notch && panel.visible && !isExpanded && !peekShowing }
     var progressShowing: Bool { panel.mode == .notch && panel.visible && !isExpanded && !peekShowing && cards.progress.working }
     var peekShowing: Bool { !isExpanded && controller.peek != nil && controller.peekDisplay == panel.uuid }
     var surface: PeakLayout.Surface { isExpanded ? (showChat ? .chat : .home) : (peekShowing ? .peek : .collapsed) }
@@ -153,6 +170,14 @@ struct PeakRootView: View {
             content
                 .frame(width: panel.layout.canvas.width, height: panel.layout.canvas.height, alignment: .topLeading)
                 .mask(shape)
+            if tagShowing {                // always-on "PEAK", drawn outside the notch mask (the notch itself has no pixels)
+                let r = panel.local(panel.layout.tag)
+                NotchTag(spec: StatusBadge.spec(presenting: controller.presenting))
+                    .frame(width: r.width, height: r.height, alignment: .top)
+                    .padding(.leading, r.minX).padding(.top, r.minY)
+                    .contentShape(Rectangle())
+                    .onTapGesture { Haptic.level(); controller.activeDisplay = panel.uuid; controller.expand() }
+            }
             if progressShowing {           // GOAT is working: a thin gold line hanging under the notch (drawn outside the notch mask)
                 let r = panel.local(panel.layout.progressLine)
                 NotchProgressLine(progress: cards.progress).frame(width: r.width, height: r.height)

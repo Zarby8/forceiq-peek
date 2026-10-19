@@ -98,6 +98,16 @@ process)" to phone.py, so Peak carries no token and no secret.
 - Raycast: `raycast/*.sh` script commands (package "ForceIQ Peak"). At install they're copied to `~/ForceIQ/peak/raycast/`.
   Add that folder once by hand: Raycast Settings → Extensions → + → Add Script Directory.
 
+## Always-on PEAK badge
+Collapsed Peak is only the notch, and the notch has no pixels, so the always-on status is two black capsules reading **PEAK**
+in brand green (#4FFF4F); while presenting they turn gold and read "PEAK · PRESENTING":
+- **The tab under the notch** (notch Macs): hangs flush from the notch's bottom edge, below the menu bar row, so nothing
+  beside the notch changes. Hover or click opens Peak (its 140 x 16 pt rect is the only extra place Peak takes the pointer).
+  Hidden while the sheet or a peek is open or Peak is hidden. The progress line hangs under it. This is the one that is
+  always visible: a crowded notch-Mac menu bar silently drops status items (Chris's M5 had no status-item window at all).
+- **The menu-bar item**: the same capsule as the status item (menu: Show, Displays, Presenting, Do not disturb, Quit). Shown
+  only if the menu bar has room for it.
+
 ## Notch alerts (the peek)
 Collapsed Peak is invisible: exactly the hardware notch. An urgent alert drops a one-line black strip out of the notch for
 6 s (8 s for a failed fix), then retracts. Urgent means a meeting starting within 10 minutes or a fix that fails after Peak
@@ -121,7 +131,7 @@ and is hidden while the sheet or a peek is open. Demo: `FORCEIQ_PEAK_DEMO_FEED=d
 "A fix failed", the sheet shows one plain notice (plus a Show details button) instead of cards, the next-session card, 3PO,
 the ask field and file drops, the Studio pill drops its client countdown, dictated words aren't echoed under the notch, and
 "what's my day" answers that it is hidden. It is the one place the "every item names its client" rule is suspended. The
-menu-bar title reads "Peak · presenting" as a reminder. It is persisted (`presenting` in settings.json), and a settings file
+menu-bar badge turns gold and reads "PEAK · PRESENTING" as a reminder. It is persisted (`presenting` in settings.json), and a settings file
 Peak can't read turns it ON, never off. Proof: `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_FEED=soon FORCEIQ_PEAK_DEMO_TOUR=1`
 with `{"presenting": true}` in the scratch root.
 

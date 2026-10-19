@@ -28,6 +28,10 @@ public struct PeakLayout: Equatable, Sendable {
     public var chat: CGRect = .zero        // the expanded sheet on the 3PO tab (taller)
     public var canvas: CGRect = .zero      // the ONE fixed panel frame: every state draws inside it (no per-frame setFrame)
     public var peek: CGRect = .zero        // the alert shell that drops out of the notch for a few seconds, then retracts
+    /// Notch mode: the always-on "PEAK" tab hanging just under the notch (the notch itself has no pixels, and a crowded
+    /// menu bar hides status items). The view draws a capsule sized to its text inside this rect; the rect is its pointer
+    /// target (hover or click opens Peak), so it takes clicks only here, below the menu bar.
+    public var tag: CGRect = .zero
     /// Notch mode: a 2 pt line hanging just under the notch (the notch itself has no pixels), for live progress.
     /// Not a hit rect: it never takes a click.
     public var progressLine: CGRect = .zero
@@ -48,6 +52,11 @@ public struct PeakLayout: Equatable, Sendable {
         case .chat: return chat == .zero ? expanded : chat
         }
     }
+    /// Is a global point over the live shell of a surface? While collapsed that is the notch plus the tag under it.
+    public func pointerHit(_ s: Surface, at p: CGPoint, slack: CGFloat = 2) -> Bool {
+        if hitRect(s).insetBy(dx: -slack, dy: -slack).contains(p) { return true }
+        return s == .collapsed && tag != .zero && tag.insetBy(dx: -slack, dy: -slack).contains(p)
+    }
     /// Is a global point on the edge-trigger strip? (Collapsed notch only; nothing here ever captures the mouse.)
     public func triggers(at p: CGPoint) -> Bool { edgeTrigger != .zero && edgeTrigger.contains(p) }
 }
@@ -66,6 +75,7 @@ public struct PeakGeometry: PeakGeometryProviding {
     public var peekSize = CGSize(width: 380, height: 40)       // the strip BELOW the menu bar row (notch mode adds the notch height)
     public var edgeTriggerSlack: CGFloat = 40                  // how far past each notch edge the top-edge trigger reaches
     public var edgeTriggerHeight: CGFloat = 3
+    public var tagSize = CGSize(width: 140, height: 16)
     public init() {}
 
     public func layout(for s: ScreenDescriptor) -> PeakLayout {
@@ -102,7 +112,10 @@ public struct PeakGeometry: PeakGeometryProviding {
     func finish(_ l: PeakLayout, chat: CGRect, peek: CGRect, edge: CGRect, _ s: ScreenDescriptor) -> PeakLayout {
         var out = l
         out.chat = chat; out.peek = peek; out.edgeTrigger = edge; out.peekStripHeight = peekSize.height
-        if let n = l.notchRect { out.progressLine = CGRect(x: n.minX + 12, y: n.minY - 5, width: max(0, n.width - 24), height: 2) }
+        if let n = l.notchRect {
+            out.tag = CGRect(x: n.midX - tagSize.width / 2, y: n.minY - tagSize.height, width: tagSize.width, height: tagSize.height)
+            out.progressLine = CGRect(x: n.minX + 12, y: n.minY - tagSize.height - 4, width: max(0, n.width - 24), height: 2)   // under the tag
+        }
         let u = l.collapsed.union(l.expanded).union(chat).union(peek)
         var c = CGRect(x: u.minX - glowMargin, y: u.minY - glowMargin, width: u.width + 2 * glowMargin, height: s.frame.maxY - (u.minY - glowMargin))
         c.origin.x = max(c.minX, s.frame.minX); if c.maxX > s.frame.maxX { c.size.width = s.frame.maxX - c.minX }

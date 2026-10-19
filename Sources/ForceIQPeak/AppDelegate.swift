@@ -63,7 +63,7 @@ enum Screens {
     }
 
     /// Is this global point over the live shell (a little slack so the edge doesn't flicker)?
-    func contains(_ p: NSPoint) -> Bool { layout.hitRect(surface).insetBy(dx: -2, dy: -2).contains(p) }
+    func contains(_ p: NSPoint) -> Bool { layout.pointerHit(surface, at: p) }
 
     func setVisible(_ on: Bool) {
         state.visible = on
@@ -913,10 +913,20 @@ enum Screens {
     // ── menu bar ──
     func buildStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.button?.title = controller.presenting ? Presenting.statusTitle : "Peak"
-        item.button?.toolTip = "ForceIQ Peak"
-        item.menu = makeMenu()
         statusItem = item
+        applyStatusBadge()
+        item.menu = makeMenu()
+    }
+
+    /// The always-on menu-bar badge: "PEAK" in green on black (gold and "PEAK · PRESENTING" while presenting).
+    func applyStatusBadge() {
+        guard let b = statusItem?.button else { return }
+        let spec = StatusBadge.spec(presenting: controller.presenting)
+        b.title = ""
+        b.image = StatusBadgeImage.make(spec)
+        b.imagePosition = .imageOnly
+        b.setAccessibilityLabel(spec.accessibilityLabel)
+        b.toolTip = spec.accessibilityLabel
     }
 
     func makeMenu() -> NSMenu {
@@ -980,7 +990,7 @@ enum Screens {
     @objc func menuToggle() { controller.toggle() }
     @objc func menuPresenting() {
         controller.setPresenting(!controller.presenting)
-        statusItem?.button?.title = controller.presenting ? Presenting.statusTitle : "Peak"
+        applyStatusBadge()
     }
     /// Alerts stop peeking until then (the meeting and fix cards are still on the sheet). One tap, no settings window.
     @objc func menuDND(_ sender: NSMenuItem) {
