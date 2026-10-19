@@ -224,9 +224,6 @@ Unknown keys are ignored.
     `list_windows`, `invoke_menu` (fails closed, never falls back to pixels), never requests permissions, and gets a
     minimal environment (no keys or tokens, telemetry off).
   - **STOP** kills the child's whole process group (SIGKILL) and reaps it; `CuaBackendTests` measures ≤ 100 ms.
-  - **Captures** are window-only (`screencapture -l <window id>`), opt-in for scratch proofs
-    (`FORCEIQ_PEAK_CUA_PROOF_DIR`), read with Vision and blacked out (client names, or strict: every line except menu
-    words) before anything is kept; nothing is kept if the text can't be read. No capture or title goes to Claude.
   - **Live smoke** (`peak/scripts/cua_live_smoke.sh`, same refusals and AX proof as the real-press smoke):
     ```
     peak/scripts/cua_live_smoke.sh --pid <isolated FLOW pid> --package <its .flowaipkg> --mode press

@@ -250,7 +250,7 @@ public final class CuaBackend: @unchecked Sendable {
     }
 }
 
-/// posix_spawn in a new process group (so STOP can kill the child and anything it started), stdin from a pipe,
+/// Spawns the one Cua child in a new process group (so STOP can kill the child and anything it started), stdin from a pipe,
 /// stdout to a pipe, stderr discarded.
 final class ChildProcess: @unchecked Sendable {
     struct SpawnError: Error, CustomStringConvertible { let code: Int32; var description: String { "spawn errno \(code)" } }
@@ -322,38 +322,6 @@ final class ChildProcess: @unchecked Sendable {
     }
 }
 
-// ── captures: window-only and redacted ──
-
-public enum CuaCapture {
-    /// screencapture of ONE window by id (-l), no sound (-x), no shadow (-o). Never the whole screen: nil without a window.
-    public static func arguments(windowID: Int, out: String) -> [String]? {
-        guard windowID > 0, !out.isEmpty else { return nil }
-        return ["-x", "-o", "-l", String(windowID), "-t", "png", out]
-    }
-    /// The text boxes to black out: every recognized line that contains a client name (any roster name, or any of its
-    /// words of 3+ letters, case and accents aside). Fail closed: nothing recognized → the caller drops the capture.
-    /// Strict mode (`keepOnly` given): every line is blacked out except exact allow-listed UI words (e.g. "Code Window").
-    public static func redactions<Box>(_ lines: [(text: String, box: Box)], names: [String], keepOnly: Set<String>? = nil) -> [Box] {
-        if let keep = keepOnly {
-            let k = Set(keep.map(fold))
-            return lines.filter { !k.contains(fold($0.text)) }.map(\.box)
-        }
-        let needles = Set(names.flatMap { n -> [String] in
-            let full = fold(n)
-            return [full] + full.split(separator: " ").map(String.init).filter { $0.count >= 3 }
-        }.filter { !$0.isEmpty })
-        return lines.filter { l in let t = fold(l.text); return needles.contains { t.contains($0) } }.map(\.box)
-    }
-    /// Log / context text with client names replaced (Cua's own log lines never carry a name).
-    public static func redactText(_ s: String, names: [String]) -> String {
-        var out = s
-        for n in names.sorted(by: { $0.count > $1.count }) where !n.isEmpty {
-            out = out.replacingOccurrences(of: n, with: "[client]", options: [.caseInsensitive, .diacriticInsensitive])
-        }
-        return out
-    }
-    static func fold(_ s: String) -> String { s.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil).trimmingCharacters(in: .whitespaces) }
-}
 
 /// Process-wide wiring, set once at launch from the gate. `backend` nil = Cua off (the presser uses the AX press).
 public final class CuaWiring: @unchecked Sendable {

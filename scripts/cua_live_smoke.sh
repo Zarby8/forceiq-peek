@@ -19,8 +19,7 @@
 #                 imported); STOP is tapped while it runs. PASS = Peak logged the Cua STOP with stop_latency_ms <= 100,
 #                 the child process is gone, no press, no 'Code Window' window after.
 # Afterwards it quits its own demo Peak (its pid), deletes the scratch root (symlink only) and leaves the proof in --out
-# (default ~/ForceIQ/peak-tmp/cua-live-<mode>-<time>). With FORCEIQ_PEAK_CUA_PROOF_DIR set, Peak also saves ONE
-# window-only, redacted capture of the isolated FLOW (strict: every text line blacked out except menu words).
+# (default ~/ForceIQ/peak-tmp/cua-live-<mode>-<time>). Text proof only: no screenshots.
 # It never touches the installed Peak, its settings or the engine, and never activates, quits or opens any FLOW.
 set -uo pipefail
 PROD_BUNDLE=com.forceiq.flowai
@@ -100,7 +99,7 @@ if [ "$MODE" = stop ]; then "$AX" close-code-window "$TPID" | tee "$OUT/close-be
 
 HOLD=""; [ "$MODE" = stop ] && HOLD=3000
 env -u GOAT_OVERLAY -u FORCEIQ_PEAK_DESKTOP_DRYRUN FORCEIQ_PEAK_DEMO=1 GOAT_PEAK_ROOT="$ROOT" FORCEIQ_PEAK_DESKTOP_LIVE=1 \
-  FORCEIQ_PEAK_CUA_LIVE=1 FORCEIQ_PEAK_CUA_SMOKE_HOLD_MS="$HOLD" FORCEIQ_PEAK_CUA_PROOF_DIR="${FORCEIQ_PEAK_CUA_PROOF_DIR:-}" \
+  FORCEIQ_PEAK_CUA_LIVE=1 FORCEIQ_PEAK_CUA_SMOKE_HOLD_MS="$HOLD" \
   FORCEIQ_PEAK_FLOW_PACKAGES="$PKGS" FORCEIQ_PEAK_DEMO_TOUR=live-flow FORCEIQ_PEAK_NO_WARM=1 FORCEIQ_PEAK_LIVE_ARM_MS=300 \
   FORCEIQ_PEAK_FLOW_TARGET_PID="$TPID" FORCEIQ_PEAK_FLOW_TARGET_BUNDLE="$TBUNDLE" FORCEIQ_PEAK_PROTECTED_PIDS="$PROTECTED" \
   "$APP/Contents/MacOS/ForceIQPeak" > "$OUT/peak-stdout.log" 2>&1 &

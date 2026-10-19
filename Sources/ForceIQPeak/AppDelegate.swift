@@ -442,14 +442,6 @@ enum Screens {
                     model.finish(report)
                     if let p = model.stopPressedAt { log.log(String(format: "dryrun stop pressed t=%.3f", p.timeIntervalSince1970)) }
                     log.log("dryrun summary total_ms=\(report.totalMs) \(report.summary)")
-                    if live, CuaWiring.shared.backend != nil, let dir = env["FORCEIQ_PEAK_CUA_PROOF_DIR"], !dir.isEmpty,
-                       let front = NSWorkspace.shared.frontmostApplication, front.bundleIdentifier == steps.first?.bundleID,
-                       ProductionGuard.reason(pid: front.processIdentifier, bundleID: front.bundleIdentifier, bundlePath: front.bundleURL?.path,
-                                              protectedPids: ProductionGuard.protectedPids(env: env)) == nil {
-                        let why = WindowCapture.captureRedacted(pid: front.processIdentifier, names: self.profile.roster.names + [client], strict: true,
-                                                                outDir: dir, label: report.pressed ? "after-press" : "after-run")
-                        log.log("cua capture \(why ?? "saved (window only, redacted)")")
-                    }
                 }
             }
         }

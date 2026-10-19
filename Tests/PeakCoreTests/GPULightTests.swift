@@ -213,16 +213,30 @@ final class GPUGuardTests: XCTestCase {
     }
 
     func testNoCodePathCallsTheRecorderOrItsWatchdog() throws {
-        let banned = try NSRegularExpression(pattern: #"(?i)\bssh\b|forceiq-5090|watchdog|launchctl|systemctl|recording\.lock|gpu-leases|nvidia-smi|\bProcess\(|\bNSTask\b|posix_spawn|(?<![.\w])system\s*\(|/usr/bin/|/bin/sh|\bkill\(|\bkillpg\("#)
+        // 5090-specific terms: banned on every line of every file, no exceptions.
+        let fiveNinety = try NSRegularExpression(pattern: #"(?i)\bssh\b|forceiq-5090|watchdog|launchctl|systemctl|recording\.lock|gpu-leases|nvidia-smi"#)
+        // Generic process spawn / kill: banned everywhere EXCEPT inside `ChildProcess` in PeakCore/DesktopCua.swift
+        // (Chris's ruling 10.19.2026, option A): the Cua runner posix_spawns its one child and STOP kills that child's group.
+        let spawn = try NSRegularExpression(pattern: #"\bProcess\(|\bNSTask\b|posix_spawn|(?<![.\w])system\s*\(|/usr/bin/|/bin/sh|\bkill\(|\bkillpg\("#)
         let fm = FileManager.default
         let files = try XCTUnwrap(fm.enumerator(at: Self.sources, includingPropertiesForKeys: nil)).compactMap { $0 as? URL }.filter { $0.pathExtension == "swift" }
         XCTAssertGreaterThan(files.count, 30)
         for f in files {
             let text = try String(contentsOf: f, encoding: .utf8)
+            var inRunner = false
             for (i, line) in text.components(separatedBy: "\n").enumerated() {
-                XCTAssertNil(banned.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)), "\(f.lastPathComponent):\(i + 1): \(line)")
+                let all = NSRange(line.startIndex..., in: line)
+                XCTAssertNil(fiveNinety.firstMatch(in: line, range: all), "\(f.lastPathComponent):\(i + 1): \(line)")
+                if f.lastPathComponent == "DesktopCua.swift" {
+                    if line.hasPrefix("final class ChildProcess") { inRunner = true } else if line == "}" { inRunner = false }
+                }
+                if f.lastPathComponent == "DesktopCua.swift" && inRunner { continue }
+                XCTAssertNil(spawn.firstMatch(in: line, range: all), "\(f.lastPathComponent):\(i + 1): \(line)")
             }
         }
+        // The carve-out is exactly one class: ChildProcess holds every spawn/kill in DesktopCua.swift, nothing else does.
+        let cua = try String(contentsOf: Self.sources.appendingPathComponent("PeakCore/DesktopCua.swift"), encoding: .utf8)
+        XCTAssertEqual(cua.components(separatedBy: "posix_spawn(").count - 1, 1, "one spawn call")
         // The light reads only Peak's own engine feed; its file has no transport or network of its own.
         let light = try String(contentsOf: Self.sources.appendingPathComponent("PeakCore/GPULight.swift"), encoding: .utf8)
         for bad in ["URLSession", "transport.", "post(", "get("] { XCTAssertFalse(light.contains(bad), bad) }

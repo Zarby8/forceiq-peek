@@ -341,28 +341,8 @@ final class Box<T>: @unchecked Sendable { private let l = NSLock(); private var 
         XCTAssertFalse(report("cua pressed x", pressed: false).viaCua)
     }
 
-    // ── captures are window-only and redacted; Cua's log lines carry no client names ──
-    func testCapturesAreWindowOnlyAndRedacted() throws {
-        XCTAssertEqual(CuaCapture.arguments(windowID: 4242, out: "/p/x.png"), ["-x", "-o", "-l", "4242", "-t", "png", "/p/x.png"])
-        XCTAssertNil(CuaCapture.arguments(windowID: 0, out: "/p/x.png"), "no window id: no capture (never the whole screen)")
-        XCTAssertNil(CuaCapture.arguments(windowID: 7, out: ""))
-        let names = ["Tobias Marchetti", "Zoë Lindqvist"]
-        let lines: [(text: String, box: Int)] = [("TOBIAS MARCHETTI (FLOW-Demo)", 1), ("Code Window", 2), ("Marchetti 10.19", 3),
-                                                  ("zoe lindqvist", 4), ("Timeline", 5), ("Tob", 6)]
-        XCTAssertEqual(CuaCapture.redactions(lines, names: names), [1, 3, 4])
-        XCTAssertEqual(CuaCapture.redactText("pressed for Tobias Marchetti and zoë lindqvist", names: names), "pressed for [client] and [client]")
-        XCTAssertEqual(CuaCapture.redactions(lines, names: [], keepOnly: ["Code Window"]), [1, 3, 4, 5, 6], "strict: only allow-listed UI words survive")
-        // the app's one capture: screencapture -l from CuaCapture.arguments, Screen Recording only checked (never requested),
-        // raw file deleted, text read first and nothing kept when it can't be (fail closed)
-        let cap = try src("ForceIQPeak/CuaCapture.swift")
-        XCTAssertTrue(cap.contains("CuaCapture.arguments(windowID: wid, out: tmp)") && cap.contains("CGPreflightScreenCaptureAccess()"))
-        XCTAssertFalse(cap.contains("CGRequestScreenCaptureAccess") || cap.contains("CGWindowListCreateImage") || cap.contains("CGDisplayCreateImage"))
-        XCTAssertTrue(cap.contains("defer { try? FileManager.default.removeItem(atPath: tmp) }") && cap.contains("fail closed"))
-        for (f, s) in try allSources() where f != "ForceIQPeak/CuaCapture.swift" {
-            XCTAssertFalse(s.contains("/usr/sbin/screencapture") || s.contains("captureRedacted(pid") && f != "ForceIQPeak/AppDelegate.swift", f)
-        }
-        let app = try src("ForceIQPeak/AppDelegate.swift")
-        XCTAssertTrue(app.contains("WindowCapture.captureRedacted(pid: front.processIdentifier, names: self.profile.roster.names + [client], strict: true,"))
+    // ── Cua's log lines carry no client names ──
+    func testCuaResultsNeverNameTheClient() throws {
         // the Cua path's own results never name the client: the request carries pid, bundle, menu path and ticket only
         let ps = try src("ForceIQPeak/DesktopPresser.swift")
         let body = String(ps[try XCTUnwrap(ps.range(of: "func pressViaCua(")).lowerBound...])
