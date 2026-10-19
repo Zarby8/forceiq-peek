@@ -15,7 +15,15 @@ masked to a circle, played with AVPlayerLooper and driven by the pack's MANIFEST
   Anything that sends, deletes, invoices, books or edits a database is view-only and opens in GOAT.
 - **family**: family-delivery alerts, only when the engine's `GOAT_FAMILY_DELIVERY_ALERTS` is on (default off). Copy link only.
 - **switcher**: the profile's apps, activated or launched by bundle ID. An app that isn't installed shows a gold outline and a gold "Not installed" line (full opacity) and can't be launched.
-- Declared for later: drops, 3po (avatar slot reserved), voice, machine_glance, spend.
+- Declared for later: voice, machine_glance.
+
+**3PO droid:** BOB Motion **ForceIQ-Peak-3PO-v1**. The chat header plays the live RealityKit rig (`rig/3po.usdz`),
+then the rendered hevc_alpha loops, then the static droid mark, by what loads (`AvatarTier`). States follow the chat:
+idle (waiting), listening (mic open; voice flag), thinking (send → first token, tools, 'consulting Opus'), talking
+(tokens streaming), and one alert flash per new approval or refusal card. Switches land on a loop boundary through
+the pack's 20-frame transitions (non-idle → non-idle via idle). The droid lives only in the expanded chat, so a
+collapsed Peak renders and decodes nothing; Reduce Motion shows a still. Proof tour: `FORCEIQ_PEAK_DEMO=1
+FORCEIQ_PEAK_DEMO_TOUR=3po`. See `Resources/ASSETS.md`.
 
 Tapping a card only shows a plain description (inputs, what it touches, outputs). Then come Run / Ask Claude / Copy
 prompt. Nothing runs until that explicit tap. Upscale, Dagu and publish progress are never shown, only "Open in

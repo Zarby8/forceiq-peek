@@ -17,6 +17,9 @@ printf 'APPL????' > "$APPB.new/Contents/PkgInfo"
 # BOB Motion ForceIQ-Peak-BOB-v1 (h264-black, 64 + 128 px, + its state data). See Resources/ASSETS.md for source + MD5s.
 # Missing -> the app shows the labelled vector placeholder.
 [ -d Resources/bob ] && cp -R Resources/bob "$APPB.new/Contents/Resources/bob"
+# BOB Motion ForceIQ-Peak-3PO-v1 (3PO chat droid): MANIFEST.json, rig/3po.usdz (live RealityKit rig), hevc_alpha 64 px
+# loops + transitions, the neutral still. See Resources/ASSETS.md. Missing -> rendered loops -> the static droid mark.
+[ -d Resources/threepo ] && cp -R Resources/threepo "$APPB.new/Contents/Resources/threepo"
 # KeyboardShortcuts' localized strings (SwiftPM resource bundle).
 for b in "$BIN"/*.bundle; do [ -d "$b" ] && cp -R "$b" "$APPB.new/Contents/Resources/"; done
 # Metal glow: compiled only when this Mac's Xcode has the Metal toolchain; otherwise the native SwiftUI glow is used.

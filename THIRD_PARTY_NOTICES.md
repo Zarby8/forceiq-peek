@@ -7,7 +7,10 @@
 Not adopted: DynamicNotchKit (MIT; reference only), twostraws/Inferno (MIT; no shader copied, the glow is Peak's own).
 No code from boring.notch, DynamicNotch or mew-notch (GPL-3) is used.
 
-Art: BOB Motion **ForceIQ-Peak-BOB-v1, v1.1** (internal ForceIQ art, Chris-locked; `Resources/ASSETS.md`). Not third-party.
+Art: BOB Motion **ForceIQ-Peak-BOB-v1, v1.1** (internal ForceIQ art, Chris-locked; `Resources/ASSETS.md`) and BOB Motion
+**ForceIQ-Peak-3PO-v1** (the 3PO droid: rig, loops, still; internal ForceIQ art, pinned by MANIFEST MD5
+`bf67596170da1025137b8fda5485369d`). Not third-party. The droid plays with Apple system frameworks only (AVFoundation,
+RealityKit); no new package dependency, no GPL code.
 
 ## KeyboardShortcuts: MIT License
 

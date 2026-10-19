@@ -109,6 +109,7 @@ enum Screens {
             if demo {                                             // screenshots: a fake coach + sample cards; apps from the real profile
                 prof = DemoData.profile(stateRoot: p.stateRoot.isEmpty ? "~/ForceIQ/peak" : p.stateRoot, apps: p.apps)
                 prof.goatBundleID = p.goatBundleID
+                if avatarTour { prof.modules["voice"] = true }    // the avatar tour shows 'listening' (voice stays off elsewhere)
             }
             setUp(prof, source: src)
         }
@@ -122,6 +123,8 @@ enum Screens {
         log.move(to: root)
         prefs = PeakPrefs(stateRoot: root)
         GhostAssets.format = prefs.ghostFormat
+        ThreePOAssets.log = { [weak self] e in self?.log.log(e) }
+        ThreePOAssets.demoReduceMotion = demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_REDUCE_MOTION"] == "1"
         controller = PeakController(prefs: prefs, profile: p, hotkey: KeyboardShortcutsHotkey(name: PeakHotkeyName.make(p)), logger: log)
         performer = Performer(engine: engine, demo: demo)
         cards = CardStackViewModel(performer: performer, logger: log)
@@ -161,6 +164,7 @@ enum Screens {
         let queued = pendingURLs; pendingURLs = []
         for u in queued { route(u) }
         if demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "1" { tour() }
+        if avatarTour { threePOAvatarTour() }
     }
 
     /// First-use costs paid once, off-screen, right after launch instead of on the first tap: the multi-line text
@@ -230,6 +234,30 @@ enum Screens {
         at(50.5, "pick-haiku") { await store.choose(.haiku) }
         at(52.0, "collapse") { c.tab = .home; c.collapse() }
         at(54.0, "tour-end") { hitch.stop() }
+    }
+
+    var avatarTour: Bool { demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "3po" }
+
+    /// Visual proof of the 3PO droid (demo mode + FORCEIQ_PEAK_DEMO_TOUR=3po): every state and transition with the
+    /// scripted transport (no engine, no tokens): idle → mic (listening) → idle → send on Auto (thinking + the gold
+    /// 'consulting Opus' pulse) → streamed reply (talking) → the proposal card (alert) → idle → collapse.
+    func threePOAvatarTour() {
+        guard let scr = NSScreen.screens.first else { return }
+        let main = Screens.uuid(scr)
+        let c = controller!, store = threePO!
+        demoKnobs.slowTurn = true
+        func at(_ t: Double, _ name: String, _ f: @escaping @MainActor () async -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + t) { [weak self] in
+                self?.log.log("tour step=\(name) t=\(String(format: "%.3f", Date().timeIntervalSince1970))"); Task { @MainActor in await f() }
+            }
+        }
+        at(1.5, "chat") { c.activeDisplay = main; c.tab = .threePO; c.expand() }
+        at(4.0, "pick-auto") { await store.choose(.auto) }
+        at(7.0, "mic-on") { store.micOn = true }
+        at(12.0, "mic-off") { store.micOn = false }
+        at(16.0, "chat-send") { store.draft = "Why is the title slide wrong?"; await store.send() }
+        at(32.0, "collapse") { c.tab = .home; c.collapse() }
+        at(34.0, "tour-end") {}
     }
 
     func refresh() {

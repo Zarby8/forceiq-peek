@@ -23,6 +23,8 @@ public enum ProposalPhase: Equatable, Sendable {
     @Published public var draft = ""
     @Published public private(set) var phases: [String: ProposalPhase] = [:]
     @Published public private(set) var approvedPops = 0
+    /// The mic is open (the voice module sets it; voice is behind its profile flag, off by default). Drives 'listening'.
+    @Published public var micOn = false
     public var onOpenApp: ((String) -> Void)?           // intent open_app → the switcher (allow-listed apps only)
     public var onCopy: ((String) -> Void)?
     let transport: ThreePOTransport
@@ -139,6 +141,7 @@ public enum ProposalPhase: Equatable, Sendable {
 public final class DemoKnobs: @unchecked Sendable {
     public var spendWarn = false
     public var statusReads = 0
+    public var slowTurn = false          // the 3PO avatar tour: a longer think + a slower stream so every state shows
     public init() {}
 }
 
@@ -149,7 +152,7 @@ public struct DemoThreePOTransport: ThreePOTransport {
         AsyncStream { cont in
             let task = Task {
                 var t0: TimeInterval = 0
-                for (at, e) in DemoData.threePOTurn() {
+                for (at, e) in DemoData.threePOTurn(slow: knobs.slowTurn) {
                     try? await Task.sleep(nanoseconds: UInt64(max(0, at - t0) * 1_000_000_000)); t0 = at
                     cont.yield(e)
                 }

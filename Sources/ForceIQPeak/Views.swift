@@ -248,7 +248,9 @@ struct PeakRootView: View {
                 if drops.active {
                     DropsView(drops: drops).transition(reduceMotion ? .identity : .asymmetric(insertion: .scale(scale: 0.94, anchor: .top), removal: .identity))
                 } else if showChat {
-                    ThreePOView(store: threePO, profile: controller.profile, prefill: controller.askText)
+                    ThreePOView(store: threePO, profile: controller.profile, prefill: controller.askText,
+                                live: AvatarPolicy.live(visible: panel.visible, globallyVisible: controller.globallyVisible,
+                                                        expanded: isExpanded, reduceMotion: reduceMotion))
                         .transition(.slideUpFull(reduceMotion))
                 } else if let ask = controller.askText {
                     AskView(initial: ask, close: { controller.closeAsk() }).transition(.slideUpFull(reduceMotion))

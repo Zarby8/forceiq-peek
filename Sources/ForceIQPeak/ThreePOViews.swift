@@ -2,14 +2,17 @@ import AppKit
 import PeakCore
 import SwiftUI
 
-// ───────────────────────────── 3PO avatar (static, original; a slot for BOB Motion's animated rig) ─────────────────────────────
-/// Seam: BOB Motion's animated rig (EOD Mon) drops in behind this; today it's the static gold droid mark.
+// ───────────────────────────── 3PO avatar slot ─────────────────────────────
+/// The droid in the chat header (live) and beside each reply (still). Default: AnimatedThreePOAvatar (ThreePOAvatar.swift:
+/// the rig, then BOB Motion's rendered loops, then this static mark). StaticDroidAvatar is the last fallback.
 @MainActor protocol ThreePOAvatarRendering {
-    func avatar(size: CGFloat) -> AnyView
+    func avatar(size: CGFloat, signals: AvatarSignals, live: Bool, reduceMotion: Bool) -> AnyView
+    func still(size: CGFloat) -> AnyView
 }
 
 @MainActor struct StaticDroidAvatar: ThreePOAvatarRendering {
-    func avatar(size: CGFloat) -> AnyView { AnyView(DroidMark().frame(width: size, height: size)) }
+    func avatar(size: CGFloat, signals: AvatarSignals, live: Bool, reduceMotion: Bool) -> AnyView { still(size: size) }
+    func still(size: CGFloat) -> AnyView { AnyView(DroidMark().frame(width: size, height: size)) }
 }
 
 /// Original geometric droid glyph, gold #F5C542 on black: a rounded-square head with one wide visor slot and a single
@@ -189,14 +192,17 @@ struct ThreePOView: View {
     @ObservedObject var store: ThreePOStore
     let profile: CoachProfile
     let prefill: String?
-    var avatar: ThreePOAvatarRendering = StaticDroidAvatar()
+    var live = true                                         // AvatarPolicy.live (expanded, visible, no Reduce Motion)
+    var avatar: ThreePOAvatarRendering = AnimatedThreePOAvatar()
     @FocusState private var focused: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                avatar.avatar(size: 26).modifier(OpusPulse(trigger: store.transcript.opusPulses, reduceMotion: reduceMotion))
+                avatar.avatar(size: 32, signals: AvatarSignals.from(store.transcript, voiceEnabled: profile.isEnabled(.voice), micOn: store.micOn),
+                              live: live, reduceMotion: reduceMotion)
+                    .modifier(OpusPulse(trigger: store.transcript.opusPulses, reduceMotion: reduceMotion))
                 Text("3PO").font(.system(size: 14, weight: .heavy)).foregroundStyle(Color.peakGold)
                 ModelPills(store: store)
                 Spacer()
@@ -266,7 +272,7 @@ struct MessageRow: View {
             }
         } else {
             HStack(alignment: .top, spacing: 8) {
-                avatar.avatar(size: 18).padding(.top, 2)
+                avatar.still(size: 18).padding(.top, 2)
                 VStack(alignment: .leading, spacing: 6) {
                     if !message.text.isEmpty {
                         Text(message.text).font(.system(size: 13)).foregroundStyle(Color.white).textSelection(.enabled)

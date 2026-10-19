@@ -216,7 +216,8 @@ public enum DemoData {
 
     /// A scripted 3PO turn for screenshots / the visual proof (no tokens, no network): thinking → Opus advisor → streamed
     /// text → a describe-first proposal → done. Delays in seconds.
-    public static func threePOTurn() -> [(TimeInterval, ThreePOEvent)] {
+    /// `slow` (the avatar tour): the advisor holds ~3.6 s and words land every 0.12 s.
+    public static func threePOTurn(slow: Bool = false) -> [(TimeInterval, ThreePOEvent)] {
         let card = ProposalCard(id: "demo0000card", action: "rerender", label: "Re-render the title slide", client: "Sample Skater",
                                 inputs: ["text: Sample Skater vs Demo Hawks 10.18.2026"], touches: "Scratch render, then the client's title folder after confirm",
                                 outputs: ["title.png", "folder.png"], reason: "The crest on the title slide is the opponent's.",
@@ -225,9 +226,10 @@ public enum DemoData {
         let words = "The title slide used the opponent's crest because the game card listed them as home. I can re-render it with the right crest; nothing runs until you tap Run and then confirm."
             .split(separator: " ").map { String($0) + " " }
         var out: [(TimeInterval, ThreePOEvent)] = [(0.2, .start(route: "claude", modelAlias: "haiku", mode: "advisor", cached: true)),
-                                                    (0.9, .advisor(consulting: true)), (1.6, .advisor(consulting: false))]
-        for (i, w) in words.enumerated() { out.append((1.8 + Double(i) * 0.06, .delta(w))) }
-        let t = 1.8 + Double(words.count) * 0.06
+                                                    (0.9, .advisor(consulting: true)), (slow ? 4.5 : 1.6, .advisor(consulting: false))]
+        let first = slow ? 4.7 : 1.8, step = slow ? 0.12 : 0.06
+        for (i, w) in words.enumerated() { out.append((first + Double(i) * step, .delta(w))) }
+        let t = first + Double(words.count) * step
         out.append((t + 0.2, .proposal(card)))
         out.append((t + 0.4, .done(text: "", costUSD: 0.0042, peakMTD: 12.34, warn: false, firstTokenMs: 640)))
         return out
