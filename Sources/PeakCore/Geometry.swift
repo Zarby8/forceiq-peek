@@ -28,10 +28,10 @@ public struct PeakLayout: Equatable, Sendable {
     public var chat: CGRect = .zero        // the expanded sheet on the 3PO tab (taller)
     public var canvas: CGRect = .zero      // the ONE fixed panel frame: every state draws inside it (no per-frame setFrame)
     public var peek: CGRect = .zero        // the alert shell that drops out of the notch for a few seconds, then retracts
-    /// Notch mode: the always-on "PEAK" tab hanging just under the notch (the notch itself has no pixels, and a crowded
-    /// menu bar hides status items). The view draws a capsule sized to its text inside this rect; the rect is its pointer
-    /// target (hover or click opens Peak), so it takes clicks only here, below the menu bar.
-    public var tag: CGRect = .zero
+    /// Notch mode: the always-on status wing, in the menu bar row flush against the notch's right edge and exactly as tall as
+    /// the notch, so the black shape reads as one wider notch (the way Boring Notch and DynamicNotchKit draw their compact
+    /// state). It is part of `collapsed`, so hover and click on it open Peak.
+    public var wing: CGRect = .zero
     /// Notch mode: a 2 pt line hanging just under the notch (the notch itself has no pixels), for live progress.
     /// Not a hit rect: it never takes a click.
     public var progressLine: CGRect = .zero
@@ -52,11 +52,6 @@ public struct PeakLayout: Equatable, Sendable {
         case .chat: return chat == .zero ? expanded : chat
         }
     }
-    /// Is a global point over the live shell of a surface? While collapsed that is the notch plus the tag under it.
-    public func pointerHit(_ s: Surface, at p: CGPoint, slack: CGFloat = 2) -> Bool {
-        if hitRect(s).insetBy(dx: -slack, dy: -slack).contains(p) { return true }
-        return s == .collapsed && tag != .zero && tag.insetBy(dx: -slack, dy: -slack).contains(p)
-    }
     /// Is a global point on the edge-trigger strip? (Collapsed notch only; nothing here ever captures the mouse.)
     public func triggers(at p: CGPoint) -> Bool { edgeTrigger != .zero && edgeTrigger.contains(p) }
 }
@@ -75,24 +70,25 @@ public struct PeakGeometry: PeakGeometryProviding {
     public var peekSize = CGSize(width: 380, height: 40)       // the strip BELOW the menu bar row (notch mode adds the notch height)
     public var edgeTriggerSlack: CGFloat = 40                  // how far past each notch edge the top-edge trigger reaches
     public var edgeTriggerHeight: CGFloat = 3
-    public var tagSize = CGSize(width: 140, height: 16)
+    public var wingWidth: CGFloat = 96                          // fits "PRESENTING"; the empty gap right of the M5's notch is ~104 pt
     public init() {}
 
     public func layout(for s: ScreenDescriptor) -> PeakLayout {
         let top = s.frame.maxY
         if s.hasNotch, let l = s.auxiliaryTopLeft, let r = s.auxiliaryTopRight {
             let notch = CGRect(x: l.maxX, y: top - s.safeAreaTop, width: max(0, r.minX - l.maxX), height: s.safeAreaTop)
-            // Collapsed sits exactly in the hardware notch: nothing in the menu bar beside or below it (Chris 10.19.2026,
-            // 14" MacBook Pro: the old ears spilled 44 pt each side and the shell hung past the notch).
-            let collapsed = notch
+            // Collapsed is the notch plus a status wing on its right, in the menu bar row and exactly the notch's height: one
+            // black shape that merges with the hardware notch (the compact state Boring Notch / DynamicNotchKit use). Never
+            // taller than the notch, never flared (the 10.19 leak was 44 pt ears each side and a shell hanging past the notch).
+            let collapsed = CGRect(x: notch.minX, y: notch.minY, width: notch.width + wingWidth, height: notch.height)
             let w = max(expandedSize.width, collapsed.width)
             let expanded = CGRect(x: notch.midX - w / 2, y: top - expandedSize.height, width: w, height: expandedSize.height)
             let cw = max(chatSize.width, collapsed.width)
             let chat = CGRect(x: notch.midX - cw / 2, y: top - chatSize.height, width: cw, height: chatSize.height)
             let pw = max(peekSize.width, collapsed.width), ph = notch.height + peekSize.height
             let peek = CGRect(x: notch.midX - pw / 2, y: top - ph, width: pw, height: ph)
-            let edge = CGRect(x: notch.minX - edgeTriggerSlack, y: top - edgeTriggerHeight,
-                              width: notch.width + 2 * edgeTriggerSlack, height: edgeTriggerHeight)
+            let edge = CGRect(x: collapsed.minX - edgeTriggerSlack, y: top - edgeTriggerHeight,
+                              width: collapsed.width + 2 * edgeTriggerSlack, height: edgeTriggerHeight)
             return finish(PeakLayout(mode: .notch, notchRect: notch, collapsed: collapsed, expanded: clamp(expanded, s.frame)),
                           chat: clamp(chat, s.frame), peek: clamp(peek, s.frame), edge: edge, s)
         }
@@ -113,8 +109,8 @@ public struct PeakGeometry: PeakGeometryProviding {
         var out = l
         out.chat = chat; out.peek = peek; out.edgeTrigger = edge; out.peekStripHeight = peekSize.height
         if let n = l.notchRect {
-            out.tag = CGRect(x: n.midX - tagSize.width / 2, y: n.minY - tagSize.height, width: tagSize.width, height: tagSize.height)
-            out.progressLine = CGRect(x: n.minX + 12, y: n.minY - tagSize.height - 4, width: max(0, n.width - 24), height: 2)   // under the tag
+            out.wing = CGRect(x: n.maxX, y: n.minY, width: wingWidth, height: n.height)
+            out.progressLine = CGRect(x: l.collapsed.minX + 12, y: n.minY - 5, width: max(0, l.collapsed.width - 24), height: 2)
         }
         let u = l.collapsed.union(l.expanded).union(chat).union(peek)
         var c = CGRect(x: u.minX - glowMargin, y: u.minY - glowMargin, width: u.width + 2 * glowMargin, height: s.frame.maxY - (u.minY - glowMargin))

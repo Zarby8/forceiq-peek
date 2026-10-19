@@ -25,46 +25,50 @@ final class StatusBadgeTests: XCTestCase {
         }
     }
 
-    // ── the tab under the notch (a crowded menu bar hides status items, so this is the always-visible one) ──
+    // ── the status wing: merged into the notch, in the menu bar row, exactly the notch's height ──
     let m5 = ScreenDescriptor(uuid: "M5", name: "Built-in Display", frame: CGRect(x: 0, y: 0, width: 2048, height: 1330),
                               safeAreaTop: 43, auxiliaryTopLeft: CGRect(x: 0, y: 1287, width: 899, height: 43),
                               auxiliaryTopRight: CGRect(x: 1149, y: 1287, width: 899, height: 43))
 
-    func testTheTagHangsFromTheNotchBelowTheMenuBarAndLeavesTheNotchAlone() {
+    func testTheWingIsFlushWithTheNotchAndExactlyAsTall() {
         let l = PeakGeometry().layout(for: m5)
         let n = l.notchRect!
-        XCTAssertEqual(l.collapsed, n, "collapsed is still exactly the notch")
-        XCTAssertEqual(l.tag.maxY, n.minY, accuracy: 0.5, "flush under the notch, never beside it in the menu bar row")
-        XCTAssertEqual(l.tag.midX, n.midX, accuracy: 0.5)
-        XCTAssertTrue(l.canvas.contains(l.tag))
-        XCTAssertLessThan(l.progressLine.maxY, l.tag.minY, "the progress line moved under the tag, not over it")
-        XCTAssertEqual(l.hitRect(.collapsed), n, "the notch hit rect did not grow")
+        XCTAssertEqual(l.wing.minX, n.maxX, "flush against the notch's right edge")
+        XCTAssertEqual(l.wing.minY, n.minY); XCTAssertEqual(l.wing.height, n.height); XCTAssertEqual(l.wing.maxY, 1330)
+        XCTAssertEqual(l.collapsed, n.union(l.wing), "one shape: the notch and its wing")
+        XCTAssertEqual(l.collapsed.minX, n.minX, "nothing to the left of the notch")
+        XCTAssertTrue(l.canvas.contains(l.collapsed))
+        XCTAssertEqual(l.hitRect(.collapsed), l.collapsed, "hover and click on the wing open Peak")
     }
 
-    func testTheTagTakesThePointerOnlyWhileCollapsed() {
+    func testTheWingFitsTheEmptyGapAndTheLongestWord() {
+        let g = PeakGeometry()
+        XCTAssertLessThanOrEqual(g.wingWidth, 104, "the M5's empty menu bar gap right of the notch")
+        let longest = max(StatusBadge.spec(presenting: false).wingText.count, StatusBadge.spec(presenting: true).wingText.count)
+        XCTAssertGreaterThanOrEqual(g.wingWidth, CGFloat(longest) * 8 + 16, "11 pt heavy caps with tracking, plus padding")
+    }
+
+    func testTheWingTextIsShortAndTheProgressLineHangsUnderTheWholeShape() {
+        XCTAssertEqual(StatusBadge.spec(presenting: false).wingText, "PEAK"); XCTAssertEqual(StatusBadge.spec(presenting: true).wingText, "PRESENTING")
         let l = PeakGeometry().layout(for: m5)
-        let onTag = CGPoint(x: l.tag.midX, y: l.tag.midY), onNotch = CGPoint(x: l.collapsed.midX, y: l.collapsed.midY)
-        XCTAssertTrue(l.pointerHit(.collapsed, at: onTag)); XCTAssertTrue(l.pointerHit(.collapsed, at: onNotch))
-        XCTAssertFalse(l.pointerHit(.collapsed, at: CGPoint(x: l.tag.minX - 30, y: l.tag.midY)), "beside the tag is the app underneath")
-        XCTAssertFalse(l.pointerHit(.collapsed, at: CGPoint(x: l.tag.midX, y: l.tag.minY - 20)), "so is below it")
-        XCTAssertFalse(l.pointerHit(.home, at: CGPoint(x: l.tag.midX, y: l.expanded.minY - 40)), "an open sheet has its own rect")
+        XCTAssertLessThan(l.progressLine.maxY, l.collapsed.minY)
+        XCTAssertGreaterThanOrEqual(l.progressLine.minX, l.collapsed.minX); XCTAssertLessThanOrEqual(l.progressLine.maxX, l.collapsed.maxX)
     }
 
-    func testTheStudioDisplayPillHasNoTag() {
+    func testTheStudioDisplayPillHasNoWing() {
         let studio = ScreenDescriptor(uuid: "S", name: "Studio Display", frame: CGRect(x: 2048, y: 0, width: 2560, height: 1440),
                                       safeAreaTop: 0, auxiliaryTopLeft: nil, auxiliaryTopRight: nil)
         let l = PeakGeometry().layout(for: studio)
-        XCTAssertEqual(l.tag, .zero)
-        XCTAssertFalse(l.pointerHit(.collapsed, at: CGPoint(x: l.collapsed.midX, y: l.collapsed.minY - 30)), "nothing hangs below the pill")
+        XCTAssertEqual(l.wing, .zero); XCTAssertEqual(l.collapsed.size, PeakGeometry().pillSize)
     }
 
-    func testTheTagViewIsBrandTextOnBlackAndTapsOpenPeak() throws {
+    func testTheWingViewIsBrandTextOnBlackAndNothingElseDrawsBesideTheNotch() throws {
         let path = #filePath.replacingOccurrences(of: "Tests/PeakCoreTests/StatusBadgeTests.swift", with: "Sources/ForceIQPeak/Views.swift")
         let v = try String(contentsOfFile: path, encoding: .utf8)
-        let tag = v.components(separatedBy: "struct NotchTag").last?.components(separatedBy: "/// Live progress under the notch").first ?? ""
-        XCTAssertTrue(tag.contains("Color.peakGreen") && tag.contains("Color.peakGold") && tag.contains("Color.black"))
-        XCTAssertFalse(tag.contains("opacity") || tag.contains("gray") || tag.contains(".secondary"))
-        XCTAssertTrue(v.contains("if tagShowing {") && v.contains("var tagShowing: Bool { panel.mode == .notch && panel.visible && !isExpanded && !peekShowing }"))
+        let wing = v.components(separatedBy: "struct NotchWing").last?.components(separatedBy: "/// Live progress under the notch").first ?? ""
+        XCTAssertTrue(wing.contains("Color.peakGreen") && wing.contains("Color.peakGold") && wing.contains("spec.wingText"))
+        XCTAssertFalse(wing.contains("opacity") || wing.contains("gray") || wing.contains(".secondary"))
+        XCTAssertFalse(v.contains("struct NotchTag"), "the under-notch tab is gone: the wing replaced it")
     }
 
     func testTheAppDrawsItFromTheSpecAndNeverSetsAPlainTitle() throws {

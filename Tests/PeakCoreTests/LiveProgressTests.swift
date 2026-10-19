@@ -61,12 +61,12 @@ import XCTest
         let n = l.notchRect!
         XCTAssertEqual(l.progressLine.height, 2)
         XCTAssertLessThan(l.progressLine.maxY, n.minY, "under the notch, in the screen content, never beside it in the menu bar")
-        XCTAssertGreaterThanOrEqual(l.progressLine.minX, n.minX); XCTAssertLessThanOrEqual(l.progressLine.maxX, n.maxX)
+        XCTAssertGreaterThanOrEqual(l.progressLine.minX, n.minX); XCTAssertLessThanOrEqual(l.progressLine.maxX, l.collapsed.maxX)
         XCTAssertTrue(l.canvas.contains(l.progressLine))
         for s in [PeakLayout.Surface.collapsed, .peek, .home, .chat] {
             XCTAssertFalse(l.hitRect(s) == l.progressLine, "not a surface")
         }
-        XCTAssertFalse(l.hitRect(.collapsed).intersects(l.progressLine), "the collapsed hit rect stays exactly the notch")
+        XCTAssertFalse(l.hitRect(.collapsed).intersects(l.progressLine), "the line hangs below the collapsed shape")
         let studio = ScreenDescriptor(uuid: "S", name: "Studio Display", frame: CGRect(x: 2048, y: 0, width: 2560, height: 1440),
                                       safeAreaTop: 0, auxiliaryTopLeft: nil, auxiliaryTopRight: nil)
         XCTAssertEqual(PeakGeometry().layout(for: studio).progressLine, .zero, "the Studio pill has the Ghost; no line")

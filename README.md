@@ -98,18 +98,19 @@ process)" to phone.py, so Peak carries no token and no secret.
 - Raycast: `raycast/*.sh` script commands (package "ForceIQ Peak"). At install they're copied to `~/ForceIQ/peak/raycast/`.
   Add that folder once by hand: Raycast Settings → Extensions → + → Add Script Directory.
 
-## Always-on PEAK badge
-Collapsed Peak is only the notch, and the notch has no pixels, so the always-on status is two black capsules reading **PEAK**
-in brand green (#4FFF4F); while presenting they turn gold and read "PEAK · PRESENTING":
-- **The tab under the notch** (notch Macs): hangs flush from the notch's bottom edge, below the menu bar row, so nothing
-  beside the notch changes. Hover or click opens Peak (its 140 x 16 pt rect is the only extra place Peak takes the pointer).
-  Hidden while the sheet or a peek is open or Peak is hidden. The progress line hangs under it. This is the one that is
-  always visible: a crowded notch-Mac menu bar silently drops status items (Chris's M5 had no status-item window at all).
-- **The menu-bar item**: the same capsule as the status item (menu: Show, Displays, Presenting, Do not disturb, Quit). Shown
-  only if the menu bar has room for it.
+## Always-on PEAK status (the notch wing)
+Collapsed Peak is the hardware notch plus a **status wing** on its right: a black extension in the menu bar row, flush with
+the notch and exactly as tall (no flare, nothing below), so the two read as one wider notch. It says **PEAK** in brand
+green (#4FFF4F), or **PRESENTING** in gold while presenting. This is the compact state the established notch apps use
+(Boring Notch's closed notch and DynamicNotchKit's compact leading/trailing content both draw beside the notch at notch
+height, with ~6 pt top and ~14 pt bottom corner radii). Hover or click on the wing opens Peak; the top-edge trigger covers
+the whole shape. The wing is 96 pt (`PeakGeometry.wingWidth`; set it to 0 to go back to a bare notch), sized for the longest
+word and the empty gap right of the M5's notch; it covers whatever menu-bar items sit under it. The Studio Display pill has no
+wing (the pill is the status). The menu-bar status item is the same capsule ("PEAK" / "PEAK · PRESENTING" on black); a crowded
+notch-Mac menu bar can hide it (the M5's had no on-screen status-item window), which is why the wing exists.
 
 ## Notch alerts (the peek)
-Collapsed Peak is invisible: exactly the hardware notch. An urgent alert drops a one-line black strip out of the notch for
+Collapsed Peak is the notch plus its green status wing. An urgent alert drops a one-line black strip out of the notch for
 6 s (8 s for a failed fix), then retracts. Urgent means a meeting starting within 10 minutes or a fix that fails after Peak
 is up (fixes already failing at launch are not news). Each line names its client; the dot is green for a meeting and gold for
 a failed fix; text is pure white. A tap opens the sheet (a meeting alert lands on the next-session card when the pill is
@@ -117,12 +118,12 @@ on); the pointer resting on it holds it 3 s at a time. Nothing peeks while Peak 
 session, in quiet hours, under Do not disturb (menu bar: 1 hour / until tomorrow morning / off), or within a minute of the
 last peek. A held alert is not spent: it peeks when the gate lifts. The decision is `AlertPolicy` (PeakCore/Alerts.swift),
 pure and tested; logs carry the kind or the reason, never a client. Pushing the pointer to the very top edge within 40 pt
-of the notch also opens Peak (that strip never takes a click, so the menu bar stays usable). Only the Studio Display pill
-lifts on hover; the notch never scales or brightens, so nothing paints outside it. Demo: `FORCEIQ_PEAK_DEMO=1
+of the notch shape also opens Peak (that strip never takes a click, so the menu bar stays usable). Only the Studio Display
+pill lifts on hover; the notch never scales or brightens, so nothing paints outside it. Demo: `FORCEIQ_PEAK_DEMO=1
 FORCEIQ_PEAK_DEMO_FEED=soon GOAT_PEAK_ROOT=<scratch root>` puts the sample meeting 9 min out.
 
 **Progress line.** While GOAT is working (a fix running, a shift download running; nothing else, per the Live Activity rule)
-a 2 pt gold line hangs just under the notch (the notch itself has no pixels). It is a gold fill over a faint track when every
+a 2 pt gold line hangs just under the notch and its wing (the notch itself has no pixels). It is a gold fill over a faint track when every
 running download reports a percent and no fix is running; otherwise a static dashed line that says "working" without claiming
 how far. Percents come only from GOAT's live doc, never estimated. It is a shape (no text), never animates, takes no click,
 and is hidden while the sheet or a peek is open. Demo: `FORCEIQ_PEAK_DEMO_FEED=download` (38%) or `working` (dashed).

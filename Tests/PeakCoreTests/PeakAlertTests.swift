@@ -37,7 +37,7 @@ import XCTest
     // ── geometry ──
     func testPeekDropsBelowTheNotchAndStaysInTheCanvas() {
         let l = PeakGeometry().layout(for: m5)
-        XCTAssertEqual(l.collapsed, CGRect(x: 899, y: 1287, width: 250, height: 43), "collapsed is still exactly the notch")
+        XCTAssertEqual(l.collapsed.height, 43, "the collapsed shape is exactly the notch's height")
         XCTAssertEqual(l.peek.maxY, 1330, "the peek hangs from the top edge")
         XCTAssertEqual(l.peek.midX, l.notchRect!.midX, accuracy: 0.5)
         XCTAssertGreaterThanOrEqual(l.peek.width, l.collapsed.width)

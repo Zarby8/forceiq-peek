@@ -48,19 +48,16 @@ enum Motion {
     }
 }
 
-/// The always-on tab under the notch: a black capsule hanging from the notch's bottom edge (square top, round bottom) with
-/// "PEAK" in brand green (gold "PEAK · PRESENTING" while presenting). Text on black, brand tokens only.
-struct NotchTag: View {
+/// The status wing: one short word in brand green (gold while presenting), centered in the wing. Text on black, no gray.
+struct NotchWing: View {
     let spec: StatusBadgeSpec
     var body: some View {
-        Text(spec.text)
-            .font(.system(size: 10, weight: .heavy)).kerning(0.9).lineLimit(1).fixedSize()
+        Text(spec.wingText)
+            .font(.system(size: 11, weight: .heavy)).kerning(0.9).lineLimit(1).fixedSize()
             .foregroundStyle(spec.textHex == Brand.goldHex ? Color.peakGold : Color.peakGreen)
-            .padding(.horizontal, 10).frame(height: 15)
-            .background(UnevenRoundedRectangle(bottomLeadingRadius: 8, bottomTrailingRadius: 8).fill(Color.black))
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(spec.accessibilityLabel)
-            .accessibilityAddTraits(.isButton)
     }
 }
 
@@ -145,7 +142,6 @@ struct PeakRootView: View {
 
     var isExpanded: Bool { controller.expanded && controller.activeDisplay == panel.uuid }
     var showChat: Bool { isExpanded && !controller.presenting && controller.tab == .threePO && controller.profile.isEnabled(.threePO) }
-    var tagShowing: Bool { panel.mode == .notch && panel.visible && !isExpanded && !peekShowing }
     var progressShowing: Bool { panel.mode == .notch && panel.visible && !isExpanded && !peekShowing && cards.progress.working }
     var peekShowing: Bool { !isExpanded && controller.peek != nil && controller.peekDisplay == panel.uuid }
     var surface: PeakLayout.Surface { isExpanded ? (showChat ? .chat : .home) : (peekShowing ? .peek : .collapsed) }
@@ -170,14 +166,6 @@ struct PeakRootView: View {
             content
                 .frame(width: panel.layout.canvas.width, height: panel.layout.canvas.height, alignment: .topLeading)
                 .mask(shape)
-            if tagShowing {                // always-on "PEAK", drawn outside the notch mask (the notch itself has no pixels)
-                let r = panel.local(panel.layout.tag)
-                NotchTag(spec: StatusBadge.spec(presenting: controller.presenting))
-                    .frame(width: r.width, height: r.height, alignment: .top)
-                    .padding(.leading, r.minX).padding(.top, r.minY)
-                    .contentShape(Rectangle())
-                    .onTapGesture { Haptic.level(); controller.activeDisplay = panel.uuid; controller.expand() }
-            }
             if progressShowing {           // GOAT is working: a thin gold line hanging under the notch (drawn outside the notch mask)
                 let r = panel.local(panel.layout.progressLine)
                 NotchProgressLine(progress: cards.progress).frame(width: r.width, height: r.height)
@@ -308,8 +296,14 @@ struct PeakRootView: View {
 
     @ViewBuilder var collapsed: some View {
         if panel.mode == .notch {
-            // Inside the camera housing nothing would be visible anyway: a plain black fill the size of the notch.
-            Color.clear.frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
+            // The notch itself has no pixels; the black wing to its right is the always-on status: "PEAK" in green (gold
+            // "PRESENTING" while presenting), in the menu bar row, merged with the notch.
+            ZStack(alignment: .topLeading) {
+                Color.clear.frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
+                NotchWing(spec: StatusBadge.spec(presenting: controller.presenting))
+                    .frame(width: panel.layout.wing.width, height: panel.layout.wing.height)
+                    .offset(x: panel.notchWidth)
+            }
         } else {
             collapsedPill
         }

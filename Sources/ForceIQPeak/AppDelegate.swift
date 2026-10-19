@@ -63,7 +63,7 @@ enum Screens {
     }
 
     /// Is this global point over the live shell (a little slack so the edge doesn't flicker)?
-    func contains(_ p: NSPoint) -> Bool { layout.pointerHit(surface, at: p) }
+    func contains(_ p: NSPoint) -> Bool { layout.hitRect(surface).insetBy(dx: -2, dy: -2).contains(p) }
 
     func setVisible(_ on: Bool) {
         state.visible = on
