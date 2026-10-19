@@ -149,6 +149,7 @@ enum Screens {
         cards.settingsNotice = prefs.settingsNotice
         threePO = ThreePOStore(transport: demo ? DemoThreePOTransport(knobs: demoKnobs) : engine, session: "peak-\(p.coachID)", logger: log)
         threePO.onCopy = { [weak self] s in self?.performer.copy(s) }
+        controller.wireAsk(to: threePO)                                      // ask links prefill 3PO's field, open or collapsed
         threePO.onOpenApp = { [weak self] name in
             guard let self, let app = self.profile.apps.first(where: { $0.name.lowercased() == name.lowercased() }) else { return }
             self.controller.handle(.switchApp(app.bundleID))

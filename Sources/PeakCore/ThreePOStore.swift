@@ -78,6 +78,16 @@ public enum ProposalPhase: Equatable, Sendable {
         await turn(text)
     }
 
+    /// forceiq-peak://ask?q=… lands here, whether the chat is open or collapsed: the text goes in the field and the Chat
+    /// pane shows. NEVER sent: only an explicit tap (Return / the send button) calls send(). Logs the event name only.
+    public func prefill(_ text: String) {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !t.isEmpty else { return }
+        draft = t
+        if pane != .chat { pane = .chat }
+        logger?.log("3po prefill")
+    }
+
     /// The dictated words, handed over exactly like a typed message (draft → send). If 3PO is mid-reply, they wait in the
     /// field for the coach to send.
     public func sendDictation(_ text: String) async {

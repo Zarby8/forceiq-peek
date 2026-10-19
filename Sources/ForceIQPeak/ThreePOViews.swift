@@ -192,7 +192,7 @@ struct SpendMeter: View {
 struct ThreePOView: View {
     @ObservedObject var store: ThreePOStore
     let profile: CoachProfile
-    let prefill: String?
+    let askSeq: Int                                         // bumps on every ask link (the store holds the prefilled text)
     var live = true                                         // AvatarPolicy.live (expanded, visible, no Reduce Motion)
     @ObservedObject var voice: VoiceController
     var avatar: ThreePOAvatarRendering = AnimatedThreePOAvatar()
@@ -232,10 +232,8 @@ struct ThreePOView: View {
             .keyboardShortcut("k", modifiers: .command)
             .buttonStyle(.plain).frame(width: 0, height: 0).accessibilityHidden(true)
         }
-        .onAppear {
-            if let p = prefill, !p.isEmpty, store.draft.isEmpty { store.draft = p }   // prefilled, never sent
-            focused = true
-        }
+        .onAppear { focused = true }
+        .onChange(of: askSeq) { _, _ in focused = true }    // an ask link while open: focus the prefilled field, never send
     }
 
     @ViewBuilder var chat: some View {

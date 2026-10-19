@@ -270,12 +270,14 @@ struct PeakRootView: View {
                 if drops.active {
                     DropsView(drops: drops).transition(reduceMotion ? .identity : .asymmetric(insertion: .scale(scale: 0.94, anchor: .top), removal: .identity))
                 } else if showChat {
-                    ThreePOView(store: threePO, profile: controller.profile, prefill: controller.askText,
+                    ThreePOView(store: threePO, profile: controller.profile, askSeq: controller.askSeq,
                                 live: AvatarPolicy.live(visible: panel.visible, globallyVisible: controller.globallyVisible,
                                                         expanded: isExpanded, reduceMotion: reduceMotion), voice: voice)
                         .transition(.slideUpFull(reduceMotion))
                 } else if let ask = controller.askText {
-                    AskView(initial: ask, close: { controller.closeAsk() }).transition(.slideUpFull(reduceMotion))
+                    AskView(initial: ask, close: { controller.closeAsk() })
+                        .id(controller.askSeq)                       // a new link while open re-seeds the field
+                        .transition(.slideUpFull(reduceMotion))
                 } else if let card = cards.describedCard {
                     DescriptionView(card: card, cards: cards)
                         .transition(reduceMotion ? .identity : .asymmetric(insertion: .move(edge: .trailing), removal: .identity))
