@@ -33,17 +33,17 @@ final class StatusBadgeTests: XCTestCase {
     func testTheWingIsFlushWithTheNotchAndExactlyAsTall() {
         let l = PeakGeometry().layout(for: m5)
         let n = l.notchRect!
-        XCTAssertEqual(l.wing.minX, n.maxX, "flush against the notch's right edge")
+        XCTAssertEqual(l.wing.maxX, n.minX, "flush against the notch's left edge")
         XCTAssertEqual(l.wing.minY, n.minY); XCTAssertEqual(l.wing.height, n.height); XCTAssertEqual(l.wing.maxY, 1330)
         XCTAssertEqual(l.collapsed, n.union(l.wing), "one shape: the notch and its wing")
-        XCTAssertEqual(l.collapsed.minX, n.minX, "nothing to the left of the notch")
+        XCTAssertEqual(l.collapsed.maxX, n.maxX, "nothing to the right of the notch")
         XCTAssertTrue(l.canvas.contains(l.collapsed))
         XCTAssertEqual(l.hitRect(.collapsed), l.collapsed, "hover and click on the wing open Peak")
     }
 
     func testTheWingFitsTheEmptyGapAndTheLongestWord() {
         let g = PeakGeometry()
-        XCTAssertLessThanOrEqual(g.wingWidth, 104, "the M5's empty menu bar gap right of the notch")
+        XCTAssertLessThanOrEqual(g.wingWidth, 104, "the wing stays small enough to leave the app menus alone")
         let longest = max(StatusBadge.spec(presenting: false).wingText.count, StatusBadge.spec(presenting: true).wingText.count)
         XCTAssertGreaterThanOrEqual(g.wingWidth, CGFloat(longest) * 8 + 16, "11 pt heavy caps with tracking, plus padding")
     }

@@ -28,7 +28,7 @@ public struct PeakLayout: Equatable, Sendable {
     public var chat: CGRect = .zero        // the expanded sheet on the 3PO tab (taller)
     public var canvas: CGRect = .zero      // the ONE fixed panel frame: every state draws inside it (no per-frame setFrame)
     public var peek: CGRect = .zero        // the alert shell that drops out of the notch for a few seconds, then retracts
-    /// Notch mode: the always-on status wing, in the menu bar row flush against the notch's right edge and exactly as tall as
+    /// Notch mode: the always-on status wing, in the menu bar row flush against the notch's left edge and exactly as tall as
     /// the notch, so the black shape reads as one wider notch (the way Boring Notch and DynamicNotchKit draw their compact
     /// state). It is part of `collapsed`, so hover and click on it open Peak.
     public var wing: CGRect = .zero
@@ -70,17 +70,17 @@ public struct PeakGeometry: PeakGeometryProviding {
     public var peekSize = CGSize(width: 380, height: 40)       // the strip BELOW the menu bar row (notch mode adds the notch height)
     public var edgeTriggerSlack: CGFloat = 40                  // how far past each notch edge the top-edge trigger reaches
     public var edgeTriggerHeight: CGFloat = 3
-    public var wingWidth: CGFloat = 96                          // fits "PRESENTING"; the empty gap right of the M5's notch is ~104 pt
+    public var wingWidth: CGFloat = 96                          // fits "PRESENTING"
     public init() {}
 
     public func layout(for s: ScreenDescriptor) -> PeakLayout {
         let top = s.frame.maxY
         if s.hasNotch, let l = s.auxiliaryTopLeft, let r = s.auxiliaryTopRight {
             let notch = CGRect(x: l.maxX, y: top - s.safeAreaTop, width: max(0, r.minX - l.maxX), height: s.safeAreaTop)
-            // Collapsed is the notch plus a status wing on its right, in the menu bar row and exactly the notch's height: one
+            // Collapsed is the notch plus a status wing on its LEFT, in the menu bar row and exactly the notch's height: one
             // black shape that merges with the hardware notch (the compact state Boring Notch / DynamicNotchKit use). Never
             // taller than the notch, never flared (the 10.19 leak was 44 pt ears each side and a shell hanging past the notch).
-            let collapsed = CGRect(x: notch.minX, y: notch.minY, width: notch.width + wingWidth, height: notch.height)
+            let collapsed = CGRect(x: notch.minX - wingWidth, y: notch.minY, width: notch.width + wingWidth, height: notch.height)
             let w = max(expandedSize.width, collapsed.width)
             let expanded = CGRect(x: notch.midX - w / 2, y: top - expandedSize.height, width: w, height: expandedSize.height)
             let cw = max(chatSize.width, collapsed.width)
@@ -109,7 +109,7 @@ public struct PeakGeometry: PeakGeometryProviding {
         var out = l
         out.chat = chat; out.peek = peek; out.edgeTrigger = edge; out.peekStripHeight = peekSize.height
         if let n = l.notchRect {
-            out.wing = CGRect(x: n.maxX, y: n.minY, width: wingWidth, height: n.height)
+            out.wing = CGRect(x: n.minX - wingWidth, y: n.minY, width: wingWidth, height: n.height)
             out.progressLine = CGRect(x: l.collapsed.minX + 12, y: n.minY - 5, width: max(0, l.collapsed.width - 24), height: 2)
         }
         let u = l.collapsed.union(l.expanded).union(chat).union(peek)

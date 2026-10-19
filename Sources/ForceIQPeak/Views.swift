@@ -296,13 +296,12 @@ struct PeakRootView: View {
 
     @ViewBuilder var collapsed: some View {
         if panel.mode == .notch {
-            // The notch itself has no pixels; the black wing to its right is the always-on status: "PEAK" in green (gold
+            // The notch itself has no pixels; the black wing to its left is the always-on status: "PEAK" in green (gold
             // "PRESENTING" while presenting), in the menu bar row, merged with the notch.
             ZStack(alignment: .topLeading) {
                 Color.clear.frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
                 NotchWing(spec: StatusBadge.spec(presenting: controller.presenting))
-                    .frame(width: panel.layout.wing.width, height: panel.layout.wing.height)
-                    .offset(x: panel.notchWidth)
+                    .frame(width: panel.layout.wing.width, height: panel.layout.wing.height)     // the wing is the leftmost part
             }
         } else {
             collapsedPill

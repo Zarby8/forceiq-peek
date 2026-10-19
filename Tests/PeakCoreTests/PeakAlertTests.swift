@@ -51,7 +51,7 @@ import XCTest
         let l = PeakGeometry().layout(for: m5)
         XCTAssertTrue(l.triggers(at: CGPoint(x: 1024, y: 1329)))
         XCTAssertTrue(l.triggers(at: CGPoint(x: 899 - 35, y: 1329)), "a little past the notch edge")
-        XCTAssertFalse(l.triggers(at: CGPoint(x: 899 - 80, y: 1329)), "not the whole menu bar")
+        XCTAssertFalse(l.triggers(at: CGPoint(x: l.collapsed.minX - 60, y: 1329)), "not the whole menu bar: only a little past the shape")
         XCTAssertFalse(l.triggers(at: CGPoint(x: 1024, y: 1330 - 20)), "not below the first few points of the edge")
         for s in [PeakLayout.Surface.collapsed, .peek, .home, .chat] {
             XCTAssertNotEqual(l.hitRect(s), l.edgeTrigger, "the trigger is never a surface: it takes no clicks")

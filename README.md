@@ -99,13 +99,13 @@ process)" to phone.py, so Peak carries no token and no secret.
   Add that folder once by hand: Raycast Settings → Extensions → + → Add Script Directory.
 
 ## Always-on PEAK status (the notch wing)
-Collapsed Peak is the hardware notch plus a **status wing** on its right: a black extension in the menu bar row, flush with
+Collapsed Peak is the hardware notch plus a **status wing** on its left: a black extension in the menu bar row, flush with
 the notch and exactly as tall (no flare, nothing below), so the two read as one wider notch. It says **PEAK** in brand
 green (#4FFF4F), or **PRESENTING** in gold while presenting. This is the compact state the established notch apps use
 (Boring Notch's closed notch and DynamicNotchKit's compact leading/trailing content both draw beside the notch at notch
 height, with ~6 pt top and ~14 pt bottom corner radii). Hover or click on the wing opens Peak; the top-edge trigger covers
 the whole shape. The wing is 96 pt (`PeakGeometry.wingWidth`; set it to 0 to go back to a bare notch), sized for the longest
-word and the empty gap right of the M5's notch; it covers whatever menu-bar items sit under it. The Studio Display pill has no
+word; it covers whatever menu-bar items sit under it (the last app menus, on an app with very long menus). The Studio Display pill has no
 wing (the pill is the status). The menu-bar status item is the same capsule ("PEAK" / "PEAK · PRESENTING" on black); a crowded
 notch-Mac menu bar can hide it (the M5's had no on-screen status-item window), which is why the wing exists.
 

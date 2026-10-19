@@ -61,7 +61,7 @@ import XCTest
         let n = l.notchRect!
         XCTAssertEqual(l.progressLine.height, 2)
         XCTAssertLessThan(l.progressLine.maxY, n.minY, "under the notch, in the screen content, never beside it in the menu bar")
-        XCTAssertGreaterThanOrEqual(l.progressLine.minX, n.minX); XCTAssertLessThanOrEqual(l.progressLine.maxX, l.collapsed.maxX)
+        XCTAssertGreaterThanOrEqual(l.progressLine.minX, l.collapsed.minX); XCTAssertLessThanOrEqual(l.progressLine.maxX, n.maxX)
         XCTAssertTrue(l.canvas.contains(l.progressLine))
         for s in [PeakLayout.Surface.collapsed, .peek, .home, .chat] {
             XCTAssertFalse(l.hitRect(s) == l.progressLine, "not a surface")

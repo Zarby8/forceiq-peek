@@ -273,7 +273,7 @@ final class GeometryTests: XCTestCase {
         XCTAssertEqual(l.collapsed.maxY, 982)
         XCTAssertEqual(l.collapsed.height, 32)
         let n = l.notchRect!
-        XCTAssertEqual(l.collapsed.minX, n.minX); XCTAssertEqual(l.collapsed.maxX, n.maxX + PeakGeometry().wingWidth)
+        XCTAssertEqual(l.collapsed.maxX, n.maxX); XCTAssertEqual(l.collapsed.minX, n.minX - PeakGeometry().wingWidth)
         XCTAssertEqual(l.collapsed.minY, n.minY, "exactly the notch's height: never taller, never hanging below it")
         XCTAssertEqual(l.expanded.maxY, 982)
         XCTAssertEqual(l.expanded.midX, l.notchRect!.midX, accuracy: 0.5)
@@ -526,13 +526,13 @@ func md5Hex(_ d: Data) -> String { Insecure.MD5.hash(data: d).map { String(forma
 
 // Chris's M5, measured 10.19.2026 (14" MacBook Pro, "More Space" 2048×1330): notch x 899…1149, 43 pt tall.
 final class NotchFitM5Tests: XCTestCase {
-    func testCollapsedIsTheMeasuredNotchPlusItsRightWing() {
+    func testCollapsedIsTheMeasuredNotchPlusItsLeftWing() {
         let m5 = ScreenDescriptor(uuid: "M5", name: "Built-in Display", frame: CGRect(x: 0, y: 0, width: 2048, height: 1330),
                                   safeAreaTop: 43, auxiliaryTopLeft: CGRect(x: 0, y: 1287, width: 899, height: 43),
                                   auxiliaryTopRight: CGRect(x: 1149, y: 1287, width: 899, height: 43))
         let l = PeakGeometry().layout(for: m5)
-        XCTAssertEqual(l.collapsed, CGRect(x: 899, y: 1287, width: 250 + 96, height: 43), "the notch plus a 96 pt wing on its right, 43 pt tall")
-        XCTAssertEqual(l.wing, CGRect(x: 1149, y: 1287, width: 96, height: 43))
+        XCTAssertEqual(l.collapsed, CGRect(x: 899 - 96, y: 1287, width: 250 + 96, height: 43), "the notch plus a 96 pt wing on its left, 43 pt tall")
+        XCTAssertEqual(l.wing, CGRect(x: 899 - 96, y: 1287, width: 96, height: 43))
         XCTAssertEqual(l.hitRect(.collapsed), l.collapsed)
     }
 
