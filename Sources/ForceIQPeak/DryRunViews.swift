@@ -159,7 +159,7 @@ struct DryRunView: View {
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.isFloatingPanel = true; panel.level = .statusBar; panel.hidesOnDeactivate = false
         panel.backgroundColor = .clear; panel.isOpaque = false; panel.hasShadow = true
-        panel.title = "Peak desktop dry run"
+        panel.title = "Peek desktop dry run"
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         host.frame = NSRect(origin: .zero, size: size)
         panel.contentView = host

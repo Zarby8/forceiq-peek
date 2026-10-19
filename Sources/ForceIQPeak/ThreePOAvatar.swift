@@ -3,7 +3,7 @@ import AppKit
 import PeakCore
 import SwiftUI
 
-// ───────────────────────────── 3PO avatar: BOB Motion ForceIQ-Peak-3PO-v1 (Resources/threepo) ─────────────────────────────
+// ───────────────────────────── 3PO avatar: BOB Motion ForceIQ-Peek-3PO-v1 (Resources/threepo) ─────────────────────────────
 /// Assets: the bundled pack (Resources/threepo: MANIFEST.json v1.1 as shipped, hevc_alpha 64 px at 60 fps and, from the
 /// v1.1 add-on, at 120 fps under fps120/, the neutral still), or
 /// FORCEIQ_PEAK_3PO_DIR=<an unpacked pack root>. hevc_alpha (real alpha, proven in AVPlayerLayer on macOS 26.6.2);
@@ -36,7 +36,7 @@ import SwiftUI
     }()
     /// FORCEIQ_PEAK_3PO_FPS=60 pins the 60 fps pack and rig rate everywhere.
     static let fpsOverride = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_3PO_FPS"]
-    /// The rate for the screen Peak is on (AvatarFrameRate.choose: 120 only on a ≥ 120 Hz screen, else 60).
+    /// The rate for the screen Peek is on (AvatarFrameRate.choose: 120 only on a ≥ 120 Hz screen, else 60).
     static func rate(for screen: NSScreen?, px: Int? = nil) -> AvatarFrameRate {
         let has120 = pack120.map { p in px.map { p.sizes.contains($0) } ?? true } ?? false
         return AvatarFrameRate.choose(screenMaxFPS: screen?.maximumFramesPerSecond, has120: has120, override: fpsOverride)

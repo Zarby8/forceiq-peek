@@ -44,7 +44,7 @@ final class GPULightStateTests: XCTestCase {
         XCTAssertEqual(GPULight.evaluate(win(5 * 3600), readAt: lightNow.addingTimeInterval(-300), now: lightNow), .green, "300 s is still fresh")
         let noLive = GPULight.evaluate(win(5 * 3600, live: nil), readAt: lightNow, now: lightNow)
         XCTAssertEqual(noLive, .unknown("Command's live status couldn't be read"))
-        XCTAssertEqual(GPUGate.refusal(noLive), "Meeting status unknown (Command's live status couldn't be read): 5090 GPU jobs are held until Peak can see there's no meeting within 2 h. Nothing ran.")
+        XCTAssertEqual(GPUGate.refusal(noLive), "Meeting status unknown (Command's live status couldn't be read): 5090 GPU jobs are held until Peek can see there's no meeting within 2 h. Nothing ran.")
     }
 
     func testTheClockMovesTheLightWithoutANewRead() {
@@ -199,7 +199,7 @@ final class GPUGateClassifierTests: XCTestCase {
     }
 }
 
-/// The app wires the gate into every GPU path, and no Peak code path can reach the recorder, its watchdog or the 5090.
+/// The app wires the gate into every GPU path, and no Peek code path can reach the recorder, its watchdog or the 5090.
 final class GPUGuardTests: XCTestCase {
     static let sources = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Sources")
 
@@ -237,7 +237,7 @@ final class GPUGuardTests: XCTestCase {
         // The carve-out is exactly one class: ChildProcess holds every spawn/kill in DesktopCua.swift, nothing else does.
         let cua = try String(contentsOf: Self.sources.appendingPathComponent("PeakCore/DesktopCua.swift"), encoding: .utf8)
         XCTAssertEqual(cua.components(separatedBy: "posix_spawn(").count - 1, 1, "one spawn call")
-        // The light reads only Peak's own engine feed; its file has no transport or network of its own.
+        // The light reads only Peek's own engine feed; its file has no transport or network of its own.
         let light = try String(contentsOf: Self.sources.appendingPathComponent("PeakCore/GPULight.swift"), encoding: .utf8)
         for bad in ["URLSession", "transport.", "post(", "get("] { XCTAssertFalse(light.contains(bad), bad) }
     }

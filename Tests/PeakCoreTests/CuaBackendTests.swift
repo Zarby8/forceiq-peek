@@ -111,7 +111,7 @@ final class Box<T>: @unchecked Sendable { private let l = NSLock(); private var 
         let call = try XCTUnwrap(py.range(of: "asyncio.run(invoke(", range: main.upperBound..<py.endIndex))
         XCTAssertLessThan(pre.lowerBound, call.lowerBound)
         XCTAssertTrue(py.contains("if env.get(FLAG) != \"1\":"))
-        XCTAssertEqual(CuaConfig.childEnvironment([:])[CuaGate.env], "0", "the child never sees the flag on unless Peak had it on")
+        XCTAssertEqual(CuaConfig.childEnvironment([:])[CuaGate.env], "0", "the child never sees the flag on unless Peek had it on")
     }
 
     // ── 2. production FLOW is refused (pid 11311, com.forceiq.flowai, /Applications/FLOW.app); only the isolated UAT FLOW ──
@@ -320,9 +320,9 @@ final class Box<T>: @unchecked Sendable { private let l = NSLock(); private var 
         for bad in ["", "-1", "10001", "1e3", "300 ", "x"] {
             XCTAssertNil(CuaConfig.childEnvironment([CuaConfig.smokeHoldEnv: bad])[CuaConfig.smokeHoldEnv], bad)
         }
-        let std = CuaConfig.standard(resources: "/x/ForceIQ Peak.app/Contents/Resources", env: [:])
+        let std = CuaConfig.standard(resources: "/x/ForceIQ Peek.app/Contents/Resources", env: [:])
         XCTAssertEqual(std.executable, NSHomeDirectory() + "/ForceIQ/.venv-peak-cua/bin/python")
-        XCTAssertEqual(std.arguments, ["-I", "-B", "/x/ForceIQ Peak.app/Contents/Resources/cua/peak_cua_runner.py"])
+        XCTAssertEqual(std.arguments, ["-I", "-B", "/x/ForceIQ Peek.app/Contents/Resources/cua/peak_cua_runner.py"])
     }
 
     // ── the run summary names the route that pressed ──

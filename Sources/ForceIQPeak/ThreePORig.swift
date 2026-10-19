@@ -5,7 +5,7 @@ import RealityKit
 import SwiftUI
 import simd
 
-// ───────────────────────────── 3PO live rig (BOB Motion ForceIQ-Peak-3PO-v1 rig/3po.usdz, RealityKit) ─────────────────────────────
+// ───────────────────────────── 3PO live rig (BOB Motion ForceIQ-Peek-3PO-v1 rig/3po.usdz, RealityKit) ─────────────────────────────
 /// On by default (it passed the M5 first-load check). FORCEIQ_PEAK_3PO_RIG=0 turns it off (the rendered loops play);
 /// FORCEIQ_PEAK_3PO_RIG=<path to a .usdz> loads that file instead of the bundled one.
 @MainActor enum ThreePORigFlag {
@@ -317,7 +317,7 @@ final class ThreePORigHost: NSView {
 }
 
 /// A non-AR RealityKit view on black: the pack's camera (85 mm, fov 14.25°, at (0, -0.30, 15) looking down -Z) and
-/// key/fill lights. Mounted only while the chat is open and live, so a collapsed Peak renders nothing.
+/// key/fill lights. Mounted only while the chat is open and live, so a collapsed Peek renders nothing.
 @available(macOS 15.0, *)
 final class ThreePORigARView: ARView {
     let driver: ThreePORigDriver

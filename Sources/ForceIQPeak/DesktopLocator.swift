@@ -30,9 +30,9 @@ struct AXDesktopLocator: DesktopLocator {
                 let page = l == CommandLink.schedule ? "schedule" : (l.contains("%2Fsessions") ? "room page" : "client page")
                 return handler.map { done(true, "\(page) link validated; handled by \($0); not opened") } ?? done(false, "no app handles forceiq-command://")
             case .startControl:
-                return done(false, "no start link: Command links open pages only and Peak never sends workflow=")
+                return done(false, "no start link: Command links open pages only and Peek never sends workflow=")
             default:
-                return done(false, "Peak owns no deep link for this target")
+                return done(false, "Peek owns no deep link for this target")
             }
         case .urlScheme:
             switch step.kind {
@@ -55,14 +55,14 @@ struct AXDesktopLocator: DesktopLocator {
         case .accessibility:
             guard let i = info else { return done(false, "\(step.app) is not installed") }
             guard let pid = i.pid else { return done(false, "\(i.name) is not running; a dry run never launches it") }
-            guard AXIsProcessTrusted() else { return done(false, "Peak has no Accessibility permission here; not requested") }
+            guard AXIsProcessTrusted() else { return done(false, "Peek has no Accessibility permission here; not requested") }
             let r = AXSearch(pid: pid, hints: step.hints, blockers: step.blockers, budget: axBudget, deadline: axDeadline).run(stop: stop)
             if r.stopped { return done(false, "stopped mid-lookup after \(r.visited) element(s)", stopped: true) }
             if let f = r.found { return done(true, "\(f) (\(r.visited) element(s) read; never pressed)") }
             if let b = r.blocker { return done(false, "blocked: \(b) (\(r.visited) element(s) read; not signed in, nothing entered)", blocked: true) }
             return done(false, "no element matching \(step.hints.map { "'\($0)'" }.joined(separator: "/")) in \(r.visited) element(s)\(r.timedOut ? " (time budget hit)" : "")")
         case .cua:
-            return done(false, "Cua is last and not wired into Peak; reported only")
+            return done(false, "Cua is last and not wired into Peek; reported only")
         }
     }
 

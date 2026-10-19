@@ -5,7 +5,7 @@ import Foundation
 //   GET /api/peak/next-session      this Mac's engine only (engine/peaknextsession.py; local-only route, refuses phones)
 //
 // The engine reads Command (GET /schedule/bookings, GET /invoices/) through its existing Command session and back-off
-// (#23), and Ghost (meeting packs + the client's games) with GETs only. Peak never sees a token and never writes, sends,
+// (#23), and Ghost (meeting packs + the client's games) with GETs only. Peek never sees a token and never writes, sends,
 // books or invoices. The pill names the client and counts down locally (a coarse timer in the view; no animation loop);
 // the feed is polled at most every 5 min (NextSessionModel.pollInterval) off the app's existing 30 s refresh tick, and
 // kept in memory only. A dead (403) session stops asking for this run; an expired one (401 / dead) waits 30 min, and the
@@ -207,9 +207,9 @@ public enum NextSessionCountdown {
 
     static func when(_ d: Date) -> String { DateFormatter.localizedString(from: d, dateStyle: .medium, timeStyle: .short) }
 
-    /// The prompt Ask TRON copies: what Peak saw, read-only, for TRON to advise on. Nothing is sent from Peak.
+    /// The prompt Ask TRON copies: what Peek saw, read-only, for TRON to advise on. Nothing is sent from Peek.
     public func tronPrompt(_ w: GapWarning) -> String {
-        var lines = ["TRON, Peak flagged a gap (read-only check; nothing was sent or changed):",
+        var lines = ["TRON, Peek flagged a gap (read-only check; nothing was sent or changed):",
                      "Client: \(w.client)", "Gap: \(w.text) [\(w.state.rawValue)]"]
         if !w.note.isEmpty { lines.append("Note: \(w.note)") }
         if let s = session, s.client == w.client { lines.append("Session: \(Self.when(s.scheduledAt)), \(s.durationMinutes) min") }
@@ -239,7 +239,7 @@ public extension DemoData {
     static func nextSessionJSON(now: Date = Date()) -> String {
         let f = ISO8601DateFormatter()
         let at = f.string(from: now.addingTimeInterval(42 * 60))
-        return #"{"ok":true,"session":{"client":"Sample Skater","scheduled_at":"\#(at)","starts_in_s":2520,"duration_minutes":60,"session_type":"Breakdown","today":true},"since_last_met":{"state":"ok","last_met":"2026-10-12","lines":["Last met 2026-10-12.","2 games since then.","1 G, 1 A, 2 P since last met.","Latest: 2026-10-18 vs Demo Wolves, L 1-3."],"note":""},"warnings":[{"kind":"export_missing","state":"unknown","client":"Sample Skater","text":"Breakdown export for Sample Skater's session today: unknown","note":"Unknown: Command has no read endpoint for breakdown exports yet, so Peak can't tell. Requested from Command via TRON."},{"kind":"invoice_missing","state":"present","client":"Sample Skater","text":"Invoice missing for Sample Skater's session today","note":""},{"kind":"invoice_unpaid","state":"present","client":"Demo Player","text":"Demo Player: invoice unpaid 9 days ($400.00)","note":""},{"kind":"invoice_unpaid","state":"present","client":"Test Client Other","text":"Test Client Other: invoice unpaid 12 days ($400.00)","note":""}],"checks":{"export_missing":"unknown","invoice_missing":"present","invoice_unpaid":"present"}}"#
+        return #"{"ok":true,"session":{"client":"Sample Skater","scheduled_at":"\#(at)","starts_in_s":2520,"duration_minutes":60,"session_type":"Breakdown","today":true},"since_last_met":{"state":"ok","last_met":"2026-10-12","lines":["Last met 2026-10-12.","2 games since then.","1 G, 1 A, 2 P since last met.","Latest: 2026-10-18 vs Demo Wolves, L 1-3."],"note":""},"warnings":[{"kind":"export_missing","state":"unknown","client":"Sample Skater","text":"Breakdown export for Sample Skater's session today: unknown","note":"Unknown: Command has no read endpoint for breakdown exports yet, so Peek can't tell. Requested from Command via TRON."},{"kind":"invoice_missing","state":"present","client":"Sample Skater","text":"Invoice missing for Sample Skater's session today","note":""},{"kind":"invoice_unpaid","state":"present","client":"Demo Player","text":"Demo Player: invoice unpaid 9 days ($400.00)","note":""},{"kind":"invoice_unpaid","state":"present","client":"Test Client Other","text":"Test Client Other: invoice unpaid 12 days ($400.00)","note":""}],"checks":{"export_missing":"unknown","invoice_missing":"present","invoice_unpaid":"present"}}"#
     }
 }
 

@@ -4,7 +4,7 @@ import RealityKit
 import XCTest
 @testable import PeakCore
 
-// 3PO avatar: BOB Motion ForceIQ-Peak-3PO-v1. State mapping from the chat's transcript, the transition planner, the
+// 3PO avatar: BOB Motion ForceIQ-Peek-3PO-v1. State mapping from the chat's transcript, the transition planner, the
 // director, the rig timeline and curves, the tier fallback (rig → loops → static), and the bundle vs the pack MANIFEST.
 let threePODir = peakDir.appendingPathComponent("Resources/threepo")
 

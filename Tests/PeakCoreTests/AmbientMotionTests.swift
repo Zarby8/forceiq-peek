@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import PeakCore
 
-// Idle CPU guard. Peak is "beautiful with motion", but ambient motion must never re-render SwiftUI at display refresh
+// Idle CPU guard. Peek is "beautiful with motion", but ambient motion must never re-render SwiftUI at display refresh
 // while the panel sits idle (the native glow's TimelineView(.animation) did: ~8-13 % CPU with the chat open, idle).
 // These scan the app's sources for every way to run a forever animation and pin each to an allowed, bounded form.
 // The runtime check is peak/scripts/cpu_idle_check.sh (expanded idle ≤ 2 %, exits 1 above).

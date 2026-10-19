@@ -107,13 +107,13 @@ final class MotionPolishGuardTests: XCTestCase {
         XCTAssertTrue(t.contains(".onSubmit { Task { await store.send() } }"), "Return sends")
     }
 
-    /// Every control Peak draws for a tap is at least 28 pt in both directions.
+    /// Every control Peek draws for a tap is at least 28 pt in both directions.
     func testTapTargetsAtLeast28() throws {
         let v = try code("Views.swift")
         let button = try body(v, from: "struct PeakButton", to: "\n}\n")
         XCTAssertTrue(button.contains("minHeight: PeakMotion.minTapTarget"), "PeakButton")
         let tabs = try body(v, from: "struct TabPills", to: "\n}\n")
-        XCTAssertTrue(tabs.contains("minHeight: PeakMotion.minTapTarget"), "Peak | 3PO pills")
+        XCTAssertTrue(tabs.contains("minHeight: PeakMotion.minTapTarget"), "Peek | 3PO pills")
         let pills = try body(try code("ThreePOViews.swift"), from: "struct ModelPills", to: "\n}\n")
         XCTAssertTrue(pills.contains("minHeight: PeakMotion.minTapTarget"), "model pills")
         let panes = try body(try code("ThreePOMemoryViews.swift"), from: "struct PanePills", to: "\n}\n")

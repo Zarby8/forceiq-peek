@@ -21,7 +21,7 @@ public enum EngineParse {
         guard let m = o["meeting"] as? [String: Any], let at = date(str(m["scheduled_at"])) else { return (nil, err) }
         let client = str(m["client"]).trimmingCharacters(in: .whitespaces)
         guard !client.isEmpty else { return (nil, err) }
-        // Peak never joins: a booking's join / meeting URL is ignored; only Command's room page (validated) opens.
+        // Peek never joins: a booking's join / meeting URL is ignored; only Command's room page (validated) opens.
         let open = CommandLink.safe((m["open_url"] as? String) ?? "")
         return (MeetingRow(client: client, scheduledAt: at, durationMinutes: (m["duration_minutes"] as? Int) ?? 60,
                            joinURL: nil, openURL: open), err)
@@ -85,7 +85,7 @@ public enum EngineParse {
     }
 }
 
-/// Command deep links Peak may open: forceiq-command://app/open#path=<path> under /sessions, /clients or /schedule only,
+/// Command deep links Peek may open: forceiq-command://app/open#path=<path> under /sessions, /clients or /schedule only,
 /// and NEVER with workflow= (Command's meeting-with-client workflow auto-joins LiveKit). Anything else → the schedule.
 public enum CommandLink {
     public static let schedule = "forceiq-command://app/open#path=%2Fschedule"

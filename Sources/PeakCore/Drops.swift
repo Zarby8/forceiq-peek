@@ -1,6 +1,6 @@
 import Foundation
 
-/// ForceIQ Peak drop zones (engine/peakdrop.py via /api/peak/title-drop|shift-drop/preview|apply|undo).
+/// ForceIQ Peek drop zones (engine/peakdrop.py via /api/peak/title-drop|shift-drop/preview|apply|undo).
 /// Drop a file → pick a zone → Preview (read-only: resolves the client, renders a scratch title) → the description →
 /// Run (apply; the engine first answers needs_confirm) → Confirm. Undo the same way. Nothing runs without the taps.
 public enum DropZone: String, CaseIterable, Sendable {
@@ -66,7 +66,7 @@ public struct DropPreview: Equatable, Sendable {
     }
 
     public var prompt: String {
-        "ForceIQ Peak drop (\(zone.title)) for \(client ?? "no client resolved"): \(description)\nRule: nothing is replaced or placed without my explicit confirm."
+        "ForceIQ Peek drop (\(zone.title)) for \(client ?? "no client resolved"): \(description)\nRule: nothing is replaced or placed without my explicit confirm."
     }
 }
 
@@ -102,7 +102,7 @@ public enum DropPhase: Equatable, Sendable {
     public var active: Bool { phase != .idle }
 
     public func received(_ url: URL) {
-        guard url.isFileURL, url.path.hasPrefix("/") else { phase = .failed("Peak only takes files on this Mac."); return }
+        guard url.isFileURL, url.path.hasPrefix("/") else { phase = .failed("Peek only takes files on this Mac."); return }
         lastURL = url; shiftState = nil; polls = 0
         phase = .pending(url, suggested: DropZone.suggested(for: url))
     }
@@ -133,7 +133,7 @@ public enum DropPhase: Equatable, Sendable {
         var b: [String: Any] = ["path": url.path]
         if zone == .title, let g = game { b["game"] = g }
         let (c, d) = await transport.post("/api/peak/\(zone.rawValue)/preview", body(b))
-        guard c == 200 || c == 500 else { phase = .failed("This Mac's GOAT doesn't have Peak drops yet."); return }
+        guard c == 200 || c == 500 else { phase = .failed("This Mac's GOAT doesn't have Peek drops yet."); return }
         if zone == .title, let ch = DropPreview.choice(d) { phase = .choosing(url, client: ch.client, choices: ch.choices, message: ch.message); return }
         let (p, err) = DropPreview.parse(zone, d)
         phase = p.map { .described($0) } ?? .failed(err ?? "GOAT couldn't preview that drop.")
@@ -179,7 +179,7 @@ public enum DropPhase: Equatable, Sendable {
         logger?.log("drop undo zone=\(p.zone.rawValue)")
         let (c, d) = await transport.post("/api/peak/\(p.zone.rawValue)/undo", body(["token": p.token, "confirm": true]))
         let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any]
-        phase = c == 200 && (o?["ok"] as? Bool) == true ? .note("Undone. Peak put things back the way they were.") : .failed((o?["message"] as? String) ?? "Couldn't undo.")
+        phase = c == 200 && (o?["ok"] as? Bool) == true ? .note("Undone. Peek put things back the way they were.") : .failed((o?["message"] as? String) ?? "Couldn't undo.")
     }
 
     /// GET /api/peak/shift-drop/status/<token>: one read. The view calls it every ~10 s while the sheet is open and the

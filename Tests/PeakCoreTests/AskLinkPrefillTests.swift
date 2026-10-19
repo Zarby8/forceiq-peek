@@ -85,7 +85,7 @@ import XCTest
         XCTAssertEqual(c.askText, "hello"); XCTAssertEqual(s.draft, ""); XCTAssertTrue(t.posts.isEmpty)
     }
 
-    /// Peak's half of the stale-health rule: Peak assembles no machine context for 3PO. A chat turn carries the typed
+    /// Peek's half of the stale-health rule: Peek assembles no machine context for 3PO. A chat turn carries the typed
     /// text, the session and the model pick only, so no snapshot (health, NAS, status, reading) can ride along from here.
     func testThreePOTurnCarriesNoMachineSnapshot() async {
         let (_, s, t, _) = make()

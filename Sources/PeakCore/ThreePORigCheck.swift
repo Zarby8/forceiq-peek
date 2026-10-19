@@ -2,7 +2,7 @@
 import Foundation
 import RealityKit
 
-/// The 3PO rig's first-load check (rig/3po.usdz from BOB Motion ForceIQ-Peak-3PO-v1): it loads, every prim the drive
+/// The 3PO rig's first-load check (rig/3po.usdz from BOB Motion ForceIQ-Peek-3PO-v1): it loads, every prim the drive
 /// needs is there (rig/README.md node contract), and the load fix is applied (talk_light exports fully lit → 0).
 /// Any failure is a reason, and the 3PO slot falls back to the rendered loops, then the static droid mark.
 @available(macOS 15.0, *)

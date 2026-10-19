@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import PeakCore
 
-// The Ghost mark (BOB pack, AVPlayerLooper) was ~1.1 % of Peak's ~1.15 % idle CPU with the chat open: the same build
+// The Ghost mark (BOB pack, AVPlayerLooper) was ~1.1 % of Peek's ~1.15 % idle CPU with the chat open: the same build
 // with the mark's video swapped for the placeholder measured 0.06 %. It now parks its steady loop like the 3PO droid
 // (AvatarLoopPark). The runtime check is peak/scripts/cpu_idle_check.sh (waits for "ghost mark parked"; 2.0 % / 0.5 %).
 

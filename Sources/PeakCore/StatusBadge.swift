@@ -1,7 +1,7 @@
 import Foundation
 
-/// The always-on menu-bar badge: "PEAK" in brand green on black, visible whether or not the notch sheet is up (it is also
-/// the one sign Peak is running, since collapsed Peak is just the notch). Presenting mode turns it gold so a shared screen
+/// The always-on menu-bar badge: "PEEK" in brand green on black, visible whether or not the notch sheet is up (it is also
+/// the one sign Peek is running, since collapsed Peek is just the notch). Presenting mode turns it gold so a shared screen
 /// shows it. A black capsule keeps the colors legible on any menu bar, light or dark.
 public struct StatusBadgeSpec: Equatable, Sendable {
     public let text: String
@@ -15,8 +15,8 @@ public struct StatusBadgeSpec: Equatable, Sendable {
 public enum StatusBadge {
     public static func spec(presenting: Bool) -> StatusBadgeSpec {
         presenting
-            ? StatusBadgeSpec(text: "PEAK · PRESENTING", wingText: "PRESENTING", textHex: Brand.goldHex, backgroundHex: Brand.blackHex,
-                              accessibilityLabel: "ForceIQ Peak, presenting, client details hidden")
-            : StatusBadgeSpec(text: "PEAK", wingText: "PEAK", textHex: Brand.greenHex, backgroundHex: Brand.blackHex, accessibilityLabel: "ForceIQ Peak")
+            ? StatusBadgeSpec(text: "PEEK · PRESENTING", wingText: "PRESENTING", textHex: Brand.goldHex, backgroundHex: Brand.blackHex,
+                              accessibilityLabel: "ForceIQ Peek, presenting, client details hidden")
+            : StatusBadgeSpec(text: "PEEK", wingText: "PEEK", textHex: Brand.greenHex, backgroundHex: Brand.blackHex, accessibilityLabel: "ForceIQ Peek")
     }
 }

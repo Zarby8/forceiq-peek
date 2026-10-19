@@ -7,10 +7,10 @@
 
 # Optional parameters:
 # @raycast.icon images/peak.png
-# @raycast.packageName ForceIQ Peak
+# @raycast.packageName ForceIQ Peek
 
 # Documentation:
-# @raycast.description forceiq-peak://voice: first run starts dictation, the next run stops it and hands the words to 3PO. Needs Voice turned on in Peak's Settings. Audio stays on this Mac.
+# @raycast.description forceiq-peak://voice: first run starts dictation, the next run stops it and hands the words to 3PO. Needs Voice turned on in Peek's Settings. Audio stays on this Mac.
 # @raycast.author ForceIQ
 
 open "forceiq-peak://voice"

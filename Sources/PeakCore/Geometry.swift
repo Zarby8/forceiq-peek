@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-/// What Peak needs to know about one display (AppKit fills it from NSScreen; tests use mocks).
+/// What Peek needs to know about one display (AppKit fills it from NSScreen; tests use mocks).
 public struct ScreenDescriptor: Equatable, Sendable {
     public let uuid: String
     public let name: String
@@ -33,13 +33,13 @@ public struct PeakLayout: Equatable, Sendable {
     public var peek: CGRect = .zero
     /// Notch mode: the always-on status wing, in the menu bar row flush against the notch's left edge and exactly as tall as
     /// the notch, so the black shape reads as one wider notch (the way Boring Notch and DynamicNotchKit draw their compact
-    /// state). It is part of `collapsed`, so hover and click on it open Peak.
+    /// state). It is part of `collapsed`, so hover and click on it open Peek.
     public var wing: CGRect = .zero
     /// Notch mode: a 2 pt line hanging just under the notch (the notch itself has no pixels), for live progress.
     /// Not a hit rect: it never takes a click.
     public var progressLine: CGRect = .zero
     /// Notch mode: a thin strip along the very top screen edge, a little wider than the notch. The pointer pinned there
-    /// opens Peak, but this strip never takes a click (it is not part of any hit rect), so the menu bar stays usable.
+    /// opens Peek, but this strip never takes a click (it is not part of any hit rect), so the menu bar stays usable.
     public var edgeTrigger: CGRect = .zero
 
     public enum Surface: Sendable { case collapsed, peek, home, chat }

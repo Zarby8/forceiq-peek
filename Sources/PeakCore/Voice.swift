@@ -1,9 +1,9 @@
 import Foundation
 
-// ForceIQ Peak voice (toggle-only dictation into 3PO). Pure logic, unit-tested: the gate, the model pins, the live-words
+// ForceIQ Peek voice (toggle-only dictation into 3PO). Pure logic, unit-tested: the gate, the model pins, the live-words
 // model (confirmed words only), the name guard (the CTC name boost never overwrites a common word; "'s" restored) and the
 // latency bookkeeping. The engine (FluidAudio + Parakeet on the ANE) and the mic live in the app target (Voice.swift).
-// Audio never leaves this Mac and is never written to disk; only the model weights are (under <Peak root>/models).
+// Audio never leaves this Mac and is never written to disk; only the model weights are (under <Peek root>/models).
 
 // ───────────────────────────── gate ─────────────────────────────
 /// Voice is opt-in: off until the coach turns it on in Settings (settings.json `voiceEnabled`). With no setting the
@@ -20,7 +20,7 @@ public enum VoiceGate {
 /// Model License weights (no EOU, Nemotron or Unified): both are CC-BY-4.0 (credit in THIRD_PARTY_NOTICES.md).
 public struct VoiceModelPin: Equatable, Sendable {
     public let repo: String          // Hugging Face repo FluidAudio downloads from
-    public let folder: String        // folder under <Peak root>/models
+    public let folder: String        // folder under <Peek root>/models
     public let revision: String      // immutable HF commit
     public let upstream: String      // the NVIDIA model it repacks
     public let approxMB: Int
@@ -37,7 +37,7 @@ public enum VoiceModels {
                                           revision: "accdafd8cf8a2ff1cabe3c11e54416b405d409aa", upstream: "NVIDIA Parakeet CTC 110M",
                                           approxMB: 98, label: "Parakeet CTC 110M (name boost)")
     public static let all = [tdt, ctc]
-    /// <Peak root>/models: never a temp folder.
+    /// <Peek root>/models: never a temp folder.
     public static func root(_ peakRoot: URL) -> URL { peakRoot.appendingPathComponent("models", isDirectory: true) }
     public static func dir(_ pin: VoiceModelPin, peakRoot: URL) -> URL { root(peakRoot).appendingPathComponent(pin.folder, isDirectory: true) }
 }
@@ -61,7 +61,7 @@ public enum VoicePhase: Equatable, Sendable {
     public var line: String? {
         switch self {
         case .off, .ready, .listening, .finishing: return nil
-        case .needsModels: return "Voice needs its speech model (about 560 MB, downloaded once into your Peak folder)."
+        case .needsModels: return "Voice needs its speech model (about 560 MB, downloaded once into your Peek folder)."
         case .downloading(let f, let what): return "Downloading \(what): \(Int((max(0, min(1, f)) * 100).rounded())) %"
         case .loading: return "Loading the speech model on this Mac…"
         case .failed(let m): return m
@@ -173,7 +173,7 @@ public enum LiveWords {
 
 // ───────────────────────────── name guard ─────────────────────────────
 /// Common English words the name boost must not overwrite. `hard` words are never replaced at all (months, weekdays,
-/// numbers, function words and Peak's own command words). Any other dictionary word (macOS /usr/share/dict/web2, loaded
+/// numbers, function words and Peek's own command words). Any other dictionary word (macOS /usr/share/dict/web2, loaded
 /// by the app) may only become a client name when it is a near-homophone of it ("Holiday" → "Halliday": similarity ≥ 0.7
 /// and the same first letter). Roster names themselves are never treated as common words.
 public struct CommonWords: Sendable {

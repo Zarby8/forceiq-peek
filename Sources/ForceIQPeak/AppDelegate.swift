@@ -20,7 +20,7 @@ final class PeakPanel: NSPanel {
     }
     override var canBecomeKey: Bool { true }      // the ask field needs keyboard focus (the app still doesn't activate)
     override var canBecomeMain: Bool { false }
-    /// Right-click (or ctrl-click) on Peak's shell, when no view under the pointer handled it: the same menu the menu-bar item
+    /// Right-click (or ctrl-click) on Peek's shell, when no view under the pointer handled it: the same menu the menu-bar item
     /// used to hold (Show, Displays, Presenting, Do not disturb, Shortcut, Quit). The wing is where the menu lives now.
     var onContextMenu: ((NSEvent) -> Void)?
     override func rightMouseDown(with event: NSEvent) {
@@ -275,7 +275,7 @@ enum Screens {
         brief = DayBriefController(speaker: briefSpeaker, voiceOn: { [weak self] in self?.voice.enabled ?? false }, logger: log)
         voice.interrupt = { [weak self] in self?.brief.interruptIfSpeaking() ?? false }
         voice.onDisabled = { [weak self] in self?.brief.silence() }
-        threePO.dayBrief = { [weak self] in await self?.composeBrief() ?? "Peak couldn't build the brief. Nothing ran." }
+        threePO.dayBrief = { [weak self] in await self?.composeBrief() ?? "Peek couldn't build the brief. Nothing ran." }
         threePO.onDayBrief = { [weak self] text in self?.brief.deliver(text) }
         let on = VoiceGate.enabled(p, setting: demo ? (isVoiceTour ? true : nil) : prefs.voiceEnabled)
         voice.configure(enabled: on, roster: p.roster.names)
@@ -313,7 +313,7 @@ enum Screens {
         let who = c.client ?? "the client"
         guard commandMeetingLink, desktopMode == .off, CommandMeetingLink.isValid(c.link), let l = c.link, let u = URL(string: l) else {
             log.log("command meeting-link open refused=1")
-            return "That Command link didn't pass Peak's check, so nothing opened."
+            return "That Command link didn't pass Peek's check, so nothing opened."
         }
         if demo { log.log("command meeting-link open demo=1"); return "Demo mode: nothing opened. Run would open Command's Start sheet for \(who)." }
         guard NSWorkspace.shared.open(u) else { log.log("command meeting-link open ok=0"); return "Command didn't open. Nothing started." }
@@ -470,7 +470,7 @@ enum Screens {
 
     /// Live dry run (demo mode + scratch GOAT_PEAK_ROOT + FORCEIQ_PEAK_DESKTOP_DRYRUN=1 + FORCEIQ_PEAK_DEMO_TOUR=dryrun-flow |
     /// dryrun-meeting): types the command into 3PO (fake roster), then taps Run on the confirm card, which in dry-run mode
-    /// only starts the locate-and-report run. STOP is pressed by hand (or by the proof script on Peak's own STOP button).
+    /// only starts the locate-and-report run. STOP is pressed by hand (or by the proof script on Peek's own STOP button).
     func dryRunTourRun(_ which: String) {
         guard let scr = NSScreen.screens.first else { return }
         let main = Screens.uuid(scr)
@@ -485,7 +485,7 @@ enum Screens {
         at(1.5, "chat") { c.activeDisplay = main; c.tab = .threePO; c.expand() }
         at(3.0, "type-send") { store.draft = text; await store.send() }
         if which == "live-flow" {                       // live: the tour never taps Run; an explicit tap on the card's Run must
-            at(5.0, "await-run-tap") {                  // (the proof script presses Peak's own Run button, id peak-command-run)
+            at(5.0, "await-run-tap") {                  // (the proof script presses Peek's own Run button, id peak-command-run)
                 let card = store.transcript.messages.reversed().lazy.flatMap(\.proposals).first(where: { $0.origin == .command })
                 self.log.log("tour card client=\(card?.client ?? "none") action=\(card?.action ?? "none") waiting for an explicit Run tap")
             }
@@ -605,7 +605,7 @@ enum Screens {
     var isVoiceTour: Bool { demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "voice" }
 
     /// Voice live smoke (demo mode + FORCEIQ_PEAK_DEMO_TOUR=voice + FORCEIQ_PEAK_VOICE_FEED=<folder of .wav clips>): each
-    /// clip is fed in real time through the mic's conversion path. Clips named *-notch-* run with Peak collapsed and are
+    /// clip is fed in real time through the mic's conversion path. Clips named *-notch-* run with Peek collapsed and are
     /// toggled through forceiq-peak://voice; the rest through the mic button's action with the 3PO chat open. Fake roster.
     func voiceTour() {
         let dir = URL(fileURLWithPath: ProcessInfo.processInfo.environment["FORCEIQ_PEAK_VOICE_FEED"] ?? "")
@@ -697,7 +697,7 @@ enum Screens {
     }
 
     /// CPU proof (demo mode + FORCEIQ_PEAK_DEMO_TOUR=3po-idle): the 3PO chat opens and stays open, idle, for 90 s; then
-    /// Peak collapses.
+    /// Peek collapses.
     func threePOIdleTour() {
         guard let scr = NSScreen.screens.first else { return }
         let main = Screens.uuid(scr)
@@ -933,7 +933,7 @@ enum Screens {
         item.menu = makeMenu()
     }
 
-    /// The always-on menu-bar badge: "PEAK" in green on black (gold and "PEAK · PRESENTING" while presenting).
+    /// The always-on menu-bar badge: "PEEK" in green on black (gold and "PEEK · PRESENTING" while presenting).
     func applyStatusBadge() {
         guard let b = statusItem?.button else { return }
         let spec = StatusBadge.spec(presenting: controller.presenting)
@@ -945,9 +945,9 @@ enum Screens {
     }
 
     func makeMenu() -> NSMenu {
-        let m = NSMenu(title: "ForceIQ Peak")
+        let m = NSMenu(title: "ForceIQ Peek")
         m.delegate = self
-        let show = NSMenuItem(title: "Show ForceIQ Peak", action: #selector(menuToggle), keyEquivalent: "")
+        let show = NSMenuItem(title: "Show ForceIQ Peek", action: #selector(menuToggle), keyEquivalent: "")
         show.state = controller.globallyVisible ? .on : .off
         show.target = self
         m.addItem(show)
@@ -985,11 +985,11 @@ enum Screens {
         let st = NSMenuItem(title: "Settings…", action: #selector(menuSettings), keyEquivalent: ",")
         st.target = self
         m.addItem(st)
-        let about = NSMenuItem(title: "About ForceIQ Peak", action: #selector(menuAbout), keyEquivalent: "")
+        let about = NSMenuItem(title: "About ForceIQ Peek", action: #selector(menuAbout), keyEquivalent: "")
         about.target = self
         m.addItem(about)
         m.addItem(.separator())
-        m.addItem(NSMenuItem(title: "Quit ForceIQ Peak", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        m.addItem(NSMenuItem(title: "Quit ForceIQ Peek", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         return m
     }
 
@@ -1018,12 +1018,12 @@ enum Screens {
         controller.setDisplay(id, shown: !controller.isDisplayShown(id))
     }
     @objc func menuAbout() {
-        NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "ForceIQ Peak"])
+        NSApp.orderFrontStandardAboutPanel(options: [.applicationName: "ForceIQ Peek"])
     }
     @objc func menuSettings() {
         if settings == nil {
             let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 420, height: 560), styleMask: [.titled, .closable], backing: .buffered, defer: false)
-            w.title = "ForceIQ Peak"
+            w.title = "ForceIQ Peek"
             w.isReleasedWhenClosed = false
             let model = SettingsModel(prefs: prefs, controller: controller)
             settingsModel = model

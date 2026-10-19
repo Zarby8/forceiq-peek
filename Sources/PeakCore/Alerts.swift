@@ -4,8 +4,8 @@ import Foundation
 // decision (pure: no UI, no clock, no network); the app only shows what it returns.
 //
 // Only two things are urgent enough to interrupt: a meeting that starts within 10 minutes, and a fix that just failed
-// (a failure that appears after Peak is up, never the ones already in the feed at launch). Every alert names its client.
-// Nothing peeks while Peak is already open, while the coach is dictating, during a live meeting, in quiet hours, under
+// (a failure that appears after Peek is up, never the ones already in the feed at launch). Every alert names its client.
+// Nothing peeks while Peek is already open, while the coach is dictating, during a live meeting, in quiet hours, under
 // do-not-disturb, or within a minute of the last peek. A suppressed alert is not spent: it can still fire once the gate lifts.
 
 public enum PeakAlertKind: String, Sendable {
@@ -130,7 +130,7 @@ public struct AlertPolicy: Sendable {
     /// The one alert to peek now, if any. `cards` are the roster-scoped cards (a client who isn't this coach's never peeks).
     /// What can peek: a meeting within 10 minutes, a fix that failed, Command's sign-in expiring, a new approval waiting, a new
     /// family-delivery alert, a shift download finishing. Everything but the meeting is news only: what was already there when
-    /// Peak first read that source is the baseline and never peeks. `isMyClient` scopes download rows to this coach's roster.
+    /// Peek first read that source is the baseline and never peeks. `isMyClient` scopes download rows to this coach's roster.
     public mutating func next(snapshot s: EngineSnapshot, cards: [PeakCard], context ctx: AlertContext,
                               isMyClient: (String) -> Bool = { _ in false }) -> PeakAlert? {
         var fresh: [PeakAlert] = []
@@ -146,11 +146,11 @@ public struct AlertPolicy: Sendable {
             guard let c = cards.first(where: { $0.kind == .fix && $0.client == f.client && $0.title == f.title }) else { continue }
             let id = "\(c.id):failed"
             guard !shown.contains(id) else { continue }
-            if !primed { shown.insert(id); continue }                         // already failing when Peak came up: not news
+            if !primed { shown.insert(id); continue }                         // already failing when Peek came up: not news
             fresh.append(PeakAlert(id: id, kind: .fixFailed, client: c.client, line: "\(c.client): a fix failed", holdSeconds: Self.fixHold))
         }
         if fixesKnown { primed = true }
-        // Command's sign-in expiring (a transition after Peak is up; held, not spent, until it can peek or it is signed in again).
+        // Command's sign-in expiring (a transition after Peek is up; held, not spent, until it can peek or it is signed in again).
         let expired = s.commandSignIn != nil
         if primedSources.contains("signin") { if expired && !signInWasExpired { signInPending = true } }
         if !expired { signInPending = false }

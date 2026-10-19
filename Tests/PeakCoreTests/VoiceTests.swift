@@ -185,7 +185,7 @@ final class VoiceGateAndModelsTests: XCTestCase {
         let d = ClientCommands.parse("Okay so, start a meeting with Avery, um, after lunch.")
         XCTAssertEqual(d?.spokenClient, "avery"); XCTAssertEqual(d?.when, "um, after lunch")
         XCTAssertNil(ClientCommands.parse("Why is the title slide wrong?"))
-        XCTAssertNil(ClientCommands.parse("Book a meeting with Halliday"))          // booking is never a Peak command
+        XCTAssertNil(ClientCommands.parse("Book a meeting with Halliday"))          // booking is never a Peek command
     }
 
     func testResolvesOneClientOrAmbiguous() {

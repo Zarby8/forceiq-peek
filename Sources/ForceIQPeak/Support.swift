@@ -188,7 +188,7 @@ final class EngineClient: ThreePOTransport, Sendable {
             let o = (try? JSONSerialization.jsonObject(with: md)) as? [String: Any] ?? [:]
             s.today = EngineParse.today(o); s.gpuWindow = GPUWindow.parse(o)
         } else {
-            s.meetingError = mc == 404 ? "This Mac's GOAT doesn't have the Peak meeting feed yet." : "GOAT didn't answer for the next meeting."
+            s.meetingError = mc == 404 ? "This Mac's GOAT doesn't have the Peek meeting feed yet." : "GOAT didn't answer for the next meeting."
         }
         let (lc, ld) = await l
         if lc == 200 {
@@ -279,7 +279,7 @@ final class EngineClient: ThreePOTransport, Sendable {
         case .openInCommand:
             return AppLauncher.openCommand() ? "Opened Command." : "Couldn't open Command."
         case .openURL(let u):
-            return open(u) ? "Opened." : "Only https or Command links open from Peak."
+            return open(u) ? "Opened." : "Only https or Command links open from Peek."
         case .copyLink(let l):
             guard l.lowercased().hasPrefix("https://") else { return "No valid link to copy." }
             copy(l); return "Family link copied. Nothing was sent."

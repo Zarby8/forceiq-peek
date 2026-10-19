@@ -14,8 +14,8 @@ final class WingStatusTests: XCTestCase {
 
     func testIdleIsPeakInGreenWithNoDots() {
         let w = spec()
-        XCTAssertEqual(w.text, "PEAK"); XCTAssertEqual(w.textHex, Brand.greenHex); XCTAssertEqual(w.dots, [])
-        XCTAssertEqual(w.accessibilityLabel, "ForceIQ Peak")
+        XCTAssertEqual(w.text, "PEEK"); XCTAssertEqual(w.textHex, Brand.greenHex); XCTAssertEqual(w.dots, [])
+        XCTAssertEqual(w.accessibilityLabel, "ForceIQ Peek")
     }
 
     func testASessionInsideTheHourShowsTheFirstNameAndMinutes() {
@@ -27,9 +27,9 @@ final class WingStatusTests: XCTestCase {
     }
 
     func testASessionOutsideTheWindowLeavesJustPeak() {
-        XCTAssertEqual(spec(session(inMinutes: 60)).text, "PEAK", "exactly an hour out is not yet")
-        XCTAssertEqual(spec(session(inMinutes: 300)).text, "PEAK")
-        XCTAssertEqual(spec(session(inMinutes: -16)).text, "PEAK")
+        XCTAssertEqual(spec(session(inMinutes: 60)).text, "PEEK", "exactly an hour out is not yet")
+        XCTAssertEqual(spec(session(inMinutes: 300)).text, "PEEK")
+        XCTAssertEqual(spec(session(inMinutes: -16)).text, "PEEK")
     }
 
     func testLongFirstNamesAreCut() {
@@ -50,8 +50,8 @@ final class WingStatusTests: XCTestCase {
 
     func testTheAccessibilityLabelNamesTheClientAndWhatNeedsYou() {
         let w = spec(session(inMinutes: 42), gaps: 2, light: .red("x"))
-        XCTAssertEqual(w.accessibilityLabel, "ForceIQ Peak, Sample Skater in 42 minutes, 5090 held, 2 gaps need you")
-        XCTAssertEqual(spec(session(inMinutes: 0.2), gaps: 1).accessibilityLabel, "ForceIQ Peak, Sample Skater now, 1 gap needs you")
+        XCTAssertEqual(w.accessibilityLabel, "ForceIQ Peek, Sample Skater in 42 minutes, 5090 held, 2 gaps need you")
+        XCTAssertEqual(spec(session(inMinutes: 0.2), gaps: 1).accessibilityLabel, "ForceIQ Peek, Sample Skater now, 1 gap needs you")
     }
 
     func testPresentingShowsNoNameNoCountdownNoDots() {

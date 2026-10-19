@@ -1,7 +1,7 @@
 import Foundation
 
-// ForceIQ Peak 3PO avatar: BOB Motion's ForceIQ-Peak-3PO-v1 pack (Resources/threepo). Pure logic, unit-tested: which
-// state the chat is in (from the transcript Peak already keeps), how the player gets there (the pack's 20-frame
+// ForceIQ Peek 3PO avatar: BOB Motion's ForceIQ-Peek-3PO-v1 pack (Resources/threepo). Pure logic, unit-tested: which
+// state the chat is in (from the transcript Peek already keeps), how the player gets there (the pack's 20-frame
 // transitions, non-idle to non-idle through idle), when a change starts (at once, crossfading from the frame on
 // screen: AvatarSwitch / AvatarCrossfade), and which files the pack carries.
 
@@ -10,7 +10,7 @@ public enum AvatarState: String, Sendable, CaseIterable {
     case idle, listening, thinking, talking, alert
 }
 
-/// What Peak already knows about the chat, reduced to what the avatar needs.
+/// What Peek already knows about the chat, reduced to what the avatar needs.
 public struct AvatarSignals: Equatable, Sendable {
     public var streaming = false          // a turn is open (send → done / error / end of stream)
     public var thinking = false           // waiting for the first token, a tool or the advisor
@@ -192,9 +192,9 @@ public struct AvatarCrossfade: Equatable, Sendable {
     }
 }
 
-/// The frame rate the 3PO avatar renders at on the screen Peak is on. 60 is the default and the fallback; 120 only
+/// The frame rate the 3PO avatar renders at on the screen Peek is on. 60 is the default and the fallback; 120 only
 /// when that screen reports ≥ 120 Hz (NSScreen.maximumFramesPerSecond: a ProMotion built-in with the lid open) and the
-/// bundle carries a complete 120 fps set (BOB Motion v1.1 add-on, fps120/). Re-chosen whenever Peak changes screens.
+/// bundle carries a complete 120 fps set (BOB Motion v1.1 add-on, fps120/). Re-chosen whenever Peek changes screens.
 public enum AvatarFrameRate: Int, Sendable, CaseIterable {
     case fps60 = 60, fps120 = 120
     public var fps: Double { Double(rawValue) }
@@ -267,7 +267,7 @@ public enum AvatarTier: String, Sendable { case rig, loops, still, mark
     }
 }
 
-/// When the avatar plays. It lives in the expanded chat only (unmounted when Peak collapses, so a collapsed, idle Peak
+/// When the avatar plays. It lives in the expanded chat only (unmounted when Peek collapses, so a collapsed, idle Peek
 /// decodes nothing), pauses while the panel is hidden, and holds one still frame under Reduce Motion.
 public enum AvatarPolicy {
     public static func live(visible: Bool, globallyVisible: Bool, expanded: Bool, reduceMotion: Bool) -> Bool {
@@ -277,7 +277,7 @@ public enum AvatarPolicy {
 
 public enum AvatarFormat: String, Sendable { case hevcAlpha = "hevc_alpha", h264Black = "h264_black" }
 
-/// BOB Motion's ForceIQ-Peak-3PO MANIFEST.json (v1.1, as shipped): frames/fps per clip and the MD5 of every file.
+/// BOB Motion's ForceIQ-Peek-3PO MANIFEST.json (v1.1, as shipped): frames/fps per clip and the MD5 of every file.
 /// rate .fps60 reads the v1 pack (top-level states/transitions); .fps120 reads the v1.1 add-on (the "fps120" block:
 /// same clips and durations, frame counts doubled, files under fps120/). A manifest without that block: no 120 pack.
 public struct ThreePOPack: Sendable {
@@ -327,7 +327,7 @@ public struct ThreePOPack: Sendable {
         prefix(rate) + (format == .hevcAlpha ? "hevc_alpha/\(px)/3po_\(clip)_\(px)_hevc_alpha.mov" : "h264_black/\(px)/3po_\(clip)_\(px)_black.mp4")
     }
     public func path(_ c: AvatarClip, px: Int) -> String { Self.path(clip: c.name, px: px, format: format, rate: rate) }
-    /// The still Peak shows under Reduce Motion and beside each reply: the neutral talking sprite (talkAmp 0).
+    /// The still Peek shows under Reduce Motion and beside each reply: the neutral talking sprite (talkAmp 0).
     public static func stillPath(px: Int) -> String { "sprites/\(px)/talking/3po_talk_amp_00_\(px).png" }
 
     /// The bundled size closest to (and at least) points × backing scale.

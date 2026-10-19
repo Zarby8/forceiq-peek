@@ -1,13 +1,13 @@
 import Foundation
 
-// ForceIQ Peak 5090 light (Chris 10.19.2026). A small dot: RED from 2 h before a meeting through its end (a meeting in
+// ForceIQ Peek 5090 light (Chris 10.19.2026). A small dot: RED from 2 h before a meeting through its end (a meeting in
 // progress included: Command live on this Mac, or a calendar / booking span that has started and not ended), GREEN
 // otherwise. The bookings read is upcoming-only, so Command's live status AND the calendar must both be readable and
 // fresh, or the light is UNKNOWN. UNKNOWN (the meeting status is missing, unreadable or STALE) is drawn red, labelled, and holds GPU work:
-// it fails closed. While it isn't green, Peak refuses EVERY 5090 GPU action (the shifts / upscale drop zone, a 3PO
+// it fails closed. While it isn't green, Peek refuses EVERY 5090 GPU action (the shifts / upscale drop zone, a 3PO
 // proposal or a GOAT approval that would upscale) with one plain message.
-// Source: GET /api/peak/next-meeting `gpu_window` (engine/peakmeeting.py: the Command bookings read Peak already makes
-// every 30 s, Command live on this Mac, the calendar the 5090 meeting guard reads). Status reads only: Peak never talks
+// Source: GET /api/peak/next-meeting `gpu_window` (engine/peakmeeting.py: the Command bookings read Peek already makes
+// every 30 s, Command live on this Mac, the calendar the 5090 meeting guard reads). Status reads only: Peek never talks
 // to the 5090, its recording service, the service that guards it, or the recorder machine.
 
 /// One time span the 5090 must hold around (a Command booking or a calendar event; times only, never a name).
@@ -19,7 +19,7 @@ public struct GPUSpan: Equatable, Sendable {
 }
 
 /// `gpu_window` as the engine sent it. `live` nil = Command's live state wasn't read (unknown, never "not live").
-/// `calendarAt`: when the calendar snapshot was fetched (judged STALE by Peak's clock); nil with `calendarIssue` = the
+/// `calendarAt`: when the calendar snapshot was fetched (judged STALE by Peek's clock); nil with `calendarIssue` = the
 /// calendar couldn't be trusted (unknown, never "a clear day"). The default is unknown: fail closed.
 public struct GPUWindow: Equatable, Sendable {
     public let spans: [GPUSpan]
@@ -30,7 +30,7 @@ public struct GPUWindow: Equatable, Sendable {
         self.spans = spans; self.live = live; self.calendarAt = calendarAt; self.calendarIssue = calendarIssue
     }
 
-    /// nil when the doc has no usable gpu_window (an old engine, an error doc): Peak then shows UNKNOWN.
+    /// nil when the doc has no usable gpu_window (an old engine, an error doc): Peek then shows UNKNOWN.
     public static func parse(_ o: [String: Any]) -> GPUWindow? {
         guard (o["ok"] as? Bool) == true, let w = o["gpu_window"] as? [String: Any], let raw = w["spans"] as? [Any] else { return nil }
         var spans: [GPUSpan] = []
@@ -75,7 +75,7 @@ public enum GPULight {
     /// The calendar snapshot (state/eventkit.json `fetched_at`) goes STALE on the same rule: older → unknown → held.
     public static let calendarStaleAfter: TimeInterval = BriefClock.staleAfter
 
-    /// Pure: the light for a gpu_window read at `readAt`, judged at `now` (Peak's own clock, so a meeting that slides
+    /// Pure: the light for a gpu_window read at `readAt`, judged at `now` (Peek's own clock, so a meeting that slides
     /// inside 2 h turns the light red without a new read).
     public static func evaluate(_ w: GPUWindow?, readAt: Date?, now: Date, tz: TimeZone = BriefClock.zone) -> GPULightState {
         guard let w, let readAt else { return .unknown("meeting status unavailable") }
@@ -133,7 +133,7 @@ public enum GPUGate {
     /// The shifts drop clones a film into ForceIQ Shifts, whose watcher starts the Dagu upscale on the 5090.
     public static func isGPUAction(_ z: DropZone) -> Bool { z == .shift }
 
-    /// nil when the light is green (allowed). Otherwise the one plain sentence Peak shows (and nothing runs).
+    /// nil when the light is green (allowed). Otherwise the one plain sentence Peek shows (and nothing runs).
     public static func refusal(_ s: GPULightState) -> String? {
         switch s {
         case .green: return nil
@@ -141,12 +141,12 @@ public enum GPUGate {
             let why = r.prefix(1).uppercased() + r.dropFirst() + (r.hasPrefix("meeting at") ? ", within 2 h" : "")
             return "\(why): 5090 GPU jobs are held so the recorder isn't disturbed. Nothing ran."
         case .unknown(let r):
-            return "Meeting status unknown (\(r)): 5090 GPU jobs are held until Peak can see there's no meeting within 2 h. Nothing ran."
+            return "Meeting status unknown (\(r)): 5090 GPU jobs are held until Peek can see there's no meeting within 2 h. Nothing ran."
         }
     }
 }
 
-/// The app's light: the latest gpu_window and when Peak read it. `state(now:)` re-judges against the clock, so a refusal
+/// The app's light: the latest gpu_window and when Peek read it. `state(now:)` re-judges against the clock, so a refusal
 /// is decided at the moment of the tap, never from a cached colour.
 @MainActor public final class GPULightModel: ObservableObject {
     @Published public private(set) var window: GPUWindow?

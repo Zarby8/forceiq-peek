@@ -2,18 +2,18 @@ import Foundation
 import XCTest
 @testable import PeakCore
 
-/// The always-on menu-bar badge: "PEAK" in brand green on black; gold while presenting; brand tokens only.
+/// The always-on menu-bar badge: "PEEK" in brand green on black; gold while presenting; brand tokens only.
 final class StatusBadgeTests: XCTestCase {
     func testTheBadgeIsPeakInBrandGreenOnBlack() {
         let s = StatusBadge.spec(presenting: false)
-        XCTAssertEqual(s.text, "PEAK"); XCTAssertEqual(s.textHex, Brand.greenHex); XCTAssertEqual(s.backgroundHex, Brand.blackHex)
+        XCTAssertEqual(s.text, "PEEK"); XCTAssertEqual(s.textHex, Brand.greenHex); XCTAssertEqual(s.backgroundHex, Brand.blackHex)
         XCTAssertEqual(Brand.greenHex, 0x4FFF4F)
-        XCTAssertEqual(s.accessibilityLabel, "ForceIQ Peak")
+        XCTAssertEqual(s.accessibilityLabel, "ForceIQ Peek")
     }
 
     func testPresentingTurnsItGoldAndSaysSo() {
         let s = StatusBadge.spec(presenting: true)
-        XCTAssertEqual(s.text, "PEAK · PRESENTING"); XCTAssertEqual(s.textHex, Brand.goldHex); XCTAssertEqual(s.backgroundHex, Brand.blackHex)
+        XCTAssertEqual(s.text, "PEEK · PRESENTING"); XCTAssertEqual(s.textHex, Brand.goldHex); XCTAssertEqual(s.backgroundHex, Brand.blackHex)
         XCTAssertTrue(s.accessibilityLabel.contains("presenting"))
     }
 
@@ -38,7 +38,7 @@ final class StatusBadgeTests: XCTestCase {
         XCTAssertEqual(l.collapsed, n.union(l.wing), "one shape: the notch and its wing")
         XCTAssertEqual(l.collapsed.maxX, n.maxX, "nothing to the right of the notch")
         XCTAssertTrue(l.canvas.contains(l.collapsed))
-        XCTAssertEqual(l.hitRect(.collapsed), l.collapsed, "hover and click on the wing open Peak")
+        XCTAssertEqual(l.hitRect(.collapsed), l.collapsed, "hover and click on the wing open Peek")
     }
 
     func testTheWingFitsTheEmptyGapAndTheLongestWord() {
@@ -49,7 +49,7 @@ final class StatusBadgeTests: XCTestCase {
     }
 
     func testTheWingTextIsShortAndTheProgressLineHangsUnderTheWholeShape() {
-        XCTAssertEqual(StatusBadge.spec(presenting: false).wingText, "PEAK"); XCTAssertEqual(StatusBadge.spec(presenting: true).wingText, "PRESENTING")
+        XCTAssertEqual(StatusBadge.spec(presenting: false).wingText, "PEEK"); XCTAssertEqual(StatusBadge.spec(presenting: true).wingText, "PRESENTING")
         let l = PeakGeometry().layout(for: m5)
         XCTAssertLessThan(l.progressLine.maxY, l.collapsed.minY)
         XCTAssertGreaterThanOrEqual(l.progressLine.minX, l.collapsed.minX); XCTAssertLessThanOrEqual(l.progressLine.maxX, l.collapsed.maxX)
@@ -75,7 +75,7 @@ final class StatusBadgeTests: XCTestCase {
         let base = #filePath.replacingOccurrences(of: "Tests/PeakCoreTests/StatusBadgeTests.swift", with: "Sources/ForceIQPeak/")
         let app = try String(contentsOfFile: base + "AppDelegate.swift", encoding: .utf8)
         XCTAssertTrue(app.contains("StatusBadge.spec(presenting: controller.presenting)"))
-        XCTAssertFalse(app.contains("button?.title = "), "the status item is the badge image, not a plain 'Peak' title")
+        XCTAssertFalse(app.contains("button?.title = "), "the status item is the badge image, not a plain 'Peek' title")
         let draw = try String(contentsOfFile: base + "StatusBadge.swift", encoding: .utf8)
         XCTAssertTrue(draw.contains("isTemplate = false"), "a template image would be tinted by the menu bar and lose the green")
         XCTAssertFalse(draw.contains("0x") || draw.contains("NSColor.gray") || draw.contains("secondaryLabel"))

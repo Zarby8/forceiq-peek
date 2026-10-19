@@ -76,7 +76,7 @@ struct PeekInline: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(alert.line)
-        .accessibilityHint("Opens ForceIQ Peak")
+        .accessibilityHint("Opens ForceIQ Peek")
         .accessibilityAddTraits(.isButton)
     }
 }
@@ -236,7 +236,7 @@ struct PeakRootView: View {
                     .padding(.leading, r.minX).padding(.top, r.minY)
                     .allowsHitTesting(false)
             }
-            if voiceStrip {                // dictating with Peak collapsed (Raycast / the deep link): the words under the notch
+            if voiceStrip {                // dictating with Peek collapsed (Raycast / the deep link): the words under the notch
                 let r = panel.local(panel.layout.collapsed)
                 VoiceStrip(voice: voice).fixedSize(horizontal: false, vertical: true).frame(width: 440)
                     .position(x: r.midX, y: r.maxY + 26)
@@ -346,7 +346,7 @@ struct PeakRootView: View {
 
     @ViewBuilder var collapsed: some View {
         if panel.mode == .notch {
-            // The notch itself has no pixels; the black wing to its left is the always-on status: "PEAK" in green (gold
+            // The notch itself has no pixels; the black wing to its left is the always-on status: "PEEK" in green (gold
             // "PRESENTING" while presenting), in the menu bar row, merged with the notch.
             ZStack(alignment: .topLeading) {
                 Color.clear.frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
@@ -365,7 +365,7 @@ struct PeakRootView: View {
                 NextSessionPill(model: nextSession, compact: true)          // names the client; gold on a gap
                 Spacer(minLength: 0)
             } else {
-                Text("ForceIQ Peak").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
+                Text("ForceIQ Peek").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
                     .matchedGeometryEffect(id: "title", in: ns)
                 Spacer(minLength: 0)
             }
@@ -385,7 +385,7 @@ struct PeakRootView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 ghost(30)
-                Text("ForceIQ Peak").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.white)
+                Text("ForceIQ Peek").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.white)
                     .matchedGeometryEffect(id: "title", in: ns)
                 if controller.profile.isEnabled(.threePO) && !controller.presenting { TabPills(controller: controller, current: controller.tab) }
                 Spacer()
@@ -449,7 +449,7 @@ struct PresentingNotice: View {
     }
 }
 
-/// Peak | 3PO, a gold pill under the active tab (matched geometry, so it slides).
+/// Peek | 3PO, a gold pill under the active tab (matched geometry, so it slides).
 struct TabPills: View {
     @ObservedObject var controller: PeakController
     /// The active tab, passed by value from the panel so the pill always redraws with the sheet it labels.
@@ -458,7 +458,7 @@ struct TabPills: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
         HStack(spacing: 2) {
-            tab(.home, "Peak")
+            tab(.home, "Peek")
             tab(.threePO, "3PO")
         }
         .padding(2)
@@ -593,7 +593,7 @@ extension Color {
     init(hex: UInt32) { let c = Brand.rgb(hex); self.init(red: c.r, green: c.g, blue: c.b) }
 }
 
-/// A gold placeholder drawn by Peak (the system prompt renders gray on macOS whatever its style).
+/// A gold placeholder drawn by Peek (the system prompt renders gray on macOS whatever its style).
 struct GoldPlaceholder: ViewModifier {
     let text: String
     let show: Bool
@@ -613,7 +613,7 @@ struct CardList: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
                 if !cards.configured {
-                    Text("No coach profile on this Mac yet (overlay peak section). Peak shows nothing until it has one.")
+                    Text("No coach profile on this Mac yet (overlay peak section). Peek shows nothing until it has one.")
                         .font(.system(size: 13)).foregroundStyle(Color.peakGold)
                 } else {
                     HomeStatusRows(signIn: cards.signIn, empty: cards.cards.isEmpty, settingsNotice: cards.settingsNotice)
@@ -814,7 +814,7 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                Text("ForceIQ Peak").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.white)
+                Text("ForceIQ Peek").font(.system(size: 15, weight: .bold)).foregroundStyle(Color.white)
                 section("Presenting") {
                     Toggle(isOn: Binding(get: { model.presenting }, set: { model.setPresenting($0) })) { label("Presenting now: hide every client detail") }
                     Toggle(isOn: $model.autoPresenting) { label("Present automatically while Command is live") }
@@ -837,18 +837,18 @@ struct SettingsView: View {
                 }
                 section("Show") {
                     Toggle(isOn: $model.nextSessionPill) { label("Next session countdown and gaps (needs Command sign-in)") }
-                    Toggle(isOn: $model.menuBarItem) { label("PEAK badge in the menu bar") }
-                    if model.restartNeeded { Text("These two take effect when Peak restarts.").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.peakGold) }
+                    Toggle(isOn: $model.menuBarItem) { label("PEEK badge in the menu bar") }
+                    if model.restartNeeded { Text("These two take effect when Peek restarts.").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.peakGold) }
                 }
                 section("Voice and shortcut") {
                     Toggle(isOn: Binding(get: { voice.enabled }, set: { setVoice($0) })) { label("Voice (opt-in): talk to 3PO") }
-                    note("Press the mic in 3PO (or forceiq-peak://voice) to start, press again to stop. Audio stays on this Mac; the speech model (about 560 MB) downloads once into your Peak folder.")
+                    note("Press the mic in 3PO (or forceiq-peak://voice) to start, press again to stop. Audio stays on this Mac; the speech model (about 560 MB) downloads once into your Peek folder.")
                     if voice.enabled, let l = voice.phase.line {
                         Text(l).font(.system(size: 11, weight: .semibold)).foregroundStyle({ if case .failed = voice.phase { return Color.peakGold }; return Color.peakGreen }())
                     }
                     Toggle(isOn: Binding(get: { controller.hotkeyEnabled }, set: { controller.setHotkeyEnabled($0) })) { label("Built-in hotkey") }
                     HStack { label("Show / hide shortcut"); HotkeyRecorder() }
-                    note("Raycast and anything else on this Mac can also use forceiq-peak:// links. Right-click the PEAK wing for the Peak menu.")
+                    note("Raycast and anything else on this Mac can also use forceiq-peak:// links. Right-click the PEEK wing for the Peek menu.")
                 }
             }
             .padding(18)

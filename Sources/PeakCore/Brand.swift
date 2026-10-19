@@ -1,14 +1,14 @@
 import Foundation
 
 /// Hard rules: pure white text on pure black, green and gold accents, never dim gray text.
-/// Palette: ForceIQ Brand 2026 pack (gold #F4C430, green #4FFF4F). This is Peak's one palette definition; Color.peakGold /
+/// Palette: ForceIQ Brand 2026 pack (gold #F4C430, green #4FFF4F). This is Peek's one palette definition; Color.peakGold /
 /// .peakGreen and every *Hex token read these.
 public enum Brand {
     public static let blackHex: UInt32 = 0x000000
     public static let whiteHex: UInt32 = 0xFFFFFF
     public static let greenHex: UInt32 = 0x4FFF4F
     public static let goldHex: UInt32 = 0xF4C430
-    /// Every text color Peak may use. Tests assert nothing else is ever offered.
+    /// Every text color Peek may use. Tests assert nothing else is ever offered.
     public static let allowedTextHex: Set<UInt32> = [whiteHex, greenHex, goldHex, blackHex]
 
     public static func rgb(_ hex: UInt32) -> (r: Double, g: Double, b: Double) {
@@ -16,7 +16,7 @@ public enum Brand {
     }
 
     /// Red, for SHAPES only (the 5090 light's dot and its glow). Never a text colour, so it is not in allowedTextHex:
-    /// every label beside a red dot stays pure white. Added with the 5090 light (Peak had no red token before).
+    /// every label beside a red dot stays pure white. Added with the 5090 light (Peek had no red token before).
     public static let redHex: UInt32 = 0xFF3B30
 }
 
@@ -58,7 +58,7 @@ public enum MarkPolicy {
     }
 }
 
-/// Peak's shape per display. Clamshell (lid closed) or a desk of external displays: no screen has a notch, so every
+/// Peek's shape per display. Clamshell (lid closed) or a desk of external displays: no screen has a notch, so every
 /// panel is a pill. A notch is used only when that very screen reports one.
 public enum DisplayPlan {
     public static func modes(_ screens: [ScreenDescriptor], geometry: PeakGeometryProviding = PeakGeometry()) -> [String: PeakMode] {

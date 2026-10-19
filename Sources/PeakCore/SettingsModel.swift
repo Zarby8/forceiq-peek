@@ -2,7 +2,7 @@ import Foundation
 import Combine
 
 /// The Settings window's state: one place that reads and writes the prefs the menu used to leave to hand-edited JSON. Every
-/// change is written through at once. `restartNeeded` is set for the two switches Peak reads only at launch (the next-session
+/// change is written through at once. `restartNeeded` is set for the two switches Peek reads only at launch (the next-session
 /// feed and the menu-bar item); everything else takes effect immediately.
 @MainActor public final class SettingsModel: ObservableObject {
     let prefs: PeakPrefs

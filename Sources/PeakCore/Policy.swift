@@ -1,14 +1,14 @@
 import Foundation
 
-/// What Peak may and may not do. Peak never sends, deletes, edits a DB, invoices or books. Approvals that would are
+/// What Peek may and may not do. Peek never sends, deletes, edits a DB, invoices or books. Approvals that would are
 /// view-only here and open in GOAT. Pipeline progress (upscale, Dagu, publish) is never shown, only "Open in Command".
 public enum CardPolicy {
-    /// GOAT approval gates (engine/approvals.py GATE_RANK / STRONG) that Peak never acts on.
+    /// GOAT approval gates (engine/approvals.py GATE_RANK / STRONG) that Peek never acts on.
     public static let viewOnlyGates: Set<String> = ["send", "delete", "invoice/booking", "db", "deploy", "switch", "computer"]
     /// Words that make any item view-only even when its gate looks routine (belt and braces).
     static let viewOnlyWords = try! NSRegularExpression(
         pattern: #"(?i)\b(delet\w*|remov\w*|trash\w*|send\w*|sent|email\w*|text(ing)?|imessage|message\w*|invoic\w*|bill\w*|payment\w*|refund\w*|book(ing|ings|ed)?|reschedul\w*|cancel\w*|db|database|sql|migrat\w*|deploy\w*)\b"#)
-    /// Progress Peak never shows (Command owns it).
+    /// Progress Peek never shows (Command owns it).
     static let pipelineWords = try! NSRegularExpression(pattern: #"(?i)\b(upscal\w*|dagu|publish\w*|realesrgan|gpu_and_deliver)\b"#)
 
     static func matches(_ rx: NSRegularExpression, _ s: String) -> Bool {
@@ -17,10 +17,10 @@ public enum CardPolicy {
 
     public static func viewOnlyReason(gate: String, text: String) -> String? {
         if viewOnlyGates.contains(gate.lowercased()) {
-            return "This approval would \(gateWords(gate)). Peak only shows it; decide it in GOAT."
+            return "This approval would \(gateWords(gate)). Peek only shows it; decide it in GOAT."
         }
         if matches(viewOnlyWords, text) {
-            return "This approval involves a send, delete, invoice, booking or database change. Peak only shows it; decide it in GOAT."
+            return "This approval involves a send, delete, invoice, booking or database change. Peek only shows it; decide it in GOAT."
         }
         return nil
     }
@@ -79,9 +79,9 @@ public enum CardBuilder {
                 detail: f.state == "running" ? "Fixing now" : f.state.capitalized,
                 description: CardDescription(
                     inputs: ["GOAT live status for \(client) (read-only)"],
-                    touches: ["Nothing. GOAT is already running this fix; Peak only shows it."],
+                    touches: ["Nothing. GOAT is already running this fix; Peek only shows it."],
                     outputs: ["Copy prompt puts a plain summary on your clipboard. Open in GOAT shows the full card."]),
-                viewOnly: true, viewOnlyReason: "GOAT is running this fix. Peak only shows it.",
+                viewOnly: true, viewOnlyReason: "GOAT is running this fix. Peek only shows it.",
                 actions: [.openInGOAT, .copyPrompt]))
         }
         for a in s.approvals where !a.test {

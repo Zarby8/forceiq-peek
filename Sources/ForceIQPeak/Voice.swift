@@ -4,12 +4,12 @@ import Foundation
 import PeakCore
 import SwiftUI
 
-// ForceIQ Peak voice: toggle-only dictation into 3PO. FluidAudio v0.17.7 + Parakeet TDT 0.6B v3 on the ANE, re-decoded
+// ForceIQ Peek voice: toggle-only dictation into 3PO. FluidAudio v0.17.7 + Parakeet TDT 0.6B v3 on the ANE, re-decoded
 // every 160 ms; only the LocalAgreement-2 prefix (confirmed words) is ever shown. On stop: one full decode, the Parakeet
-// CTC 110M name boost against the live roster (spotter rescue OFF), then Peak's name guard + possessive restore
+// CTC 110M name boost against the live roster (spotter rescue OFF), then Peek's name guard + possessive restore
 // (PeakCore VoiceNameGuard). The words then go to 3PO exactly like a typed message.
 // Privacy: mic samples live only in memory ([Float]) and are dropped at stop. No AVAudioFile, no recorder, no temp files,
-// nothing uploaded. Only the model weights touch disk, under <Peak root>/models.
+// nothing uploaded. Only the model weights touch disk, under <Peek root>/models.
 
 // ───────────────────────────── audio sources ─────────────────────────────
 /// 16 kHz mono Float32 chunks, in memory only.
@@ -127,7 +127,7 @@ actor PeakDictation {
 
     var isLoaded: Bool { loaded }
 
-    /// Downloads (first enable only) into <Peak root>/models, then loads on the ANE. `progress(fraction, what)`.
+    /// Downloads (first enable only) into <Peek root>/models, then loads on the ANE. `progress(fraction, what)`.
     func prepare(root: URL, progress: @escaping @Sendable (Double, String) -> Void) async throws {
         guard !loaded else { return }
         Self.pinRevisions()
@@ -145,7 +145,7 @@ actor PeakDictation {
         if !CtcModels.modelsExist(at: ctcDir) { progress(tdtShare, VoiceModels.ctc.label) }
         ctc = try await CtcModels.downloadAndLoad(to: ctcDir, variant: .ctc110m)
         self.ctcDir = ctcDir
-        tokenizer = try await CtcTokenizer.load(from: ctcDir)        // from <Peak root>/models, never Application Support
+        tokenizer = try await CtcTokenizer.load(from: ctcDir)        // from <Peek root>/models, never Application Support
         progress(1, VoiceModels.ctc.label)
         loaded = true
         try await rebuildBoosting()
@@ -351,7 +351,7 @@ actor PeakDictation {
         do {
             try src.start { [engine] chunk in Task { await engine.append(chunk) } }
         } catch {
-            phase = .failed("Peak couldn't open the microphone."); showLine = false
+            phase = .failed("Peek couldn't open the microphone."); showLine = false
             logger?.log("voice mic failed"); return
         }
         source = src; lastFeed = src as? FeedSource
@@ -361,7 +361,7 @@ actor PeakDictation {
     }
 
     private func micDenied() {
-        phase = .failed("Peak can't hear the mic. Allow it in System Settings → Privacy & Security → Microphone, then press the mic again.")
+        phase = .failed("Peek can't hear the mic. Allow it in System Settings → Privacy & Security → Microphone, then press the mic again.")
         Task { try? await Task.sleep(nanoseconds: 4_000_000_000); if case .failed = self.phase { self.phase = .ready } }
     }
 
@@ -490,8 +490,8 @@ final class WeakRef<T: AnyObject>: @unchecked Sendable {
     init(_ v: T) { value = v }
 }
 
-/// FluidAudio's VocabularyBoostingSession, with the CTC tokenizer read from Peak's own model folder: the session reads it
-/// from ~/Library/Application Support/FluidAudio, which Peak never downloads to. Same steps and thresholds as the
+/// FluidAudio's VocabularyBoostingSession, with the CTC tokenizer read from Peek's own model folder: the session reads it
+/// from ~/Library/Application Support/FluidAudio, which Peek never downloads to. Same steps and thresholds as the
 /// session (spot → constrained token rescore, vocabulary-size config, 0.5 s margin); spotter rescue stays off.
 struct PeakBoost: Sendable {
     let vocabulary: CustomVocabularyContext

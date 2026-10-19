@@ -1,14 +1,19 @@
-# ForceIQ Peak (PR 1)
+# ForceIQ Peek (PR 1)
+
+> **Naming.** The product is called **Peek** (ForceIQ Peek, the PEEK wing). Identifiers keep the old spelling on purpose, so your
+> macOS permissions and every integration keep working: bundle id `com.forceiq.peak`, the `forceiq-peak://` links, the
+> `~/ForceIQ/peak` folder, the `PeakCore` / `ForceIQPeak` module names, `FORCEIQ_PEAK_*` env vars and GOAT's `/api/peak/*` routes.
+
 
 A Ghost-branded strip for macOS. It wraps the notch on a notch display and floats as a pill at top-center on a display
 without one (Studio Display). There's one non-activating, borderless `NSPanel` per `NSScreen`, above the menu bar, on
 every Space and stationary, and it follows `NSApplication.didChangeScreenParametersNotification`. Pure white on pure
 black, green `#4FFF4F` and gold `#F4C430` accents (ForceIQ Brand 2026; defined once in `Sources/PeakCore/Brand.swift`), no dim gray text.
 
-**Ghost mark:** BOB Motion **ForceIQ-Peak-BOB-v1, v1.1** (idle re-timed to a seamless 60-frame loop), h264 on black,
+**Ghost mark:** BOB Motion **ForceIQ-Peek-BOB-v1, v1.1** (idle re-timed to a seamless 60-frame loop), h264 on black,
 masked to a circle, played with AVPlayerLooper and driven by the pack's MANIFEST.json. See `Resources/ASSETS.md`.
 Its glow breathes as a Core Animation layer animation (`CAGlowView`, curve in `GlowBreath`): the render server runs
-it, so an expanded, idle Peak does no per-frame SwiftUI work.
+it, so an expanded, idle Peek does no per-frame SwiftUI work.
 
 ## What it shows (modules, on or off per coach profile)
 - **meetings**: the next Command meeting for this coach's client: the client name, a live countdown, Join (opens the
@@ -20,7 +25,7 @@ it, so an expanded, idle Peak does no per-frame SwiftUI work.
 - **voice** (opt-in, off by default; Settings → "Voice"): toggle dictation into 3PO. See **Voice** below.
 - Declared for later: machine_glance.
 
-**3PO droid:** BOB Motion **ForceIQ-Peak-3PO-v1**. The chat header plays the live RealityKit rig (`rig/3po.usdz`),
+**3PO droid:** BOB Motion **ForceIQ-Peek-3PO-v1**. The chat header plays the live RealityKit rig (`rig/3po.usdz`),
 then the rendered hevc_alpha loops, then the static droid mark, by what loads (`AvatarTier`). States follow the chat:
 idle (waiting), listening (mic open; voice flag), thinking (send → first token, tools, 'consulting Opus'), talking
 (tokens streaming), and one alert flash per new approval or refusal card. Every change starts at once (within
@@ -29,7 +34,7 @@ screen into the pack's 20-frame transitions (non-idle → non-idle via idle); fa
 the alert flash settling back to idle waits for the flash to finish. A steady idle rig parks: one captured idle pass
 plays as a layer animation and RealityKit leaves the window until something changes (chat-open idle CPU about the
 static mark's). Proof tours: `FORCEIQ_PEAK_DEMO_TOUR=3po-send` (send latency), `3po-idle` (chat-open idle CPU). The droid lives only in the expanded chat, so a
-collapsed Peak renders and decodes nothing; Reduce Motion shows a still. Proof tour: `FORCEIQ_PEAK_DEMO=1
+collapsed Peek renders and decodes nothing; Reduce Motion shows a still. Proof tour: `FORCEIQ_PEAK_DEMO=1
 FORCEIQ_PEAK_DEMO_TOUR=3po`. See `Resources/ASSETS.md`.
 
 **3PO memory:** say "remember Sample Skater's games are on Saturdays" and 3PO keeps it, for this coach only, as plain local
@@ -53,7 +58,7 @@ goes to Claude. `/skill <name>` always opens the card.
 
 Tapping a card only shows a plain description (inputs, what it touches, outputs). Then come Run / Ask Claude / Copy
 prompt. Nothing runs until that explicit tap. Upscale, Dagu and publish progress are never shown, only "Open in
-Command". Peak uploads nothing, and client video stays local.
+Command". Peek uploads nothing, and client video stays local.
 
 ## Motion and ease (tokens: PeakCore `PeakMotion`; guard: `MotionPolishGuardTests`)
 - **One spring** (response 0.38, damping 0.82) for expand / collapse: the shell path morphs and the Ghost, title and
@@ -62,7 +67,7 @@ Command". Peak uploads nothing, and client video stays local.
 - **Cards** rise 8 pt and sharpen from a light blur, 40 ms apart (capped at 6 steps); approvals pop from 0.94; a card that
   leaves squeezes its height to its top edge while the cards below slide up. Drop-zone tiles stagger the same way.
 - **3PO chat:** bubbles slide in from their own side (you: trailing, 3PO: leading); the thinking dots stay (busy only);
-  each streamed chunk lands at full white (no opacity fade on text); proposal and skill cards pop in; the model pill, Chat / Memory and Peak / 3PO
+  each streamed chunk lands at full white (no opacity fade on text); proposal and skill cards pop in; the model pill, Chat / Memory and Peek / 3PO
   slide their selection (matched geometry); the composer ring eases to green 2 pt with a soft halo on focus.
 - **Number rolls** (spend total, voice status line): the new value rolls up 6 pt from a light blur at full opacity and the
   old one leaves at once (`SwapText`). No `numericText` (it cross-fades the changing digits); Reduce Motion swaps in place.
@@ -82,36 +87,36 @@ Command". Peak uploads nothing, and client video stays local.
 | `GET /api/peak/client-directory` | **new**, this Mac only, read-only, asked only with `commandMeetingLink` on: this coach's active Command clients `[{id, display_name}]` (engine/peakdirectory.py → panels.command_get → Command `GET /clients/directory`); ids re-validated as UUIDs; nothing persisted or logged but counts |
 | `GET /api/peak/next-session` | **new**, this Mac only (403 for phones), read-only, asked only with `nextSessionPill` on, at most every 5 min: this coach's next session and gap checks (engine/peaknextsession.py → panels.command_get → Command `GET /schedule/bookings?upcoming_only=true&recent_hours=12` and `GET /invoices/`; Ghost `GET /v1/portal/{id}/meeting-bundles` and `GET /v1/ghost/client/{id}/games` for "since last met"); this coach's roster only; nothing persisted, logs are counts and states only |
 | `GET /api/live` | existing: fixes and download counts |
-| `GET /api/approvals`, `POST /api/approvals/<id>/approve\|ask\|prompt` | existing (approve without confirm only previews strong gates; Peak never sends confirm) |
+| `GET /api/approvals`, `POST /api/approvals/<id>/approve\|ask\|prompt` | existing (approve without confirm only previews strong gates; Peek never sends confirm) |
 | `GET /api/family-delivery-alerts` | existing (flag off → enabled=false, no Command call) |
 
 Auth works the same way as GOAT's own Mac app trust. A loopback request with no Tailscale headers is "this Mac (local
-process)" to phone.py, so Peak carries no token and no secret.
+process)" to phone.py, so Peek carries no token and no secret.
 
 ## Control
 - Hotkey: ctrl+opt+G by default (set in the profile), via KeyboardShortcuts 3.1.0. You can re-bind it in Shortcut…, and
   the menu-bar **Built-in hotkey** item turns it on or off (persisted).
-- Menu bar "Peak": show/hide, per-display checkboxes (by display UUID, persisted in `<state_root>/settings.json`), About, Quit.
+- Menu bar "Peek": show/hide, per-display checkboxes (by display UUID, persisted in `<state_root>/settings.json`), About, Quit.
 - URL scheme `forceiq-peak://` (strict; unknown actions are ignored; only the action name is logged):
   `toggle`, `show`, `hide`, `expand`, `collapse`, `ask[?q=…]` (opens the ask field prefilled and never sends),
   `switch?app=<bundle id from the profile>`, `display?id=<display UUID>&state=on|off`, `voice` (toggle dictation).
-- Raycast: `raycast/*.sh` script commands (package "ForceIQ Peak"). At install they're copied to `~/ForceIQ/peak/raycast/`.
+- Raycast: `raycast/*.sh` script commands (package "ForceIQ Peek"). At install they're copied to `~/ForceIQ/peak/raycast/`.
   Add that folder once by hand: Raycast Settings → Extensions → + → Add Script Directory.
 
-## Always-on PEAK status (the notch wing)
-Collapsed Peak is the hardware notch plus a **status wing** on its left: a black extension in the menu bar row, flush with
-the notch and exactly as tall (no flare, nothing below), so the two read as one wider notch. It says **PEAK** in brand
+## Always-on PEEK status (the notch wing)
+Collapsed Peek is the hardware notch plus a **status wing** on its left: a black extension in the menu bar row, flush with
+the notch and exactly as tall (no flare, nothing below), so the two read as one wider notch. It says **PEEK** in brand
 green (#4FFF4F), or **PRESENTING** in gold while presenting. This is the compact state the established notch apps use
 (Boring Notch's closed notch and DynamicNotchKit's compact leading/trailing content both draw beside the notch at notch
-height, with ~6 pt top and ~14 pt bottom corner radii). Hover or click on the wing opens Peak; the top-edge trigger covers
+height, with ~6 pt top and ~14 pt bottom corner radii). Hover or click on the wing opens Peek; the top-edge trigger covers
 the whole shape. The wing is 96 pt (`PeakGeometry.wingWidth`; set it to 0 to go back to a bare notch), sized for the longest
 word; it covers whatever menu-bar items sit under it (the last app menus, on an app with very long menus). The Studio Display pill has no
-wing (the pill is the status). **The menu-bar status item is off** (settings.json `menuBarItem`: true brings it back as a black "PEAK" capsule); the wing is
-the status. **Right-click (or ctrl-click) the wing for the Peak menu**: Show / Hide, Displays, Presenting, Do not disturb,
+wing (the pill is the status). **The menu-bar status item is off** (settings.json `menuBarItem`: true brings it back as a black "PEEK" capsule); the wing is
+the status. **Right-click (or ctrl-click) the wing for the Peek menu**: Show / Hide, Displays, Presenting, Do not disturb,
 Built-in hotkey, Shortcut, About, Quit. (A crowded notch-Mac menu bar can also hide a status item; the M5's had no on-screen
 status-item window until the wing left room.)
 
-**What the wing says** (`WingStatus`, pure and tested): idle = PEAK in green. A session inside 60 minutes = the client's first
+**What the wing says** (`WingStatus`, pure and tested): idle = PEEK in green. A session inside 60 minutes = the client's first
 name (6 characters, cut with an ellipsis) and whole minutes, e.g. `Spiros 42m`, then `now` from its start until 15 minutes
 after (full name in the sheet, the peek and the VoiceOver label). A small gold dot = a gap needs you (missing / unpaid
 invoice or export, from the next-session feed). A small red dot = the 5090 is held (a meeting live or within 2 h, or the
@@ -119,25 +124,25 @@ meeting status unknown). Presenting = gold PRESENTING, no dots, no names. The co
 it shows (a coarse tick, no animation). Demo: `FORCEIQ_PEAK_DEMO=1` with `{"nextSessionPill": true}` in the scratch root.
 
 ## Settings window
-Right-click the PEAK wing, then **Settings…** (Cmd-,). Every control writes through to settings.json at once: present while
+Right-click the PEEK wing, then **Settings…** (Cmd-,). Every control writes through to settings.json at once: present while
 Command is live and presenting now, Do not disturb (1 hour / until tomorrow / off, with when it ends), quiet hours with start
-and end times, the next-session countdown and gaps, the PEAK badge in the menu bar (these two apply when Peak restarts, and the
+and end times, the next-session countdown and gaps, the PEEK badge in the menu bar (these two apply when Peek restarts, and the
 window says so), Voice, the built-in hotkey and the shortcut. `SettingsModel` (PeakCore) holds the logic and is tested; the
 view is white text on black with gold section titles.
 
 ## Notch alerts (the peek)
-Collapsed Peak is the notch plus its green status wing. An urgent alert widens the collapsed shape INLINE in the menu bar row (notch height, ~145 pt each side of the notch, the way Boring Notch's
-sneak peek works) for 6 s (8 s for a failed fix): the client on the left of the notch, what happened on the right, then it retracts. What peeks: a meeting starting within 10 minutes; a fix that fails after Peak is up; Command's sign-in expiring
+Collapsed Peek is the notch plus its green status wing. An urgent alert widens the collapsed shape INLINE in the menu bar row (notch height, ~145 pt each side of the notch, the way Boring Notch's
+sneak peek works) for 6 s (8 s for a failed fix): the client on the left of the notch, what happened on the right, then it retracts. What peeks: a meeting starting within 10 minutes; a fix that fails after Peek is up; Command's sign-in expiring
 ("Command sign-in | expired"); a new approval waiting ("<client> | needs your OK"); a new family-delivery alert; a shift
 download finishing for one of the coach's clients ("<client> | download finished"; shift downloads only, never a provider grab).
-Everything except the meeting is news only: what was already there when Peak first read that source is the baseline and never
+Everything except the meeting is news only: what was already there when Peek first read that source is the baseline and never
 peeks. When several wait, the most urgent goes first (meeting, fix, sign-in, approval, family, download), one a minute. Each line names its client (Command's sign-in names Command); the dot is green for a meeting or a finished
 download and gold for anything that needs you; text is pure white. A tap opens the sheet (a meeting alert lands on the next-session card when the pill is
-on); the pointer resting on it holds it 3 s at a time. Nothing peeks while Peak is open, while dictating, during a live
+on); the pointer resting on it holds it 3 s at a time. Nothing peeks while Peek is open, while dictating, during a live
 session, in quiet hours, under Do not disturb (menu bar: 1 hour / until tomorrow morning / off), or within a minute of the
 last peek. A held alert is not spent: it peeks when the gate lifts. The decision is `AlertPolicy` (PeakCore/Alerts.swift),
 pure and tested; logs carry the kind or the reason, never a client. Pushing the pointer to the very top edge within 40 pt
-of the notch shape also opens Peak (that strip never takes a click, so the menu bar stays usable). Only the Studio Display
+of the notch shape also opens Peek (that strip never takes a click, so the menu bar stays usable). Only the Studio Display
 pill lifts on hover; the notch never scales or brightens, so nothing paints outside it. Demo: `FORCEIQ_PEAK_DEMO=1
 FORCEIQ_PEAK_DEMO_FEED=soon GOAT_PEAK_ROOT=<scratch root>` puts the sample meeting 9 min out.
 
@@ -151,8 +156,8 @@ and is hidden while the sheet or a peek is open. Demo: `FORCEIQ_PEAK_DEMO_FEED=d
 "A fix failed", the sheet shows one plain notice (plus a Show details button) instead of cards, the next-session card, 3PO,
 the ask field and file drops, the Studio pill drops its client countdown, dictated words aren't echoed under the notch, and
 "what's my day" answers that it is hidden. It is the one place the "every item names its client" rule is suspended. The
-menu-bar badge turns gold and reads "PEAK · PRESENTING" as a reminder. It is persisted (`presenting` in settings.json), and a settings file
-Peak can't read turns it ON, never off. Proof: `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_FEED=soon FORCEIQ_PEAK_DEMO_TOUR=1`
+menu-bar badge turns gold and reads "PEEK · PRESENTING" as a reminder. It is persisted (`presenting` in settings.json), and a settings file
+Peek can't read turns it ON, never off. Proof: `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_FEED=soon FORCEIQ_PEAK_DEMO_TOUR=1`
 with `{"presenting": true}` in the scratch root.
 
 **Auto-presenting.** Meetings run in the Command app and the client sees the screen, so presenting turns itself on while
@@ -163,7 +168,7 @@ never written down. `autoPresenting: false` in settings.json disables it. Proof:
 FORCEIQ_PEAK_DEMO_FEED=live GOAT_PEAK_ROOT=<scratch>` (log: `state presenting=on reason=command-live`).
 
 ## Settings (`<state_root>/settings.json`; `GOAT_PEAK_ROOT` overrides the root)
-Peak writes this file itself (menu bar, Settings); you can also hand-edit it. Every key is optional: a missing key (or a
+Peek writes this file itself (menu bar, Settings); you can also hand-edit it. Every key is optional: a missing key (or a
 JSON `null`) gets its default and the keys that are present are kept, so `{"commandMeetingLink": true}` alone works.
 Unknown keys are ignored.
 
@@ -185,7 +190,7 @@ Unknown keys are ignored.
 
 - **No file** is normal (a new Mac, a fresh scratch root): silent defaults, nothing logged, nothing written until a setting
   changes.
-- **A file that exists but can't be used** fails loudly and fails closed. That covers a file Peak can't read, an empty
+- **A file that exists but can't be used** fails loudly and fails closed. That covers a file Peek can't read, an empty
   file, invalid JSON, a top level that isn't an object, or any key with the wrong type (e.g. `"desktopActions": "yes"`,
   or a number inside `hiddenDisplays`). Then:
   - **all** settings use the defaults above, and `desktopActions`, `commandMeetingLink` and voice stay **off**
@@ -193,8 +198,8 @@ Unknown keys are ignored.
   - `logs/peak.log` gets one line naming the file and the bad key or parse position, never a value, e.g.
     `settings unreadable path=…/settings.json error=key 'desktopActions' has the wrong type (expected true/false); using defaults (desktopActions, commandMeetingLink, voice off)`;
   - the home list shows a plain-white status row: **Settings file couldn't be read: using defaults**;
-  - Peak never crashes. Before its first write over the bad file, it copies the file to
-    `<state_root>/settings.unreadable.json` so hand edits aren't lost. Fix the file and relaunch Peak.
+  - Peek never crashes. Before its first write over the bad file, it copies the file to
+    `<state_root>/settings.unreadable.json` so hand edits aren't lost. Fix the file and relaunch Peek.
 - Tests: `PrefsLoadTests` (lenient decode, loud failure, safe defaults) and `SettingsNoticeGuardTests` (the row is pure
   white with no fade, and `desktopActions` has no toggle).
 
@@ -206,24 +211,24 @@ Unknown keys are ignored.
   boost runs once at stop against the live roster (spotter rescue OFF). Models (about 560 MB) download once, on first
   enable, into `<Peak root>/models` (pinned HF commits; progress line in the 3PO field and Settings). No NVIDIA Open Model
   License models. Audio stays in memory on this Mac: never written, never uploaded.
-- **Live words** in the notch / pill (when Peak is collapsed) and in the 3PO field: confirmed words only (the prefix two
+- **Live words** in the notch / pill (when Peek is collapsed) and in the 3PO field: confirmed words only (the prefix two
   decodes agree on, about 0.5 s in), pure white at full opacity from the first word (never dimmed or gray); until the
   final pass a gold caret (▍) trails the last word, then it goes. 'Listening…' is pure white too. Client names
   underlined in gold. The mic shows "…" while it loads or finishes (never half-faded). The voice status line under the
   field rolls each new state up at full opacity (`SwapText`; no numericText cross-fade).
 - **Name guard** (PeakCore `VoiceNameGuard`): the boost may replace a word only when it sounds like the name. Months,
-  weekdays, numbers, function words and Peak's command words are never replaced ("October", "compare" never become
+  weekdays, numbers, function words and Peek's command words are never replaced ("October", "compare" never become
   "Cooper"); any other dictionary word (macOS `/usr/share/dict/web2`) only by a near-homophone ("Holiday" → "Halliday").
   The "'s" the boost strips is restored ("Halliday's").
 - **Commands.** The final words go to 3PO exactly like a typed message. "Open <client>'s FLOW package (and hit the code
   button)" and "Start a meeting with <client>" become a local confirm card (client, meeting, time; Run / Ask Claude / Copy
   prompt); an unclear client gets a pick card. Run only opens Command's own UI (the booking's room page, else the
-  schedule) or brings FLOW forward. Peak never joins, records or books, and never touches the recorder. The code-button
+  schedule) or brings FLOW forward. Peek never joins, records or books, and never touches the recorder. The code-button
   click is a desktop (Cua) action: behind `settings.json` `desktopActions`, OFF, and not wired until the STOP dry run passes.
 - **Desktop actions STOP dry run (locate and report only).** `FORCEIQ_PEAK_DESKTOP_DRYRUN=1` with a scratch `GOAT_PEAK_ROOT`
   (never `~/ForceIQ/peak`) turns a client command card's Run into a dry run: each step (FLOW: find the client's latest
   package → bring FLOW forward → the code-window button; Command: the app → the room / schedule link → its start control)
-  is located the safe way first (Peak's deep link, the app's URL scheme, App Intents, Accessibility read-only lookup, Cua
+  is located the safe way first (Peek's deep link, the app's URL scheme, App Intents, Accessibility read-only lookup, Cua
   last; Cua is not wired, only reported) and reported in a floating panel with a red **STOP** (Esc). STOP aborts between
   steps or mid-lookup and logs `dryrun STOPPED phase=… step=… latency_ms=… skipped=[…]`. Nothing is clicked, typed, opened
   or written in another app; bringing FLOW forward is the only effect. There is no live mode (`DesktopActionMode` is
@@ -260,29 +265,29 @@ Unknown keys are ignored.
   peak/scripts/real_press_smoke.sh --bundle <its non-production bundle id> --check-only      # target checks only
   ```
   It refuses production FLOW (exit 3) before it looks at or launches anything: `--bundle com.forceiq.flowai`, any pid of
-  a running `/Applications/FLOW.app`, or a pid in `FORCEIQ_PEAK_PROTECTED_PIDS`, and hands those pids to Peak. It makes
+  a running `/Applications/FLOW.app`, or a pid in `FORCEIQ_PEAK_PROTECTED_PIDS`, and hands those pids to Peek. It makes
   a scratch `GOAT_PEAK_ROOT` under `~/ForceIQ/peak-tmp` with `settings.json` `{"desktopActions": true, "hiddenDisplays":
-  [], "globallyHidden": false}` (Peak ignores a settings.json missing the last two, so the flag would read off) and a
-  package folder holding only a symlink named for the demo client, launches a demo Peak of the build in live mode, checks
-  Peak logged `desktop mode=live`, taps Peak's own Run (AX, Peak's button only), and reads FLOW's windows again.
-  `--mode press` passes when no `Code Window` window was open before, Peak logged one press, and a `Code Window` window is
-  open after. `--mode stop` first closes an open `Code Window` window in the isolated FLOW, taps Peak's STOP while the
+  [], "globallyHidden": false}` (Peek ignores a settings.json missing the last two, so the flag would read off) and a
+  package folder holding only a symlink named for the demo client, launches a demo Peek of the build in live mode, checks
+  Peek logged `desktop mode=live`, taps Peek's own Run (AX, Peek's button only), and reads FLOW's windows again.
+  `--mode press` passes when no `Code Window` window was open before, Peek logged one press, and a `Code Window` window is
+  open after. `--mode stop` first closes an open `Code Window` window in the isolated FLOW, taps Peek's STOP while the
   press is armed, and passes on `STOPPED phase=before_press`, no press, no `Code Window` window. Then it quits its own
-  demo Peak, deletes the scratch root (the symlink only) and leaves the proof in `~/ForceIQ/peak-tmp/real-press-<mode>-<time>`
-  (or `--out`). No screen captures. The script never activates, quits or opens a FLOW (only Peak's step 2 brings the
-  isolated FLOW forward, by pid) and never changes the installed Peak, its settings or the engine. Accessibility for the terminal is required (the helper `scripts/real_press_ax.swift` is
+  demo Peek, deletes the scratch root (the symlink only) and leaves the proof in `~/ForceIQ/peak-tmp/real-press-<mode>-<time>`
+  (or `--out`). No screen captures. The script never activates, quits or opens a FLOW (only Peek's step 2 brings the
+  isolated FLOW forward, by pid) and never changes the installed Peek, its settings or the engine. Accessibility for the terminal is required (the helper `scripts/real_press_ax.swift` is
   compiled into `$TMPDIR`).
 - **Cua backend (flag, OFF by default, no UI; waits for Chris's GO on his real setup).** [Cua](https://github.com/trycua/cua)'s
   `cua-driver` (MIT, pinned `0.36.0` with hashes in `peak/cua/requirements.lock`) can make the ONE live press instead of
-  Peak's own AXPress. It lives in its own venv, `~/ForceIQ/.venv-peak-cua` (`peak/cua/install.sh`: `uv pip sync
+  Peek's own AXPress. It lives in its own venv, `~/ForceIQ/.venv-peak-cua` (`peak/cua/install.sh`: `uv pip sync
   --require-hashes`, TMPDIR `~/ForceIQ/peak-tmp/cua/`), never the test venv or system Python. It is on only when all four
   hold: a scratch root (not `~/ForceIQ/peak`), `desktopActions: true`, `FORCEIQ_PEAK_DESKTOP_LIVE=1`, and `cuaActions: true`
-  plus `FORCEIQ_PEAK_CUA_LIVE=1` (PeakCore `CuaGate`; log `desktop cua=on|off`). Off, Peak never imports, spawns or calls
+  plus `FORCEIQ_PEAK_CUA_LIVE=1` (PeakCore `CuaGate`; log `desktop cua=on|off`). Off, Peek never imports, spawns or calls
   Cua (`CuaBackend.make` returns nil, `spawnCount` stays 0).
   - **One choke point.** Cua runs only from `DesktopPresser.pressCodeWindow`, after the same frontmost, production and
     PressGuard checks. `CuaBackend.invokeMenu` needs a `PressAuthorization` (minted only by re-running every guard) and an
     `ApprovalTicket` (minted only when the approval card's Run is tapped); neither can be built elsewhere.
-  - **Approval card first.** Before every Cua run Peak shows a card: what it does ("Cua will press FLOW's Tools ›
+  - **Approval card first.** Before every Cua run Peek shows a card: what it does ("Cua will press FLOW's Tools ›
     Code Window"), what it touches (that FLOW's pid and bundle id; no files, no other app, no database, no network), then
     Run / Cancel. Only a tap on that card's Run (`peak-cua-run`) mints the ticket; voice or a link never does; STOP,
     Cancel or 2 minutes without a tap cancel it. After the tap every guard runs again before the child starts.
@@ -316,9 +321,9 @@ Unknown keys are ignored.
   settings.json {"commandMeetingLink": true}>` types unique / ambiguous / none against a mocked directory (fake clients)
   and taps Run once (demo: nothing opens).
 - **Next-session pill and gap warnings (flag, OFF by default; read-only).** With `settings.json` `nextSessionPill: true`
-  (no UI, no env opt-in), Peak asks `GET /api/peak/next-session` at most every 5 min (30 min after a sign-in loss; 403 →
+  (no UI, no env opt-in), Peek asks `GET /api/peak/next-session` at most every 5 min (30 min after a sign-in loss; 403 →
   one dead state, no more asks) and keeps the answer in memory only. Flag off → no fetches, no pill. The engine reads
-  Command through its existing auth and back-off (`panels.command_get`, the #23 dead-after-3 gate); Peak carries no token.
+  Command through its existing auth and back-off (`panels.command_get`, the #23 dead-after-3 gate); Peek carries no token.
   Everything is scoped to this coach's profile and roster (`peakdrop.roster`); a booking for anyone else is dropped.
   - **Pill:** names the client and counts down locally (`in 42m`, `now`, `started 5m ago`; a 30 s `TimelineView`, no
     loop). Collapsed: the pill in pill mode, a gold dot in notch mode. Expanded: the pill sits on top of the home list;
@@ -352,7 +357,7 @@ Unknown keys are ignored.
 
 ## Build and test (never installs, launches or adds a login item)
 ```
-peak/build.sh      # → peak/build/ForceIQ Peak.app (scratch, SwiftPM cache and TMPDIR under ~/ForceIQ/)
+peak/build.sh      # → peak/build/ForceIQ Peek.app (scratch, SwiftPM cache and TMPDIR under ~/ForceIQ/)
 cd peak && TMPDIR=~/ForceIQ/peak-tmp swift test --scratch-path ~/ForceIQ/peak-derived/<name> --cache-path ~/ForceIQ/peak-derived/swiftpm-cache
 ```
 
@@ -377,7 +382,7 @@ Per coach: see `ADD-A-COACH.md` and `profile.template.json`. Third-party code: `
 
 ## "What's my day" brief and the 5090 light
 
-- **Brief.** Type `/day` or "what's my day" in 3PO (or say it with the voice toggle; Voice stays off by default). Peak
+- **Brief.** Type `/day` or "what's my day" in 3PO (or say it with the voice toggle; Voice stays off by default). Peek
   answers locally, with zero tokens and in three sentences: today's Command sessions (each naming the client), what's BLOCKED, and the
   decisions waiting on you. It reads next-meeting `today`, `/api/approvals` and `/api/live`. A source older than 300 s
   is labelled `STALE (read 9:30 AM ET, 12 min ago)`. A source that didn't answer is said plainly and nothing is
@@ -388,6 +393,6 @@ Per coach: see `ADD-A-COACH.md` and `profile.template.json`. Third-party code: `
   Mac or from the calendar. The message names the case, e.g. "Meeting in progress (started 9:10 AM ET)" or "Meeting at
   9:30 AM ET, within 2 h". Otherwise the light is green. It's unknown when there's no read, the read is older than 300 s, Command's live status
   can't be read, or the calendar is unknown (missing, garbled, access not granted, no fetch time) or STALE (its
-  `fetched_at` is older than 300 s). Unknown is treated as red and labelled. While it isn't green, Peak refuses every 5090 GPU action (the
+  `fetched_at` is older than 300 s). Unknown is treated as red and labelled. While it isn't green, Peek refuses every 5090 GPU action (the
   shifts/upscale drop zone, GPU proposals and GPU approvals) with one plain sentence, and nothing runs. Status reads only:
-  Peak never talks to the 5090, its recording service, the service that guards it, or the recorder machine.
+  Peek never talks to the 5090, its recording service, the service that guards it, or the recorder machine.

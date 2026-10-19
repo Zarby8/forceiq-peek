@@ -21,7 +21,7 @@ struct AXCodeWindowPresser: DesktopPresser {
         func ms() -> Int { Int((Date().timeIntervalSince(t0) * 1000).rounded()) }
         if stop.isPressed { return PressResult(pressed: false, stopped: true, detail: "STOP before the press; nothing pressed", ms: ms()) }
         guard step.kind == .codeWindowButton else { return PressResult(pressed: false, detail: "not FLOW's code-window step; nothing pressed", ms: ms()) }
-        guard AXIsProcessTrusted() else { return PressResult(pressed: false, detail: "Peak has no Accessibility permission; nothing pressed", ms: ms()) }
+        guard AXIsProcessTrusted() else { return PressResult(pressed: false, detail: "Peek has no Accessibility permission; nothing pressed", ms: ms()) }
         let front = await MainActor.run { () -> (pid: pid_t, bundle: String?, path: String?)? in
             NSWorkspace.shared.frontmostApplication.map { ($0.processIdentifier, $0.bundleIdentifier, $0.bundleURL?.path) }
         }

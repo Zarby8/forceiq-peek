@@ -8,7 +8,7 @@ public protocol ThreePOTransport: Sendable {
     func post(_ path: String, _ body: Data) async -> (Int, Data)
 }
 
-/// A proposal's lifecycle in Peak. Describe first; Run = GOAT's preview; Confirm = a second explicit tap.
+/// A proposal's lifecycle in Peek. Describe first; Run = GOAT's preview; Confirm = a second explicit tap.
 public enum ProposalPhase: Equatable, Sendable {
     case described
     case previewing
@@ -46,7 +46,7 @@ public enum ProposalPhase: Equatable, Sendable {
     var pendingLinkPicks: [String: (ClientCommand, [String: DirectoryClient])] = [:]
     /// This coach's Command directory, in memory only, briefly (DirectoryCache). Read only with the flag on.
     public let directory = DirectoryCache()
-    /// The engine said the Command sign-in is dead: surface the existing sign-in row (Peak's home). Never a retry loop.
+    /// The engine said the Command sign-in is dead: surface the existing sign-in row (Peek's home). Never a retry loop.
     public var onCommandSignIn: ((CommandSignInNotice) -> Void)?
     /// "What's my day" ("/day", "what's my day", typed or dictated): composes the brief locally (zero tokens). nil = off.
     public var dayBrief: (() async -> String)?
@@ -307,7 +307,7 @@ public enum ProposalPhase: Equatable, Sendable {
     }
 
     public func run(_ id: String) async {
-        if let c = card(id), c.origin == .command {               // Peak's own command card: one explicit tap opens the UI
+        if let c = card(id), c.origin == .command {               // Peek's own command card: one explicit tap opens the UI
             guard !c.viewOnly, phases[id] == .described || isFailed(id) else { return }
             logger?.log("3po command run action=\(c.action)")
             phases[id] = .done(onCommandRun?(c) ?? "Nothing ran.")

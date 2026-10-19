@@ -1,6 +1,6 @@
 import Foundation
 
-// The pack's state curves (BOB Motion ForceIQ-Peak-3PO-v1 source/curves.py and rig/README.md, "exact maths used for
+// The pack's state curves (BOB Motion ForceIQ-Peek-3PO-v1 source/curves.py and rig/README.md, "exact maths used for
 // the renders"), ported so the live rig moves like the rendered loops. Pure, unit-tested.
 
 public struct ThreePOParams: Equatable, Sendable {

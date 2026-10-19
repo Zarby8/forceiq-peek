@@ -1,8 +1,8 @@
 import Foundation
 
-/// One coach's Peak profile: the resolved `peak` section of that coach's GOAT overlay (engine/peakprofile.py), loaded at
+/// One coach's Peek profile: the resolved `peak` section of that coach's GOAT overlay (engine/peakprofile.py), loaded at
 /// launch from the local engine (GET /api/peak/profile), else the last copy cached under the state root.
-/// Nothing coach-specific lives in Peak's code.
+/// Nothing coach-specific lives in Peek's code.
 public struct CoachProfile: Equatable, Sendable, Codable {
     public struct Roster: Equatable, Sendable, Codable {
         public var source: String; public var names: [String]
@@ -69,7 +69,7 @@ public struct CoachProfile: Equatable, Sendable, Codable {
         return p
     }
 
-    /// No profile at all: nothing enabled, no apps, no clients. Peak shows "No coach profile" and does nothing else.
+    /// No profile at all: nothing enabled, no apps, no clients. Peek shows "No coach profile" and does nothing else.
     public static let none = CoachProfile(
         schema: 1, configured: false, coachID: "none", displayName: "", stateRoot: "~/ForceIQ/peak",
         roster: Roster(source: "none", names: []), folderRoots: [], nasPaths: [], accounts: Accounts(command: "", flow: ""),
@@ -77,7 +77,7 @@ public struct CoachProfile: Equatable, Sendable, Codable {
         modules: [:], apps: [], goatBundleID: "", commandOpenURL: "forceiq-command://app/open")
 }
 
-/// GOAT_PEAK_ROOT: a scratch Peak root for tests, demo instances and CPU checks, so they never write the coach's real
+/// GOAT_PEAK_ROOT: a scratch Peek root for tests, demo instances and CPU checks, so they never write the coach's real
 /// ~/ForceIQ/peak (logs, settings.json, profile.cache.json). Empty or unset: no override.
 public enum PeakRoot {
     public static func override(env: [String: String] = ProcessInfo.processInfo.environment,

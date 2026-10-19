@@ -149,7 +149,7 @@ import XCTest
         let backup = r.appendingPathComponent(PeakPrefs.unreadableBackupName)
         XCTAssertEqual(try String(contentsOf: backup, encoding: .utf8), bad, "the coach's unreadable file is kept, not lost")
         let fresh = PeakPrefs(stateRoot: r)
-        XCTAssertNil(fresh.loadIssue, "Peak's own write is valid JSON")
+        XCTAssertNil(fresh.loadIssue, "Peek's own write is valid JSON")
         XCTAssertFalse(fresh.isDisplayShown(a)); XCTAssertTrue(fresh.globallyHidden); XCTAssertFalse(fresh.commandMeetingLink)
         XCTAssertEqual(fresh.voiceEnabled, nil)
     }

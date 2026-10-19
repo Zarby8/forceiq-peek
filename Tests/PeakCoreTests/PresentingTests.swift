@@ -69,7 +69,7 @@ import XCTest
         try! Data(#"{"presenting": "yes"}"#.utf8).write(to: r.appendingPathComponent("settings.json"))
         let bad = PeakPrefs(stateRoot: r)
         XCTAssertNotNil(bad.loadIssue)
-        XCTAssertTrue(bad.presenting, "a settings file Peak can't read: hide everything, not nothing")
+        XCTAssertTrue(bad.presenting, "a settings file Peek can't read: hide everything, not nothing")
         XCTAssertTrue(PeakPrefs.Doc.CodingKeys.allCases.map(\.stringValue).contains("presenting"))
     }
 

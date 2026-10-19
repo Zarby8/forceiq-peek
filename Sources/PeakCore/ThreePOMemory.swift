@@ -1,6 +1,6 @@
 import Foundation
 
-// ForceIQ Peak 3PO memory + skill cards: the client side of engine/threepo_memory.py and engine/threepo_skills.py.
+// ForceIQ Peek 3PO memory + skill cards: the client side of engine/threepo_memory.py and engine/threepo_skills.py.
 // Pure logic, unit-tested: memory doc parsing and grouping, the memory view's look (bright on black, never dim), skill
 // card decoding, and the rule that a skill only runs from its card's own Run tap. Nothing here touches the network.
 
@@ -147,7 +147,7 @@ public struct SkillCard: Equatable, Sendable, Identifiable {
 }
 
 public enum SkillPolicy {
-    /// Only read, prompt or action skills; an action skill is runnable only for an action Peak itself would allow.
+    /// Only read, prompt or action skills; an action skill is runnable only for an action Peek itself would allow.
     public static func card(from o: [String: Any]) -> SkillCard? {
         let id = jstr(o["id"]), slug = jstr(o["slug"]), name = jstr(o["name"])
         guard !id.isEmpty, !slug.isEmpty, !name.isEmpty else { return nil }

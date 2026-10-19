@@ -164,7 +164,7 @@ struct SpendMeter: View {
                     }
                 }
             }
-            if let p = spend.peak { line(title: "Peak", p, big: false) }
+            if let p = spend.peak { line(title: "Peek", p, big: false) }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: spend.peak?.totalUSD)
     }

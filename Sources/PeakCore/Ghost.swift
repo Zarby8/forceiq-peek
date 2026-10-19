@@ -1,6 +1,6 @@
 import Foundation
 
-/// Peak's Ghost mark states (BOB Motion pack ForceIQ-Peak-BOB-v1, MANIFEST peak_state_map).
+/// Peek's Ghost mark states (BOB Motion pack ForceIQ-Peek-BOB-v1, MANIFEST peak_state_map).
 public enum GhostState: String, Sendable, CaseIterable {
     case idle, attention, working, typing, receipt, error
 
@@ -37,7 +37,7 @@ public struct GhostPlayback: Equatable, Sendable {
 public struct GhostPack: Sendable {
     public let pack: String
     public let sizes: [Int]
-    public let stateMap: [String: String]               // Peak state → asset
+    public let stateMap: [String: String]               // Peek state → asset
     public let playback: [String: GhostPlayback]        // asset → playback
     public let md5: [String: String]                    // relative file → md5
 
@@ -88,8 +88,8 @@ public struct GhostPack: Sendable {
 
 /// The Ghost mark parks its steady loop the way the 3PO droid does (AvatarLoopPark): a playing AVPlayerLooper cost
 /// ~1.1 % CPU with the chat open and idle (CoreMedia's image queue + decoder every frame, a looper item swap every
-/// pass), nearly all of Peak's idle cost. Parked, the loop's decoded frames run as a Core Animation keyframe
-/// animation (the render server draws it; Peak itself wakes for nothing). Same frames, same phase, same timing.
+/// pass), nearly all of Peek's idle cost. Parked, the loop's decoded frames run as a Core Animation keyframe
+/// animation (the render server draws it; Peek itself wakes for nothing). Same frames, same phase, same timing.
 public enum GhostMarkPark {
     /// The frames that repeat: a loop's loop range (whole clip when unset); intro_then_loop's loop range once the
     /// intro has played. One-shots never park (they end).

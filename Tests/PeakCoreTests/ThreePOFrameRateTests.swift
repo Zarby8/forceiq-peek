@@ -3,7 +3,7 @@ import Foundation
 import XCTest
 @testable import PeakCore
 
-// 3PO at 120 fps (BOB Motion ForceIQ-Peak-3PO v1.1 add-on): the rate follows the screen Peak is on (120 only at
+// 3PO at 120 fps (BOB Motion ForceIQ-Peek-3PO v1.1 add-on): the rate follows the screen Peek is on (120 only at
 // ≥ 120 Hz, 60 is the default and the fallback), the add-on's manifest and the bundled fps120 clips, and the rig's
 // parked idle at each rate. The Mac running these has whatever screens it has; the 120 path is driven by injected
 // maximumFramesPerSecond values.
@@ -31,7 +31,7 @@ final class AvatarFrameRateChoiceTests: XCTestCase {
         XCTAssertEqual(AvatarFrameRate.choose(screenMaxFPS: 120, has120: true, override: ""), .fps120)
     }
 
-    /// Peak moving between the built-in ProMotion panel and the 60 Hz Studio Displays (or the lid closing).
+    /// Peek moving between the built-in ProMotion panel and the 60 Hz Studio Displays (or the lid closing).
     func testMovingBetweenScreensFollowsEachScreen() {
         let path: [Int?] = [120, 60, 120, nil, 60, 120]
         XCTAssertEqual(path.map { AvatarFrameRate.choose(screenMaxFPS: $0, has120: true) },

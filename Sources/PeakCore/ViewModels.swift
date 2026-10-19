@@ -8,7 +8,7 @@ import Combine
     func unregister()
 }
 
-/// Performs a card action that Peak allowed (app side: GOAT engine on 127.0.0.1, NSWorkspace, pasteboard).
+/// Performs a card action that Peek allowed (app side: GOAT engine on 127.0.0.1, NSWorkspace, pasteboard).
 @MainActor public protocol CardActionPerforming: AnyObject {
     func perform(_ action: CardAction, on card: PeakCard) async -> String
     /// Did the last perform() actually succeed (drives the approval pop; never a guess from the text)?
@@ -74,7 +74,7 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     public func expand() { if !globallyVisible { show() }; dismissPeek(); guard !expanded else { return }; expanded = true; log("state expanded=on") }
     public func collapse() { guard expanded else { return }; expanded = false; askText = nil; log("state expanded=off") }
 
-    /// Drop an alert out of the notch on `display`. Only a visible, collapsed Peak shows one; it retracts by itself.
+    /// Drop an alert out of the notch on `display`. Only a visible, collapsed Peek shows one; it retracts by itself.
     public func showPeek(_ a: PeakAlert, on display: String?) {
         guard globallyVisible, !expanded else { return }
         let a = presenting ? Presenting.redact(a) : a
@@ -254,7 +254,7 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     public func choose(_ action: CardAction) async -> Bool {
         guard let card = describedCard else { return false }
         guard CardPolicy.isAllowed(action, on: card) else {
-            lastResult = card.viewOnlyReason ?? "Not available from Peak."
+            lastResult = card.viewOnlyReason ?? "Not available from Peek."
             logger?.log("card refused kind=\(card.kind.rawValue)")
             return false
         }

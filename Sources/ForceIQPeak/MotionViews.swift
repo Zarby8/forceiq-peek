@@ -62,7 +62,7 @@ struct PopIn: ViewModifier {
     }
 }
 
-/// Blur-to-sharp at full opacity: how text "fades in" in Peak (white stays pure white the whole way).
+/// Blur-to-sharp at full opacity: how text "fades in" in Peek (white stays pure white the whole way).
 struct Sharpen: ViewModifier {
     let on: Bool
     func body(content: Content) -> some View { content.blur(radius: on ? PeakMotion.entryBlur : 0) }

@@ -1,8 +1,8 @@
 import Foundation
 
-// ForceIQ Peak "What's my day" brief (Chris 10.19.2026). Typed ("/day", "what's my day") or said through the existing
+// ForceIQ Peek "What's my day" brief (Chris 10.19.2026). Typed ("/day", "what's my day") or said through the existing
 // voice toggle (toggle-only, no wake word; voice stays behind its flag, off by default). A few sentences, local only:
-//   1. today's Command sessions, each naming its client (GET /api/peak/next-meeting `today`: the bookings read Peak
+//   1. today's Command sessions, each naming its client (GET /api/peak/next-meeting `today`: the bookings read Peek
 //      already makes through the engine's Command session);
 //   2. BLOCKED items (GOAT approvals: failed jobs + duplicate-run blocks; GOAT live status: failed fixes + fixes needed);
 //   3. decisions waiting on Chris (every other open GOAT approval).
@@ -304,7 +304,7 @@ public enum DayBriefCommand {
         return true
     }
 
-    /// Voice turned off (or Peak quitting): silence at once.
+    /// Voice turned off (or Peek quitting): silence at once.
     public func silence() {
         guard speaking else { return }
         generation += 1

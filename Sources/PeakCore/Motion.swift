@@ -1,6 +1,6 @@
 import Foundation
 
-/// Peak's motion tokens (the "easy UX, beautiful with motion" polish). Every value is a finite, event-triggered move:
+/// Peek's motion tokens (the "easy UX, beautiful with motion" polish). Every value is a finite, event-triggered move:
 /// nothing here repeats, and each view falls back to a short crossfade of the shell or no motion at all under Reduce
 /// Motion. Text is never faded: entries rise and sharpen from a light blur at full opacity (white stays pure white).
 /// MotionPolishGuardTests pins every number below.
@@ -54,7 +54,7 @@ public enum PeakMotion {
         [springResponse, hoverResponse, reduceCrossfade, staggerStep, maxEntryDelay, popResponse, collapseResponse, focusRing]
     }
 
-    /// Smallest tap target (pt) for any control Peak draws: buttons, segmented pills, chips that take taps.
+    /// Smallest tap target (pt) for any control Peek draws: buttons, segmented pills, chips that take taps.
     public static let minTapTarget = 28.0
 }
 

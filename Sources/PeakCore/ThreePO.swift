@@ -1,6 +1,6 @@
 import Foundation
 
-// ForceIQ Peak 3PO: the client side of engine/threepo.py's SSE contract (POST /api/3po/stream; GET /api/3po/models|spend).
+// ForceIQ Peek 3PO: the client side of engine/threepo.py's SSE contract (POST /api/3po/stream; GET /api/3po/models|spend).
 // Pure logic, unit-tested: the SSE parser, the event decoder, the transcript reducer, model picks, the proposal policy
 // and the spend meter. Nothing here talks to the network or runs a card.
 
@@ -77,7 +77,7 @@ public struct ProposalCard: Equatable, Sendable, Identifiable {
     public var viewOnly: Bool
     public var previewBody: Data?        // POST /api/act body without confirm (GOAT's own preview)
     public var confirmBody: Data?        // POST /api/act body with confirm:true (only after the preview, on a second tap)
-    /// engine: a 3PO proposal (Run = GOAT's /api/act preview, then Confirm). command: a client voice/typed command Peak
+    /// engine: a 3PO proposal (Run = GOAT's /api/act preview, then Confirm). command: a client voice/typed command Peek
     /// recognised itself (Run opens `link` / brings `appName` forward, nothing else). pick: "which client?" (`picks`).
     public enum Origin: String, Sendable { case engine, command, pick }
     public var origin: Origin = .engine
@@ -94,7 +94,7 @@ public enum ProposalPolicy {
         danger.firstMatch(in: action, range: NSRange(action.startIndex..., in: action)) != nil
     }
 
-    /// The card Peak shows. Run exists only for a routine heal that goes through GOAT's own /api/act preview → confirm.
+    /// The card Peek shows. Run exists only for a routine heal that goes through GOAT's own /api/act preview → confirm.
     public static func card(from o: [String: Any]) -> ProposalCard? {
         guard let id = o["id"] as? String, let action = o["action"] as? String, !id.isEmpty, !action.isEmpty else { return nil }
         func str(_ v: Any?) -> String {
@@ -191,7 +191,7 @@ public struct SpendDoc: Equatable, Sendable {
         return Line(totalUSD: total, budgetUSD: b, warn: warn, byFamily: ordered)
     }
 
-    /// done.spend {peak_mtd_usd, warn}: the Peak line updates from the turn itself (no extra request).
+    /// done.spend {peak_mtd_usd, warn}: the Peek line updates from the turn itself (no extra request).
     public mutating func applyTurn(peakMTD: Double?, warn: Bool?) {
         guard let v = peakMTD else { return }
         var l = peak ?? Line(totalUSD: 0, budgetUSD: budgetUSD, warn: false, byFamily: SpendDoc.familyOrder.map { ($0, 0) })
@@ -338,7 +338,7 @@ public struct ThreePOTranscript: Equatable, Sendable {
         consultingOpus = models.pick == .auto
     }
 
-    /// A zero-token local turn (a client command Peak recognised itself): the user's words, then 3PO's card(s).
+    /// A zero-token local turn (a client command Peek recognised itself): the user's words, then 3PO's card(s).
     public mutating func local(user text: String?, reply: String, cards: [ProposalCard]) {
         if let text { messages.append(ChatMessage(id: nextID, role: .user, text: text, done: true)); nextID += 1 }
         messages.append(ChatMessage(id: nextID, role: .threePO, text: reply, proposals: cards, modelAlias: "local", local: true, done: true))

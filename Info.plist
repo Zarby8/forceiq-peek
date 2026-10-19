@@ -3,9 +3,9 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>ForceIQ Peak</string>
+	<string>ForceIQ Peek</string>
 	<key>CFBundleName</key>
-	<string>ForceIQ Peak</string>
+	<string>ForceIQ Peek</string>
 	<key>CFBundleExecutable</key>
 	<string>ForceIQPeak</string>
 	<key>CFBundleIdentifier</key>
@@ -23,7 +23,7 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Peak listens only while you have pressed the mic (press again to stop) and turns your words into a 3PO message. Audio stays on this Mac and is never saved or uploaded.</string>
+	<string>Peek listens only while you have pressed the mic (press again to stop) and turns your words into a 3PO message. Audio stays on this Mac and is never saved or uploaded.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

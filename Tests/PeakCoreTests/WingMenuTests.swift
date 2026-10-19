@@ -2,7 +2,7 @@ import Foundation
 import XCTest
 @testable import PeakCore
 
-/// The menu-bar item is off by default; the status wing's right-click is the Peak menu (Show, Displays, Presenting,
+/// The menu-bar item is off by default; the status wing's right-click is the Peek menu (Show, Displays, Presenting,
 /// Do not disturb, Settings, Quit), so nothing is left without a way to reach it.
 final class WingMenuTests: XCTestCase {
     func testTheMenuBarItemIsOffByDefaultAndFailsClosedToOff() {
@@ -25,7 +25,7 @@ final class WingMenuTests: XCTestCase {
         XCTAssertTrue(app.contains("override func rightMouseDown(with event: NSEvent)"))
         XCTAssertTrue(app.contains("NSMenu.popUpContextMenu(self.makeMenu(), with: e, for: v)"), "the one menu, built once, shown from the wing")
         let menu = app.components(separatedBy: "func makeMenu() -> NSMenu").last?.components(separatedBy: "func menuWillOpen").first ?? ""
-        for needle in ["Show ForceIQ Peak", "Presenting.menuTitle", "Do not disturb", "Built-in hotkey", "Settings…", "Quit ForceIQ Peak"] {
+        for needle in ["Show ForceIQ Peek", "Presenting.menuTitle", "Do not disturb", "Built-in hotkey", "Settings…", "Quit ForceIQ Peek"] {
             XCTAssertTrue(menu.contains(needle), "the menu still offers: \(needle)")
         }
     }

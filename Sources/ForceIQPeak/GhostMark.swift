@@ -4,7 +4,7 @@ import PeakCore
 import SwiftUI
 
 // ───────────────────────────── seams: the mark renderer and the glow renderer ─────────────────────────────
-/// The Ghost mark. Default: BOB Motion's ForceIQ-Peak-BOB-v1 pack (AVPlayerLayer + AVPlayerLooper, circle-masked, on
+/// The Ghost mark. Default: BOB Motion's ForceIQ-Peek-BOB-v1 pack (AVPlayerLayer + AVPlayerLooper, circle-masked, on
 /// black), driven by the pack's own data (Resources/bob/MANIFEST.json, as shipped). Swap by asset path:
 /// FORCEIQ_PEAK_GHOST_DIR=<a pack root with MANIFEST.json + h264-black/ (+ hevc-alpha/)>.
 @MainActor protocol GhostMarkRendering {
@@ -344,7 +344,7 @@ enum GlowTint {
 }
 
 /// Native glow: a soft ring that breathes (GlowBreath). Core Animation layer animations, run by the render server:
-/// no SwiftUI update or CA commit per frame from Peak (the old TimelineView(.animation) re-rendered the whole expanded
+/// no SwiftUI update or CA commit per frame from Peek (the old TimelineView(.animation) re-rendered the whole expanded
 /// panel at display refresh: ~8-13 % CPU, chat open and idle). Not live (collapsed + idle, hidden): a still frame.
 @MainActor struct NativeGlowRenderer: GhostGlowRendering {
     func glow(state: GhostState, reduceMotion: Bool, active: Bool) -> AnyView {

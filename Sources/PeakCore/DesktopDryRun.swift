@@ -3,7 +3,7 @@ import Foundation
 // Desktop actions (Cua) STOP dry run. LOCATE AND REPORT ONLY.
 //
 // The two headline commands ("open <client>'s latest FLOW package and hit the code-window button", "start a meeting with
-// <client>") are planned as steps. Each step's target is located the safe way first: a deep link Peak already owns, the
+// <client>") are planned as steps. Each step's target is located the safe way first: a deep link Peek already owns, the
 // app's URL scheme, App Intents, then an Accessibility element lookup, and Cua last. Nothing is clicked, typed, opened or
 // written in another app. The one effect a dry run may have is bringing FLOW forward (what the card's Run already does).
 // A visible STOP aborts at once, between steps or during one; what was stopped is logged.
@@ -143,7 +143,7 @@ public struct DryRunReport: Equatable, Sendable {
     public var totalMs: Int
     public var live = false
     public var pressed: Bool { results.contains { $0.press?.pressed == true } }
-    /// The press went through the Cua backend (cua-driver invoke_menu) rather than Peak's own AXPress.
+    /// The press went through the Cua backend (cua-driver invoke_menu) rather than Peek's own AXPress.
     public var viaCua: Bool { results.contains { $0.press?.pressed == true && $0.press?.detail.hasPrefix("cua pressed") == true } }
     public var summary: String {
         let located = results.filter { $0.located != nil }.count

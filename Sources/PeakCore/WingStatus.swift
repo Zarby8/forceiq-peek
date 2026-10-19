@@ -1,7 +1,7 @@
 import Foundation
 
 /// What the status wing says right now. One short word, plus small shape-only dots; never more than the wing can hold.
-///   idle            PEAK in green
+///   idle            PEEK in green
 ///   a session soon  "<first name> 42m" in green (inside 60 min), "<first name> now" from its start until 15 min after
 ///   a gap needs you a gold dot (an unpaid / missing invoice or export; the sheet has the detail)
 ///   5090 held       a red dot (a meeting is live or within 2 h, or the meeting status is unknown: GPU jobs are held)
@@ -43,7 +43,7 @@ public enum WingStatus {
         if light.holdsGPU { dots.append(Brand.redHex) }
         if gaps > 0 { dots.append(Brand.goldHex) }
         var text = StatusBadge.spec(presenting: false).wingText
-        var label = ["ForceIQ Peak"]
+        var label = ["ForceIQ Peek"]
         if let s = session, let c = countdown(to: s.scheduledAt, now: now) {
             text = "\(firstName(s.client)) \(c)"
             label.append(c == "now" ? "\(s.client) now" : "\(s.client) in \(c.dropLast()) minutes")

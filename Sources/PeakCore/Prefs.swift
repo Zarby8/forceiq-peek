@@ -1,6 +1,6 @@
 import Foundation
 
-/// Persisted Peak settings, one JSON file under this coach's state root (<state_root>/settings.json).
+/// Persisted Peek settings, one JSON file under this coach's state root (<state_root>/settings.json).
 /// (KeyboardShortcuts keeps the recorded shortcut itself in the app's UserDefaults; that's the library's storage.)
 ///
 /// Every key is optional and decoded leniently: a missing key (or a JSON null) gets its documented default and the keys
@@ -14,7 +14,7 @@ import Foundation
 /// JSON, not an object, or any key of the wrong type) fails loudly and fails closed: ALL settings fall back to defaults,
 /// desktopActions / commandMeetingLink / voice are off, `loadIssue` names the path and the bad key or parse error
 /// (never a value), the app logs it and shows `unreadableNotice` on the home list. Before the first save over such a
-/// file, Peak keeps a copy next to it (settings.unreadable.json) so the coach's edits aren't lost. Never crashes.
+/// file, Peek keeps a copy next to it (settings.unreadable.json) so the coach's edits aren't lost. Never crashes.
 public final class PeakPrefs: @unchecked Sendable {
     struct Doc: Codable {
         var hiddenDisplays: [String] = []; var hotkeyEnabled: Bool? = nil; var globallyHidden = false; var ghostFormat: String? = nil
@@ -56,7 +56,7 @@ public final class PeakPrefs: @unchecked Sendable {
 
     /// The plain-white status row shown on the home list while the file couldn't be used.
     public static let unreadableNotice = "Settings file couldn't be read: using defaults"
-    /// Where an unreadable file is copied before Peak first writes over it.
+    /// Where an unreadable file is copied before Peek first writes over it.
     public static let unreadableBackupName = "settings.unreadable.json"
 
     public let url: URL
@@ -172,7 +172,7 @@ public final class PeakPrefs: @unchecked Sendable {
         set { edit { $0.commandMeetingLink = newValue } }
     }
     /// The next-session pill + gap warnings (NextSessionGate; read-only, GET /api/peak/next-session). OFF by default, no
-    /// UI. Missing key or unreadable file = off, and with it off Peak never asks the engine for the feed.
+    /// UI. Missing key or unreadable file = off, and with it off Peek never asks the engine for the feed.
     public var nextSessionPill: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.nextSessionPill ?? false }
         set { edit { $0.nextSessionPill = newValue } }
@@ -184,12 +184,12 @@ public final class PeakPrefs: @unchecked Sendable {
         set { edit { $0.presenting = newValue } }
     }
     /// Presenting turns itself on while Command is live on this Mac (the client sees the screen). ON by default; off by hand in
-    /// settings.json. A settings file Peak can't read leaves it on (the privacy-safe side).
+    /// settings.json. A settings file Peek can't read leaves it on (the privacy-safe side).
     public var autoPresenting: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.autoPresenting ?? true }
         set { edit { $0.autoPresenting = newValue } }
     }
-    /// Show the menu-bar status item (a black "PEAK" capsule with the Peak menu). OFF by default: the status wing beside the
+    /// Show the menu-bar status item (a black "PEEK" capsule with the Peek menu). OFF by default: the status wing beside the
     /// notch is the always-on status and its right-click menu has the same actions. Missing key or unreadable file = off.
     public var menuBarItem: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.menuBarItem ?? false }

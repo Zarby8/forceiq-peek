@@ -120,6 +120,6 @@ public struct EngineSnapshot: Equatable, Sendable {
     public var fixesNeeded: [BriefItem] = []           // /api/live `fixes_needed` (BLOCKED)
     public var liveAt: Date? = nil                     // /api/live doc's own write time
     public var approvalsAt: Date? = nil                // /api/approvals listing time
-    public var takenAt: Date? = nil                    // when Peak made this read
+    public var takenAt: Date? = nil                    // when Peek made this read
     public init() {}
 }

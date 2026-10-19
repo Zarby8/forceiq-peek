@@ -6,7 +6,7 @@ import Foundation
 //
 // The link opens Command's staff route /sessions/start: a confirm sheet with the client's name and Start / Cancel.
 // Nothing starts on load; nothing starts until the coach taps Start in Command. A bad or missing id lands on
-// /sessions/start?error=invalid. Peak builds the link ONLY from a validated, trimmed, lower-case UUID taken from this
+// /sessions/start?error=invalid. Peek builds the link ONLY from a validated, trimmed, lower-case UUID taken from this
 // coach's Command directory (GET /clients/directory through the engine's existing Command session); a heard or typed
 // name never goes into the link.
 //

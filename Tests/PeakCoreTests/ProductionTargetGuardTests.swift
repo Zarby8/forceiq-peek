@@ -188,8 +188,8 @@ import XCTest
         let s = try String(contentsOf: script, encoding: .utf8)
         XCTAssertTrue(s.contains("PROD_BUNDLE=com.forceiq.flowai") && s.contains("PROD_APP=/Applications/FLOW.app"))
         XCTAssertTrue(s.contains("pgrep -f \"^$PROD_APP/Contents/MacOS/\""), "every running production FLOW pid is protected")
-        XCTAssertTrue(s.contains("FORCEIQ_PEAK_PROTECTED_PIDS=\"$PROTECTED\""), "Peak gets the same protected pids")
+        XCTAssertTrue(s.contains("FORCEIQ_PEAK_PROTECTED_PIDS=\"$PROTECTED\""), "Peek gets the same protected pids")
         XCTAssertFalse(s.contains("open -a") || s.contains("screencapture") || s.contains("osascript"))
-        XCTAssertTrue(s.contains("\"hiddenDisplays\": [], \"globallyHidden\": False"), "settings.json Peak actually loads")
+        XCTAssertTrue(s.contains("\"hiddenDisplays\": [], \"globallyHidden\": False"), "settings.json Peek actually loads")
     }
 }

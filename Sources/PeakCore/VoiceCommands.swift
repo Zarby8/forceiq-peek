@@ -1,12 +1,12 @@
 import Foundation
 
-// Client commands Peak recognises itself, typed or spoken (the voice transcript goes through ThreePOStore.send() exactly
+// Client commands Peek recognises itself, typed or spoken (the voice transcript goes through ThreePOStore.send() exactly
 // like a typed message). Two today:
 //   "Open <client>'s FLOW package (and hit the code button)"   "Start a meeting with <client>"
 // Each one only produces a describe-first confirm card naming the client, the meeting and the time, with Run / Ask Claude /
 // Copy prompt. Nothing runs until Run is tapped, and Run only opens Command's own UI (its room page or schedule) or brings
-// FLOW forward. Peak never joins, records, books or reschedules, and never touches the recorder. A desktop click (FLOW's
-// code button) is a Cua action: it stays behind settings `desktopActions` (OFF, no UI); Peak presses FLOW's
+// FLOW forward. Peek never joins, records, books or reschedules, and never touches the recorder. A desktop click (FLOW's
+// code button) is a Cua action: it stays behind settings `desktopActions` (OFF, no UI); Peek presses FLOW's
 // Code Window only in a gated scratch live setup after Run (see DesktopLive.swift).
 // An unclear client gets a pick card instead. Zero tokens; nothing leaves this Mac.
 // With the Command meeting link flag on (CommandMeetingLink.swift, OFF by default), "start a meeting" resolves the client
@@ -185,8 +185,8 @@ public enum ClientCommands {
             let link = m.map { CommandLink.safe($0.openURL) } ?? CommandLink.schedule
             c = ProposalCard(id: id, action: "start_meeting", label: "Start a meeting with \(client)", client: client,
                              inputs: ["Client: \(client)", meetingLine, timeLine] + (cmd.when.map { ["You asked for: \($0)"] } ?? []),
-                             touches: m == nil ? "Opens Command's schedule (Command's own UI). Nothing is booked from Peak."
-                                               : "Opens Command's room page for this booking (Command's own UI). You tap Join / Record in Command; Peak never joins, records or books.",
+                             touches: m == nil ? "Opens Command's schedule (Command's own UI). Nothing is booked from Peek."
+                                               : "Opens Command's room page for this booking (Command's own UI). You tap Join / Record in Command; Peek never joins, records or books.",
                              outputs: [m == nil ? "Command: the schedule" : "Command: the room page"],
                              reason: "You said: \u{201C}\(cmd.said)\u{201D}", message: "Nothing has run. Run only opens Command.",
                              status: "proposed", viewOnly: false, previewBody: nil, confirmBody: nil)
@@ -198,7 +198,7 @@ public enum ClientCommands {
                              inputs: ["Client: \(client)", "Package: \(client)'s latest FLOW package (~/Desktop/FLOW)", meetingLine,
                                       "Time: now, when you tap Run"],
                              touches: click
-                                 ? "Brings FLOW forward. The code button is a desktop click (Cua): it stays behind Desktop actions (\(ctx.desktopActions ? "on" : "off"); Peak presses it only in a scratch live setup after Run), so you press it in FLOW."
+                                 ? "Brings FLOW forward. The code button is a desktop click (Cua): it stays behind Desktop actions (\(ctx.desktopActions ? "on" : "off"); Peek presses it only in a scratch live setup after Run), so you press it in FLOW."
                                  : "Brings FLOW forward.",
                              outputs: ["FLOW in front"], reason: "You said: \u{201C}\(cmd.said)\u{201D}",
                              message: "Nothing has run. Run only opens FLOW.",
@@ -244,7 +244,7 @@ public extension ClientCommands {
                                       timeLine] + (cmd.when.map { ["You asked for: \($0)"] } ?? []),
                              touches: "Opens Command's Start meeting sheet for \(name) (Command's own confirm, with Start and Cancel). "
                                 + "Nothing starts until you tap Start in Command; Cancel there leaves everything as it was. "
-                                + "Peak never joins, records or books.",
+                                + "Peek never joins, records or books.",
                              outputs: ["Command: the Start meeting sheet for \(name)"],
                              reason: "You said: \u{201C}\(cmd.said)\u{201D}",
                              message: "Nothing has run. Run only opens Command's Start sheet.",
@@ -278,7 +278,7 @@ public extension ClientCommands {
     static func directoryProblemCard(_ cmd: ClientCommand, _ r: DirectoryResult, id: String) -> ProposalCard {
         let why: String, msg: String
         switch r {
-        case .signedOut(let n): why = n.message; msg = "Nothing has run. Tap \(n.label) on Peak's home, then ask again."
+        case .signedOut(let n): why = n.message; msg = "Nothing has run. Tap \(n.label) on Peek's home, then ask again."
         case .forbidden(let m): why = m; msg = "Nothing has run. Sign in to Command as a coach or admin, then ask again."
         case .failed(let m): why = m; msg = "Nothing has run. Try again in a minute."
         case .clients: why = "Your Command directory is empty."; msg = "Nothing has run."

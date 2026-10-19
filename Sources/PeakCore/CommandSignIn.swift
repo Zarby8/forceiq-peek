@@ -1,9 +1,9 @@
 import Foundation
 
-/// Command's dashboard sign-in is dead (the engine says auth: "expired"). Peak shows ONE plain state,
+/// Command's dashboard sign-in is dead (the engine says auth: "expired"). Peek shows ONE plain state,
 /// "Command sign-in expired, tap to sign in", and its tap opens GOAT's EXISTING Sign in to Command flow:
 /// the first tap only asks GOAT (POST /api/act {name: command_signin}, no confirm) for what it would do, and nothing
-/// runs until the coach taps Sign in to Command on that confirm. Peak never stores, reads or shows a token.
+/// runs until the coach taps Sign in to Command on that confirm. Peek never stores, reads or shows a token.
 public struct CommandSignInNotice: Equatable, Sendable {
     public static let expiredText = "Command sign-in expired, tap to sign in"
     public static let act = "command_signin"                 // the only act this notice can ask GOAT for

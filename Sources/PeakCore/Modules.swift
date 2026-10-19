@@ -1,6 +1,6 @@
 import Foundation
 
-/// Peak modules. PR 1 ships meetings, approvals (GOAT fixes + approvals), family (behind GOAT_FAMILY_DELIVERY_ALERTS)
+/// Peek modules. PR 1 ships meetings, approvals (GOAT fixes + approvals), family (behind GOAT_FAMILY_DELIVERY_ALERTS)
 /// and the app switcher. The rest are declared so they slot in later; each is on/off per coach profile.
 public enum PeakModuleID: String, Sendable, CaseIterable {
     case meetings, approvals, switcher, family

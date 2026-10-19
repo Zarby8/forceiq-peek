@@ -88,7 +88,7 @@ import XCTest
         XCTAssertEqual(m.state(), .unknown("Command's live status couldn't be read"))
         XCTAssertEqual(m.state().dotHex, Brand.redHex)
         let (phase, reached) = await drop(with: m)
-        XCTAssertEqual(phase, .failed("Meeting status unknown (Command's live status couldn't be read): 5090 GPU jobs are held until Peak can see there's no meeting within 2 h. Nothing ran."))
+        XCTAssertEqual(phase, .failed("Meeting status unknown (Command's live status couldn't be read): 5090 GPU jobs are held until Peek can see there's no meeting within 2 h. Nothing ran."))
         XCTAssertFalse(reached)
     }
 
