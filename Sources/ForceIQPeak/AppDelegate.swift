@@ -181,6 +181,7 @@ enum Screens {
         if avatarTour { threePOAvatarTour() }
         if sendTour { threePOSendTour() }
         if idleTour { threePOIdleTour() }
+        if polishTour { motionPolishTour() }
         if PeakSnapshot.dir != nil {                       // visual proof: render the memory pane + a skill card, then quit
             Task { @MainActor in
                 if PeakSnapshot.signIn {
@@ -388,6 +389,36 @@ enum Screens {
         at(50.5, "pick-haiku") { await store.choose(.haiku) }
         at(52.0, "collapse") { c.tab = .home; c.collapse() }
         at(54.0, "tour-end") { hitch.stop() }
+    }
+
+    var polishTour: Bool { demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "polish" }
+
+    /// Motion-polish proof (demo mode + FORCEIQ_PEAK_DEMO_TOUR=polish, sample names only): hover lift, the one-spring
+    /// expand with staggered cards, an approval that pops in, a card that collapses away, the chat with its sliding
+    /// pills, focus ring, bubbles and streamed answer, then collapse. Nothing runs: no card is chosen, no engine.
+    func motionPolishTour() {
+        guard let scr = NSScreen.screens.first, let h = hosts[Screens.uuid(scr)] else { return }
+        let main = Screens.uuid(scr)
+        let c = controller!, cards = cards!, store = threePO!, t0 = Date()     // one clock, so the meeting card keeps its id
+        func at(_ t: Double, _ name: String, _ f: @escaping @MainActor () async -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + t) { [weak self] in
+                self?.log.log("tour step=\(name)"); Task { @MainActor in await f() }
+            }
+        }
+        at(1.0, "feed") { cards.update(DemoData.polishSnapshot(step: 0, now: t0), profile: self.profile) }
+        at(1.5, "hover-in") { h.state.hovering = true }
+        at(2.7, "hover-out") { h.state.hovering = false }
+        at(3.5, "expand") { c.activeDisplay = main; c.expand() }
+        at(6.0, "approval-arrives") { cards.update(DemoData.polishSnapshot(step: 1, now: t0), profile: self.profile) }
+        at(8.5, "card-removed") { cards.update(DemoData.polishSnapshot(step: 2, now: t0), profile: self.profile) }
+        at(10.5, "chat") { withAnimation(Motion.spring(false)) { c.tab = .threePO } }
+        at(12.0, "pane-memory") { withAnimation(Motion.spring(false)) { store.pane = .memory } }
+        at(13.2, "pane-chat") { withAnimation(Motion.spring(false)) { store.pane = .chat } }
+        at(14.2, "pick-sonnet") { await store.choose(.sonnet) }
+        at(15.2, "pick-auto") { await store.choose(.auto) }
+        at(16.5, "chat-send") { store.draft = "Why is the title slide wrong?"; await store.send() }
+        at(27.0, "collapse") { c.tab = .home; c.collapse() }
+        at(29.0, "tour-end") {}
     }
 
     var avatarTour: Bool { demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "3po" }

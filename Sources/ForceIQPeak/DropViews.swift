@@ -87,7 +87,10 @@ struct DropsView: View {
         case .idle: EmptyView()
         case .pending(_, let suggested):
             HStack(spacing: 10) {
-                ForEach(DropZone.allCases, id: \.self) { z in ZoneTile(zone: z, suggested: z == suggested) { Task { await drops.preview(z) } } }
+                ForEach(Array(DropZone.allCases.enumerated()), id: \.element) { i, z in
+                    ZoneTile(zone: z, suggested: z == suggested) { Task { await drops.preview(z) } }
+                        .modifier(StaggeredEntry(index: i, reduceMotion: reduceMotion))
+                }
             }
             Text("Nothing is read until you pick a zone. Preview never changes a file.").font(.system(size: 11)).foregroundStyle(Color.white)
         case .choosing(_, _, let choices, _):

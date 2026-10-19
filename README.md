@@ -55,6 +55,21 @@ Tapping a card only shows a plain description (inputs, what it touches, outputs)
 prompt. Nothing runs until that explicit tap. Upscale, Dagu and publish progress are never shown, only "Open in
 Command". Peak uploads nothing, and client video stays local.
 
+## Motion and ease (tokens: PeakCore `PeakMotion`; guard: `MotionPolishGuardTests`)
+- **One spring** (response 0.38, damping 0.82) for expand / collapse: the shell path morphs and the Ghost, title and
+  badge move by matched geometry. The collapsed pill's hover lift (1.02) is near-critically damped and keyed to the lift
+  only, so hovering never re-animates the shell.
+- **Cards** rise 8 pt and sharpen from a light blur, 40 ms apart (capped at 6 steps); approvals pop from 0.94; a card that
+  leaves squeezes its height to its top edge while the cards below slide up. Drop-zone tiles stagger the same way.
+- **3PO chat:** bubbles slide in from their own side (you: trailing, 3PO: leading); the thinking dots stay (busy only);
+  each streamed chunk fades in over 0.22 s; proposal and skill cards pop in; the model pill, Chat / Memory and Peak / 3PO
+  slide their selection (matched geometry); the composer ring eases to green 2 pt with a soft halo on focus.
+- **Ease:** every tap target is at least 28 pt. Esc collapses (the Collapse button carries it), Return sends, ⌘K focuses
+  the composer (switching back to Chat).
+- Every move is a finite one-shot on an event (no repeat, no clock, no TimelineView). Text is never faded at rest; entries
+  rise and sharpen at full opacity. Reduce Motion: no motion (the shell crossfades). Proof tour (sample names only):
+  `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_FEED=sample FORCEIQ_PEAK_DEMO_TOUR=polish GOAT_PEAK_ROOT=<scratch root>`.
+
 ## Data (local GOAT engine only, 127.0.0.1:8765; no new outbound network)
 | Endpoint | Status |
 |---|---|

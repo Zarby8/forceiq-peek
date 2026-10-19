@@ -28,12 +28,14 @@ struct PanePills: View {
         let on = store.pane == p
         return Button {
             Haptic.tick()
-            store.pane = p
+            withAnimation(Motion.spring(reduceMotion)) { store.pane = p }
             if p == .memory { Task { await store.loadMemory() } }
         } label: {
             Text(title).font(.system(size: 11, weight: .heavy))
                 .foregroundStyle(on ? Color.black : Color.white)
-                .padding(.horizontal, 9).padding(.vertical, 3)
+                .lineLimit(1).fixedSize()
+                .padding(.horizontal, 9)
+                .frame(minWidth: PeakMotion.minTapTarget, minHeight: PeakMotion.minTapTarget)
                 .background { if on { Capsule().fill(Color(memory: MemoryStyle.activePillHex)).matchedGeometryEffect(id: "pane", in: ns) } }
                 .contentShape(Capsule())
         }

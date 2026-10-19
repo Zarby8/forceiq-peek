@@ -129,7 +129,9 @@ struct ModelPills: View {
                     Text(r.label).font(.system(size: 11, weight: .heavy))
                         .foregroundStyle(on ? Color.black : (r.available ? Color.white : Color.peakGold))
                         .strikethrough(!r.available, color: .peakGold)
-                        .padding(.horizontal, 9).padding(.vertical, 3)
+                        .lineLimit(1).fixedSize()                 // the taller target must never let a label wrap
+                        .padding(.horizontal, 9)
+                        .frame(minWidth: PeakMotion.minTapTarget, minHeight: PeakMotion.minTapTarget)
                         .background { if on { Capsule().fill(Color.peakGold).matchedGeometryEffect(id: "pick", in: ns) } }
                         .contentShape(Capsule())
                 }
@@ -222,6 +224,15 @@ struct ThreePOView: View {
                 chat
             }
         }
+        .background {
+            // ⌘K: focus the composer (switching back to Chat first). No label, no hit area: a keyboard path only.
+            Button("") {
+                if store.pane != .chat { withAnimation(Motion.spring(reduceMotion)) { store.pane = .chat } }
+                DispatchQueue.main.async { focused = true }
+            }
+            .keyboardShortcut("k", modifiers: .command)
+            .buttonStyle(.plain).frame(width: 0, height: 0).accessibilityHidden(true)
+        }
         .onAppear {
             if let p = prefill, !p.isEmpty, store.draft.isEmpty { store.draft = p }   // prefilled, never sent
             focused = true
@@ -239,7 +250,7 @@ struct ThreePOView: View {
                         ForEach(store.transcript.messages) { m in
                             MessageRow(message: m, store: store, avatar: avatar, last: m.id == store.transcript.messages.last?.id)
                                 .id(m.id)
-                                .transition(.slideUpFull(reduceMotion))
+                                .transition(.bubble(user: m.role == .user, reduceMotion))
                         }
                         ForEach(Array(store.transcript.notes.enumerated()), id: \.offset) { _, n in
                             Text(n).font(.system(size: 11, weight: .bold)).foregroundStyle(Color.peakGold)
@@ -256,8 +267,9 @@ struct ThreePOView: View {
                 if voice.enabled { MicButton(voice: voice) }
                 TextField("", text: $store.draft, axis: .vertical)
                     .textFieldStyle(.plain).font(.system(size: 13)).foregroundStyle(Color.white).lineLimit(1...4)
-                    .modifier(GoldPlaceholder(text: voice.enabled ? "Ask 3PO… or press the mic" : "Ask 3PO…", show: store.draft.isEmpty && !dictating))
+                    .modifier(GoldPlaceholder(text: voice.enabled ? "Ask 3PO… or press the mic" : "Ask 3PO…  Return sends", show: store.draft.isEmpty && !dictating))
                     .focused($focused)
+                    .help("Return sends · ⌘K focuses · Esc collapses")
                     .onSubmit { Task { await store.send() } }
                     .padding(.horizontal, 10).padding(.vertical, 7)
                     .overlay(alignment: .topLeading) {
@@ -273,8 +285,7 @@ struct ThreePOView: View {
                             .allowsHitTesting(false)
                         }
                     }
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(dictating || focused ? Color.peakGreen : Color.peakGold, lineWidth: dictating || focused ? 2 : 1))
-                    .animation(Motion.quick(reduceMotion), value: focused)
+                    .modifier(FocusRing(active: dictating || focused, reduceMotion: reduceMotion))
                 PeakButton(title: store.transcript.streaming ? "…" : "Send", color: .peakGreen, filled: true, enabled: store.canSend) {
                     Task { await store.send() }
                 }
@@ -308,14 +319,14 @@ struct MessageRow: View {
                 VStack(alignment: .leading, spacing: 6) {
                     if !message.text.isEmpty {
                         Text(message.text).font(.system(size: 13)).foregroundStyle(Color.white).textSelection(.enabled)
-                            .contentTransition(.opacity)                     // each streamed chunk fades in softly
-                            .animation(reduceMotion ? nil : .easeOut(duration: 0.22), value: message.text)
+                            .contentTransition(reduceMotion ? .identity : .opacity)      // each streamed chunk fades in softly
+                            .animation(reduceMotion ? nil : .easeOut(duration: PeakMotion.streamFade), value: message.text)
                     }
                     if last && store.transcript.thinking { ThinkingDots().transition(.scale(scale: 0.4)) }
                     if let e = message.error { Text(e).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.peakGold) }
-                    ForEach(message.skills) { c in SkillCardView(card: c, store: store).transition(reduceMotion ? .identity : .scale(scale: 0.94, anchor: .top)) }
+                    ForEach(message.skills) { c in SkillCardView(card: c, store: store).transition(.arrivalPop(reduceMotion)) }
                     if let ev = message.memory, ev.needsPick { MemoryPickRow(message: message, event: ev, store: store) }
-                    ForEach(message.proposals) { c in ProposalView(card: c, store: store).transition(reduceMotion ? .identity : .scale(scale: 0.94, anchor: .top)) }
+                    ForEach(message.proposals) { c in ProposalView(card: c, store: store).transition(.arrivalPop(reduceMotion)) }
                     if message.done { meta }
                 }
             }

@@ -30,11 +30,18 @@ struct Haptic {
 }
 
 enum Motion {
-    /// One spring for every morph (response 0.4, damping 0.8); Reduce Motion: a short crossfade instead.
-    static func spring(_ reduce: Bool) -> Animation { reduce ? .easeInOut(duration: 0.16) : .spring(response: 0.4, dampingFraction: 0.8) }
+    /// One spring for every morph (PeakMotion: response 0.38, damping 0.82): expand / collapse, the shell path, the
+    /// matched-geometry ghost / title / badge, the sheet's content and every sliding pill. Reduce Motion: a short crossfade.
+    static func spring(_ reduce: Bool) -> Animation {
+        reduce ? .easeInOut(duration: PeakMotion.reduceCrossfade) : .spring(response: PeakMotion.springResponse, dampingFraction: PeakMotion.springDamping)
+    }
     static func quick(_ reduce: Bool) -> Animation { reduce ? .easeInOut(duration: 0.12) : .spring(response: 0.28, dampingFraction: 0.72) }
+    /// Hover lift: near-critically damped (no overshoot under the pointer), keyed to the lift itself only.
+    static func hover(_ reduce: Bool) -> Animation {
+        reduce ? .easeInOut(duration: 0.12) : .spring(response: PeakMotion.hoverResponse, dampingFraction: PeakMotion.hoverDamping)
+    }
     static func sheet(_ reduce: Bool) -> AnyTransition {
-        reduce ? .opacity : .asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)).animation(.spring(response: 0.42, dampingFraction: 0.82).delay(0.06)),
+        reduce ? .opacity : .asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)).animation(spring(false).delay(0.06)),
                                         removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)).animation(.easeOut(duration: 0.12)))
     }
 }
@@ -130,10 +137,10 @@ struct PeakRootView: View {
         .animation(Motion.quick(reduceMotion), value: voiceStrip)
         .contentShape(shape)
         .onTapGesture { if !isExpanded { Haptic.level(); controller.activeDisplay = panel.uuid; controller.expand() } }
-        .scaleEffect(hoverLift ? 1.02 : 1, anchor: UnitPoint(x: (shellRect.midX) / max(1, panel.layout.canvas.width), y: 0))
+        .scaleEffect(hoverLift ? PeakMotion.hoverScale : 1, anchor: UnitPoint(x: (shellRect.midX) / max(1, panel.layout.canvas.width), y: 0))
         .frame(width: panel.layout.canvas.width, height: panel.layout.canvas.height, alignment: .topLeading)
         .animation(Motion.spring(reduceMotion), value: surface)
-        .animation(Motion.quick(reduceMotion), value: panel.hovering)
+        .animation(Motion.hover(reduceMotion), value: hoverLift)
         .onDrop(of: [.fileURL], isTargeted: Binding(get: { panel.dropTargeted }, set: { on in
             if on != panel.dropTargeted { panel.dropTargeted = on; if on { Haptic.tick() } }
         })) { providers in
@@ -254,7 +261,7 @@ struct PeakRootView: View {
                         .padding(.horizontal, 8).padding(.vertical, 3)
                         .background(Capsule().fill(Color.peakGold).matchedGeometryEffect(id: "badge", in: ns))
                 }
-                PeakButton(title: "Collapse", color: .white) { controller.collapse() }
+                PeakButton(title: "Collapse", color: .white, shortcut: .cancelAction, help: "Collapse (Esc)") { controller.collapse() }
             }
             .padding(.top, panel.mode == .notch ? (panel.layout.notchRect?.height ?? 32) + 4 : 12)
             Group {
@@ -300,7 +307,9 @@ struct TabPills: View {
     func tab(_ t: PeakController.Tab, _ title: String) -> some View {
         let on = current == t
         return Text(title).font(.system(size: 11, weight: .heavy)).foregroundStyle(on ? Color.black : Color.white)
-            .padding(.horizontal, 10).padding(.vertical, 3)
+            .lineLimit(1).fixedSize()
+            .padding(.horizontal, 10)
+            .frame(minWidth: PeakMotion.minTapTarget, minHeight: PeakMotion.minTapTarget)
             .background { if on { Capsule().fill(Color.peakGold).matchedGeometryEffect(id: "tab", in: ns) } }
             .contentShape(Capsule())
             .onTapGesture { Haptic.tick(); withAnimation(Motion.spring(reduceMotion)) { controller.tab = t } }
@@ -392,6 +401,9 @@ struct PeakButton: View {
     var filled = false
     /// Disabled = a gold outline with a pure white label at full opacity; it just stops taking taps (never dimmed).
     var enabled = true
+    /// A keyboard path for the button (Esc on Collapse); the button stays the visible affordance.
+    var shortcut: KeyboardShortcut? = nil
+    var help: String? = nil
     let action: () -> Void
     @State private var hover = false
     var fill: Color { enabled && filled ? color : Color.black }
@@ -400,7 +412,8 @@ struct PeakButton: View {
     var body: some View {
         Button(action: { guard enabled else { return }; Haptic.tick(); action() }) {
             Text(title).font(.system(size: 12, weight: .bold)).foregroundStyle(label)
-                .padding(.horizontal, 10).padding(.vertical, 5)
+                .padding(.horizontal, 10)
+                .frame(minWidth: PeakMotion.minTapTarget, minHeight: PeakMotion.minTapTarget)
                 .background(RoundedRectangle(cornerRadius: 7).fill(fill))
                 .overlay(RoundedRectangle(cornerRadius: 7).stroke(stroke, lineWidth: hover && enabled ? 2 : 1))
                 .scaleEffect(hover && enabled ? 1.04 : 1)
@@ -408,6 +421,8 @@ struct PeakButton: View {
                 .opacity(PeakTokens.disabledOpacity)
         }
         .buttonStyle(.plain)
+        .keyboardShortcut(shortcut)
+        .help(help ?? title)
         .allowsHitTesting(enabled)
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: enabled)
         .onHover { h in withAnimation(.spring(response: 0.25, dampingFraction: 0.7)) { hover = h }; if h && enabled { Haptic.tick() } }
@@ -433,6 +448,7 @@ struct GoldPlaceholder: ViewModifier {
 
 struct CardList: View {
     @ObservedObject var cards: CardStackViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
@@ -442,7 +458,13 @@ struct CardList: View {
                 } else {
                     HomeStatusRows(signIn: cards.signIn, empty: cards.cards.isEmpty)
                 }
-                ForEach(cards.cards) { c in CardRow(card: c).onTapGesture { Haptic.tick(); cards.tap(c) } }
+                // Each card rises in, staggered; approvals pop; a card that leaves collapses its height (StaggeredEntry,
+                // .cardCollapse). Nothing here runs a card: a tap only opens its description.
+                ForEach(Array(cards.cards.enumerated()), id: \.element.id) { i, c in
+                    CardRow(card: c).onTapGesture { Haptic.tick(); cards.tap(c) }
+                        .modifier(StaggeredEntry(index: i, pop: c.kind == .approval, reduceMotion: reduceMotion))
+                        .transition(.cardCollapse(reduceMotion))
+                }
                 if cards.pipelineHidden > 0 {
                     HStack {
                         Text("Pipeline progress lives in Command.").font(.system(size: 12)).foregroundStyle(Color.white)
@@ -458,6 +480,7 @@ struct CardList: View {
                     }
                 }
             }
+            .animation(Motion.collapse(reduceMotion), value: cards.cards.map(\.id))
         }
         .scrollIndicators(.never)
     }
