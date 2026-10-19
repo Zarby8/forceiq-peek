@@ -59,7 +59,7 @@ final class MotionPolishGuardTests: XCTestCase {
         for bad in ["repeatForever", "repeating:", "repeatCount", "TimelineView", "displayLink", "Timer.", "phaseAnimator"] {
             XCTAssertFalse(m.contains(bad), "MotionViews.swift uses \(bad): every polish move is a one-shot")
         }
-        for s in ["struct StaggeredEntry", "struct CollapseOut", "struct BubbleIn", "struct PopIn"] {
+        for s in ["struct StaggeredEntry", "struct CollapseOut", "struct BubbleIn", "struct PopIn", "struct Sharpen"] {
             let b = try body(m, from: s, to: "\n}\n")
             XCTAssertFalse(b.contains(".opacity("), "\(s) fades its content; text stays at full opacity (rise + sharpen instead)")
         }
@@ -68,7 +68,7 @@ final class MotionPolishGuardTests: XCTestCase {
     /// Reduce Motion: every polish effect has a no-motion (or crossfade) branch.
     func testReduceMotionHonoured() throws {
         let m = try code("MotionViews.swift")
-        for s in ["static func pop(", "static func collapse(", "static func cardCollapse(", "static func bubble(", "static func arrivalPop("] {
+        for s in ["static func pop(", "static func collapse(", "static func cardCollapse(", "static func bubble(", "static func arrivalPop(", "static func sharpen("] {
             let b = try body(m, from: s, to: "\n    }\n")
             XCTAssertTrue(b.contains("reduce ?"), "\(s) has no Reduce Motion branch")
         }
@@ -81,7 +81,7 @@ final class MotionPolishGuardTests: XCTestCase {
         XCTAssertTrue(v.contains(".animation(Motion.hover(reduceMotion), value: hoverLift)"), "hover animates the lift only")
         XCTAssertFalse(v.contains("value: panel.hovering)"), "an animation keyed to every hover flip re-animates the whole shell")
         let t = try code("ThreePOViews.swift")
-        XCTAssertTrue(t.contains(".contentTransition(reduceMotion ? .identity : .opacity)"), "the streamed text fade is off under Reduce Motion")
+        XCTAssertTrue(t.contains(".contentTransition(.identity)"), "the streamed text lands at full white")
         XCTAssertTrue(t.contains(".transition(.bubble(user: m.role == .user, reduceMotion))"))
     }
 
@@ -96,7 +96,7 @@ final class MotionPolishGuardTests: XCTestCase {
         XCTAssertTrue(try code("ThreePOMemoryViews.swift").contains(#"matchedGeometryEffect(id: "pane", in: ns)"#), "Chat / Memory slides")
         XCTAssertTrue(t.contains("FocusRing(active: dictating || focused"), "the composer ring animates")
         XCTAssertTrue(t.contains("if last && store.transcript.thinking { ThinkingDots()"), "the thinking dots stay, mounted only while thinking")
-        XCTAssertEqual(t.components(separatedBy: ".transition(.arrivalPop(reduceMotion))").count - 1, 2, "skill and proposal cards pop in")
+        XCTAssertEqual(t.components(separatedBy: ".transition(.arrivalPop(reduceMotion))").count - 1, 3, "skill and proposal cards and the Consulting Opus chip pop in")
     }
 
     func testKeyboardPaths() throws {
@@ -123,6 +123,19 @@ final class MotionPolishGuardTests: XCTestCase {
         }
         for (i, l) in v.components(separatedBy: "\n").enumerated() where l.contains(".padding(.vertical, 3)") || l.contains(".padding(.vertical, 5)") {
             XCTAssertFalse(l.contains("Button"), "Views.swift:\(i + 1): a short button")
+        }
+    }
+
+    /// Brand: no opacity fade on text. No view transition or content transition in the panel views may use .opacity
+    /// (the one exception is the pill's glass fill, a shape with no text).
+    func testNoOpacityFadeOnText() throws {
+        for name in ["Views.swift", "ThreePOViews.swift", "ThreePOMemoryViews.swift", "DropViews.swift", "MotionViews.swift"] {
+            let lines = codeLines(try source(name))
+            for (i, l) in lines.enumerated() where (l.contains(".transition(") || l.contains("contentTransition(") || l.contains("AnyTransition"))
+                && l.range(of: #"[ (:]\.opacity\b"#, options: .regularExpression) != nil {
+                let ctx = lines[max(0, i - 3)...i].joined(separator: " ")
+                XCTAssertTrue(ctx.contains("glassEffect"), "\(name):\(i + 1): an opacity transition fades text; rise / sharpen at full opacity instead")
+            }
         }
     }
 

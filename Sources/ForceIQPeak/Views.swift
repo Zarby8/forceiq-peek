@@ -41,8 +41,10 @@ enum Motion {
         reduce ? .easeInOut(duration: 0.12) : .spring(response: PeakMotion.hoverResponse, dampingFraction: PeakMotion.hoverDamping)
     }
     static func sheet(_ reduce: Bool) -> AnyTransition {
-        reduce ? .opacity : .asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)).animation(spring(false).delay(0.06)),
-                                        removal: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)).animation(.easeOut(duration: 0.12)))
+        // Text is never faded: the sheet pops in (scale + blur-to-sharp at full opacity) and leaves at once while the
+        // shell's spring closes over it. Reduce Motion: no motion (the shell itself still crossfades).
+        reduce ? .identity : .asymmetric(insertion: .modifier(active: PopIn(on: true), identity: PopIn(on: false)).animation(spring(false).delay(0.06)),
+                                         removal: .identity)
     }
 }
 
@@ -130,7 +132,7 @@ struct PeakRootView: View {
                 let r = panel.local(panel.layout.collapsed)
                 VoiceStrip(voice: voice).fixedSize(horizontal: false, vertical: true).frame(width: 440)
                     .position(x: r.midX, y: r.maxY + 26)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(reduceMotion ? .identity : .move(edge: .top).combined(with: .sharpen(false)))
                     .allowsHitTesting(false)
             }
         }
@@ -194,7 +196,7 @@ struct PeakRootView: View {
             } else {
                 let r = panel.local(panel.layout.collapsed)
                 collapsed.padding(.leading, r.minX).padding(.top, r.minY)
-                    .transition(.opacity.animation(.easeOut(duration: 0.12)))
+                    .transition(.sharpen(reduceMotion))
             }
         }
     }
@@ -241,7 +243,7 @@ struct PeakRootView: View {
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(Capsule().fill(Color.peakGold).matchedGeometryEffect(id: "badge", in: ns))
                     .frame(minWidth: 18)
-                    .transition(.scale.combined(with: .opacity))
+                    .transition(.arrivalPop(reduceMotion))
             }
         }
         .padding(.horizontal, 6)

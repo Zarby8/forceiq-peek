@@ -213,7 +213,7 @@ struct ThreePOView: View {
                 ModelPills(store: store)
                 PanePills(store: store)
                 Spacer()
-                if store.transcript.consultingOpus { ConsultingOpusChip(reduceMotion: reduceMotion).transition(.scale.combined(with: .opacity)) }
+                if store.transcript.consultingOpus { ConsultingOpusChip(reduceMotion: reduceMotion).transition(.arrivalPop(reduceMotion)) }
             }
             .animation(Motion.quick(reduceMotion), value: store.transcript.consultingOpus)
             if profile.isEnabled(.spend) { SpendMeter(spend: store.transcript.spend) }
@@ -246,6 +246,7 @@ struct ThreePOView: View {
                         if store.transcript.messages.isEmpty {
                             Text("Ask 3PO about a client, a stuck job or a fix. Nothing runs unless you tap Run, then Confirm.")
                                 .font(.system(size: 12)).foregroundStyle(Color.white)
+                                .transition(.identity)          // leaves at once on the first send (never fades)
                         }
                         ForEach(store.transcript.messages) { m in
                             MessageRow(message: m, store: store, avatar: avatar, last: m.id == store.transcript.messages.last?.id)
@@ -319,8 +320,7 @@ struct MessageRow: View {
                 VStack(alignment: .leading, spacing: 6) {
                     if !message.text.isEmpty {
                         Text(message.text).font(.system(size: 13)).foregroundStyle(Color.white).textSelection(.enabled)
-                            .contentTransition(reduceMotion ? .identity : .opacity)      // each streamed chunk fades in softly
-                            .animation(reduceMotion ? nil : .easeOut(duration: PeakMotion.streamFade), value: message.text)
+                            .contentTransition(.identity)   // each streamed chunk lands at full white: no opacity fade on text (brand)
                     }
                     if last && store.transcript.thinking { ThinkingDots().transition(.scale(scale: 0.4)) }
                     if let e = message.error { Text(e).font(.system(size: 12, weight: .bold)).foregroundStyle(Color.peakGold) }

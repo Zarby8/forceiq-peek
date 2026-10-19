@@ -62,7 +62,17 @@ struct PopIn: ViewModifier {
     }
 }
 
+/// Blur-to-sharp at full opacity: how text "fades in" in Peak (white stays pure white the whole way).
+struct Sharpen: ViewModifier {
+    let on: Bool
+    func body(content: Content) -> some View { content.blur(radius: on ? PeakMotion.entryBlur : 0) }
+}
+
 extension AnyTransition {
+    /// Text that appears in place (the collapsed pill's title, the voice strip): sharpens in, leaves at once.
+    static func sharpen(_ reduce: Bool) -> AnyTransition {
+        reduce ? .identity : .asymmetric(insertion: .modifier(active: Sharpen(on: true), identity: Sharpen(on: false)), removal: .identity)
+    }
     /// Card list removal: the height collapse; insertion is handled by StaggeredEntry (so the first open staggers too).
     static func cardCollapse(_ reduce: Bool) -> AnyTransition {
         reduce ? .identity : .asymmetric(insertion: .identity,

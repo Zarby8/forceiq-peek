@@ -35,15 +35,15 @@ public enum PeakMotion {
     /// Chat bubbles slide in from their own side (user: trailing, 3PO: leading) and rise a little.
     public static let bubbleSlide = 14.0
     public static let bubbleRise = 6.0
-    /// The streaming answer: each new chunk fades in this gently (content transition; off under Reduce Motion).
-    public static let streamFade = 0.22
+    /// The streaming answer: each new chunk lands at full white (no opacity fade on text, brand rule); the stream's
+    /// own cadence is the motion.
     /// Composer focus ring: stroke 1 → 2 pt and a soft green halo, eased in this long.
     public static let focusRing = 0.18
     public static let focusHaloRadius = 5.0
 
     /// Every duration-like value above, for the finite-and-short guard.
     public static var allDurations: [Double] {
-        [springResponse, hoverResponse, reduceCrossfade, staggerStep, maxEntryDelay, popResponse, collapseResponse, streamFade, focusRing]
+        [springResponse, hoverResponse, reduceCrossfade, staggerStep, maxEntryDelay, popResponse, collapseResponse, focusRing]
     }
 
     /// Smallest tap target (pt) for any control Peak draws: buttons, segmented pills, chips that take taps.
