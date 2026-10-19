@@ -4,6 +4,14 @@ import Foundation
 /// nothing here repeats, and each view falls back to a short crossfade of the shell or no motion at all under Reduce
 /// Motion. Text is never faded: entries rise and sharpen from a light blur at full opacity (white stays pure white).
 /// MotionPolishGuardTests pins every number below.
+/// Hover lift (scale + brightness) is for the floating pill only. The collapsed notch is exactly the hardware notch, so
+/// scaling or brightening it would paint a fringe into the menu bar (Chris 10.19.2026: nothing outside the notch).
+public enum HoverLift {
+    public static func applies(mode: PeakMode, hovering: Bool, expanded: Bool, reduceMotion: Bool) -> Bool {
+        mode == .pill && hovering && !expanded && !reduceMotion
+    }
+}
+
 public enum PeakMotion {
     /// The ONE spring for expand / collapse and every morph (shell path, matched-geometry ghost, title, badge, pills).
     public static let springResponse = 0.38

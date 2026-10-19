@@ -8,6 +8,7 @@ import Foundation
 ///   hiddenDisplays [] (shown on every display) · globallyHidden false · hotkeyEnabled unset (the profile's hotkey.enabled)
 ///   ghostFormat unset (h264-black) · voiceEnabled unset (the profile's modules.voice) · desktopActions false
 ///   commandMeetingLink false · nextSessionPill false · cuaActions false
+///   quietHoursStart / quietHoursEnd unset ("HH:mm" local; both set = no peeks in that window, wraps midnight) · dndUntil unset
 /// No file is normal (a fresh Mac): silent defaults. A file that exists but can't be used (unreadable, empty, not valid
 /// JSON, not an object, or any key of the wrong type) fails loudly and fails closed: ALL settings fall back to defaults,
 /// desktopActions / commandMeetingLink / voice are off, `loadIssue` names the path and the bad key or parse error
@@ -18,10 +19,11 @@ public final class PeakPrefs: @unchecked Sendable {
         var hiddenDisplays: [String] = []; var hotkeyEnabled: Bool? = nil; var globallyHidden = false; var ghostFormat: String? = nil
         var voiceEnabled: Bool? = nil; var desktopActions: Bool? = nil; var commandMeetingLink: Bool? = nil
         var nextSessionPill: Bool? = nil; var cuaActions: Bool? = nil
+        var quietHoursStart: String? = nil; var quietHoursEnd: String? = nil; var dndUntil: Double? = nil
         init() {}
         enum CodingKeys: String, CodingKey, CaseIterable {
             case hiddenDisplays, hotkeyEnabled, globallyHidden, ghostFormat, voiceEnabled, desktopActions, commandMeetingLink
-            case nextSessionPill, cuaActions
+            case nextSessionPill, cuaActions, quietHoursStart, quietHoursEnd, dndUntil
         }
         /// decodeIfPresent for every key: missing / null = the default. A key of the wrong type throws (typeMismatch),
         /// which load() turns into all defaults plus a logged, visible error.
@@ -36,6 +38,15 @@ public final class PeakPrefs: @unchecked Sendable {
             commandMeetingLink = try c.decodeIfPresent(Bool.self, forKey: .commandMeetingLink)
             nextSessionPill = try c.decodeIfPresent(Bool.self, forKey: .nextSessionPill)
             cuaActions = try c.decodeIfPresent(Bool.self, forKey: .cuaActions)
+            quietHoursStart = try Doc.clock(c, .quietHoursStart)
+            quietHoursEnd = try Doc.clock(c, .quietHoursEnd)
+            dndUntil = try c.decodeIfPresent(Double.self, forKey: .dndUntil)
+        }
+        /// An "HH:mm" key; anything that isn't a 24 h clock time is an invalid key (all defaults, visible notice).
+        private static func clock(_ c: KeyedDecodingContainer<CodingKeys>, _ k: CodingKeys) throws -> String? {
+            guard let v = try c.decodeIfPresent(String.self, forKey: k) else { return nil }
+            guard QuietHours.minute(v) != nil else { throw DecodingError.dataCorruptedError(forKey: k, in: c, debugDescription: "expected HH:mm") }
+            return v
         }
     }
 
@@ -161,6 +172,17 @@ public final class PeakPrefs: @unchecked Sendable {
     public var nextSessionPill: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.nextSessionPill ?? false }
         set { edit { $0.nextSessionPill = newValue } }
+    }
+    /// A daily window with no alert peeks. Needs both keys; missing / unreadable file = none.
+    public var quietHours: QuietHours? {
+        lock.lock(); defer { lock.unlock() }
+        guard let s = doc.quietHoursStart, let e = doc.quietHoursEnd else { return nil }
+        return QuietHours(start: s, end: e)
+    }
+    /// One-tap do-not-disturb from the menu: no alert peeks until this instant. nil / past = off.
+    public var dndUntil: Date? {
+        get { lock.lock(); defer { lock.unlock() }; return doc.dndUntil.map(Date.init(timeIntervalSince1970:)) }
+        set { edit { $0.dndUntil = newValue?.timeIntervalSince1970 } }
     }
     public var globallyHidden: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.globallyHidden }

@@ -98,6 +98,9 @@ enum Screens {
     var demoFeedLogged = false
     var voice: VoiceController!
     var lastMeeting: MeetingRow?
+    /// Notch alerts: AlertPolicy decides, the controller peeks and retracts. Gates: do-not-disturb, quiet hours, live meeting.
+    var alertPolicy = AlertPolicy()
+    var lastSuppressionLogged: AlertSuppression?
     /// The 5090 light (status reads only) and the "What's my day" brief (local TTS, spoken only with Voice on).
     var gpuLight: GPULightModel!
     var brief: DayBriefController!
@@ -162,6 +165,9 @@ enum Screens {
         cards.settingsNotice = prefs.settingsNotice
         nextSession = NextSessionModel(transport: demo ? DemoThreePOTransport(knobs: demoKnobs) : engine,
                                        enabled: NextSessionGate.enabled(setting: prefs.nextSessionPill), roster: p.roster.names, logger: log)
+        controller.onPeekOpen = { [weak self] a in                           // a meeting alert lands on the next-session card
+            if a.kind == .meetingSoon { self?.nextSession.openCard() }
+        }
         nextSession.onCopy = { [weak self] s in                               // clipboard only; nothing is ever sent
             guard let self else { return }
             if self.demo { self.demoClipboard = s } else { self.performer.copy(s) }
@@ -716,7 +722,8 @@ enum Screens {
     /// Demo feed (sample names only) with today's sessions and a gpu_window: the sample meeting 42 min out → red.
     func demoSnapshot(now: Date = Date()) -> EngineSnapshot {
         let quiet = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "quiet"
-        var s = DemoData.snapshot(now: now, quiet: quiet)
+        let soon = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "soon"     // the sample meeting 9 min out
+        var s = DemoData.snapshot(now: now, quiet: quiet, meetingInMinutes: soon ? 9 : 42.3)
         s.takenAt = now; s.liveAt = now; s.approvalsAt = now
         let m = s.meeting
         s.today = m.map { [SessionRow(client: $0.client, scheduledAt: $0.scheduledAt, durationMinutes: $0.durationMinutes)] } ?? []
@@ -724,10 +731,39 @@ enum Screens {
         return s
     }
 
+    /// Which display an alert drops on: the one under the pointer, else the notch display, else any shown display.
+    func peekDisplayID() -> String? {
+        let p = NSEvent.mouseLocation
+        if let s = NSScreen.screens.first(where: { $0.frame.contains(p) }), controller.panelVisible(on: Screens.uuid(s)) { return Screens.uuid(s) }
+        return hosts.first { controller.panelVisible(on: $0.key) && $0.value.layout.mode == .notch }?.key
+            ?? hosts.keys.first { controller.panelVisible(on: $0) }
+    }
+
+    /// One policy call per feed read: peek an urgent alert (meeting within 10 min, a fix that just failed) unless the policy
+    /// holds it back. Logs the kind or the reason only, never a client name.
+    func considerAlert(_ s: EngineSnapshot) {
+        guard let display = peekDisplayID() else { return }
+        let listening = voice.phase.isListening || voice.phase == .finishing
+        let ctx = AlertContext(now: Date(), expanded: controller.expanded, dictating: listening,
+                               dndUntil: prefs.dndUntil, quietHours: prefs.quietHours)
+        guard let a = alertPolicy.next(snapshot: s, cards: cards.cards, context: ctx) else {
+            if alertPolicy.lastSuppression != lastSuppressionLogged, let why = alertPolicy.lastSuppression { log.log("alert held=\(why.rawValue)") }
+            lastSuppressionLogged = alertPolicy.lastSuppression
+            return
+        }
+        lastSuppressionLogged = nil
+        log.log("alert peek=\(a.kind.rawValue)")
+        controller.showPeek(a, on: display)
+        Haptic.level()
+        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+                             userInfo: [.announcement: a.line, .priority: NSAccessibilityPriorityLevel.high.rawValue])
+    }
+
     func refresh() {
         gpuLight?.refresh()
         if demo {
             let s = demoSnapshot(); cards.update(s, profile: profile)
+            considerAlert(s)
             gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date())
             let quiet = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "quiet"
             lastMeeting = isVoiceTour ? DemoData.voiceMeeting() : s.meeting
@@ -739,6 +775,7 @@ enum Screens {
         Task { @MainActor in
             let s = await engine.snapshot()
             cards.update(s, profile: profile)
+            considerAlert(s)
             lastMeeting = s.meeting
             gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date())
             _ = briefCache.ingest(s, now: Date())            // last good read per source, for a later brief
@@ -774,7 +811,8 @@ enum Screens {
         for (id, h) in hosts {
             h.setVisible(controller.panelVisible(on: id))
             let e = isExpanded(id)
-            h.surface = e ? (controller.tab == .threePO && profile.isEnabled(.threePO) ? .chat : .home) : .collapsed
+            h.surface = e ? (controller.tab == .threePO && profile.isEnabled(.threePO) ? .chat : .home)
+                : (controller.peek != nil && controller.peekDisplay == id ? .peek : .collapsed)
             if lastSurface[id] != h.surface {
                 lastSurface[id] = h.surface
                 if h.surface == .chat { h.panel.makeKey(); Task { await threePO.refreshSpend() } }
@@ -802,9 +840,10 @@ enum Screens {
         var over: String?
         for (id, h) in hosts {
             let inside = h.state.visible && h.contains(p)
+            let atEdge = h.state.visible && !inside && h.surface == .collapsed && h.layout.triggers(at: p)   // never captures a click
             if h.panel.ignoresMouseEvents == inside { h.panel.ignoresMouseEvents = !inside }
             if h.state.hovering != (inside && h.surface == .collapsed) { h.state.hovering = inside && h.surface == .collapsed }
-            if inside { over = id }
+            if inside || atEdge { over = id }
         }
         if over != hoveredDisplay {
             let was = hoveredDisplay
@@ -815,6 +854,7 @@ enum Screens {
 
     func hover(_ inside: Bool, uuid: String) {
         hoverCollapse?.cancel()
+        if inside, controller.peek != nil { controller.extendPeek(); return }      // reading an alert: hold it, open only on a tap
         if inside {
             Haptic.generic()                                     // paired with the 1.02 scale + brightness lift
             if !controller.expanded {
@@ -895,6 +935,15 @@ enum Screens {
             m.addItem(it)
         }
         m.addItem(.separator())
+        let dnd = NSMenuItem(title: "Do not disturb", action: nil, keyEquivalent: "")
+        let sub = NSMenu(title: "Do not disturb")
+        for (title, tag) in [("For 1 hour", 1), ("Until tomorrow morning", 2), ("Off", 0)] {
+            let it = NSMenuItem(title: title, action: #selector(menuDND(_:)), keyEquivalent: "")
+            it.tag = tag; it.target = self
+            sub.addItem(it)
+        }
+        dnd.submenu = sub
+        m.addItem(dnd)
         let hk = NSMenuItem(title: "Built-in hotkey", action: #selector(menuHotkey), keyEquivalent: "")
         hk.state = controller.hotkeyEnabled ? .on : .off
         hk.target = self
@@ -919,6 +968,17 @@ enum Screens {
     }
 
     @objc func menuToggle() { controller.toggle() }
+    /// Alerts stop peeking until then (the meeting and fix cards are still on the sheet). One tap, no settings window.
+    @objc func menuDND(_ sender: NSMenuItem) {
+        let now = Date()
+        switch sender.tag {
+        case 1: prefs.dndUntil = now.addingTimeInterval(3600)
+        case 2: prefs.dndUntil = DoNotDisturb.tomorrowMorning(after: now)
+        default: prefs.dndUntil = nil
+        }
+        controller.dismissPeek()
+        log.log("state dnd=\(sender.tag == 0 ? "off" : "on")")
+    }
     @objc func menuHotkey() { controller.setHotkeyEnabled(!controller.hotkeyEnabled) }
     @objc func menuDisplay(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }

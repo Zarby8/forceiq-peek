@@ -108,17 +108,18 @@ struct PeakRootView: View {
 
     var isExpanded: Bool { controller.expanded && controller.activeDisplay == panel.uuid }
     var showChat: Bool { isExpanded && controller.tab == .threePO && controller.profile.isEnabled(.threePO) }
-    var surface: PeakLayout.Surface { isExpanded ? (showChat ? .chat : .home) : .collapsed }
+    var peekShowing: Bool { !isExpanded && controller.peek != nil && controller.peekDisplay == panel.uuid }
+    var surface: PeakLayout.Surface { isExpanded ? (showChat ? .chat : .home) : (peekShowing ? .peek : .collapsed) }
     var shellRect: CGRect {
         var r = panel.local(panel.layout.hitRect(surface))
         if panel.mode == .notch && isExpanded { r = r.insetBy(dx: -earRadius, dy: 0) }   // ears sit outside the sheet
         return r
     }
-    var earRadius: CGFloat { panel.mode == .notch && isExpanded ? 14 : 0 }   // collapsed: no flare past the notch
-    var topRadius: CGFloat { panel.mode == .notch ? earRadius : (isExpanded ? 22 : panel.collapsedSize.height / 2) }
-    var bottomRadius: CGFloat { isExpanded ? 24 : (panel.mode == .notch ? 12 : panel.collapsedSize.height / 2) }
+    var earRadius: CGFloat { panel.mode == .notch && (isExpanded || peekShowing) ? 14 : 0 }   // collapsed: no flare past the notch
+    var topRadius: CGFloat { panel.mode == .notch ? earRadius : (isExpanded ? 22 : (peekShowing ? 20 : panel.collapsedSize.height / 2)) }
+    var bottomRadius: CGFloat { isExpanded ? 24 : (peekShowing ? 20 : (panel.mode == .notch ? 12 : panel.collapsedSize.height / 2)) }
     var shape: PeakShellShape { PeakShellShape(rect: shellRect, topRadius: topRadius, bottomRadius: bottomRadius, notch: panel.mode == .notch) }
-    var hoverLift: Bool { panel.hovering && !isExpanded && !reduceMotion }
+    var hoverLift: Bool { HoverLift.applies(mode: panel.mode, hovering: panel.hovering, expanded: isExpanded || peekShowing, reduceMotion: reduceMotion) }
     var voiceStrip: Bool {
         !isExpanded && panel.visible && voice.enabled && controller.activeDisplay.map { $0 == panel.uuid } ?? true
             && (voice.phase.isListening || voice.phase == .finishing || voice.handing)
@@ -140,7 +141,10 @@ struct PeakRootView: View {
         }
         .animation(Motion.quick(reduceMotion), value: voiceStrip)
         .contentShape(shape)
-        .onTapGesture { if !isExpanded { Haptic.level(); controller.activeDisplay = panel.uuid; controller.expand() } }
+        .onTapGesture {
+            if peekShowing { Haptic.level(); controller.openPeek() }
+            else if !isExpanded { Haptic.level(); controller.activeDisplay = panel.uuid; controller.expand() }
+        }
         .scaleEffect(hoverLift ? PeakMotion.hoverScale : 1, anchor: UnitPoint(x: (shellRect.midX) / max(1, panel.layout.canvas.width), y: 0))
         .frame(width: panel.layout.canvas.width, height: panel.layout.canvas.height, alignment: .topLeading)
         .animation(Motion.spring(reduceMotion), value: surface)
@@ -199,8 +203,27 @@ struct PeakRootView: View {
                 let r = panel.local(panel.layout.collapsed)
                 collapsed.padding(.leading, r.minX).padding(.top, r.minY)
                     .transition(.sharpen(reduceMotion))
+                if peekShowing, let a = controller.peek {
+                    let p = panel.local(panel.layout.peekStrip)
+                    peekLine(a).frame(width: p.width, height: p.height)
+                        .padding(.leading, p.minX).padding(.top, p.minY)
+                        .transition(Motion.sheet(reduceMotion))
+                }
             }
         }
+    }
+
+    /// One plain line under the notch: a dot (green for a meeting, gold for a failed fix), then the alert in white.
+    func peekLine(_ a: PeakAlert) -> some View {
+        HStack(spacing: 10) {
+            Circle().fill(a.kind == .fixFailed ? Color.peakGold : Color.peakGreen).frame(width: 9, height: 9)
+            Text(a.line).font(.system(size: 14, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
+        }
+        .padding(.horizontal, 20)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(a.line)
+        .accessibilityHint("Opens ForceIQ Peak")
+        .accessibilityAddTraits(.isButton)
     }
 
     /// Collapsed + idle pills hold a still frame; hover, expand or a state change wake the mark (MarkPolicy).

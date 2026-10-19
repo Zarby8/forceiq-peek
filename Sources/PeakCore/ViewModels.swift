@@ -43,6 +43,12 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     public var onVoiceToggle: (() -> Void)?
     public enum Tab: String, Sendable { case home, threePO = "3po" }
     @Published public var tab: Tab = .home
+    /// An alert peeking out of the notch (AlertPolicy decides; this only holds it for `holdSeconds`, then retracts it).
+    @Published public private(set) var peek: PeakAlert? = nil
+    @Published public private(set) var peekDisplay: String? = nil
+    /// A tap on the peek: the app opens whatever the alert is about (a meeting alert opens the next-session card).
+    public var onPeekOpen: ((PeakAlert) -> Void)?
+    private var peekTask: Task<Void, Never>?
 
     public init(prefs: PeakPrefs, profile: CoachProfile, hotkey: HotkeyRegistering, logger: PeakLogging? = nil) {
         self.prefs = prefs; self.profile = profile; self.hotkey = hotkey; self.logger = logger
@@ -55,9 +61,39 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
 
     public func toggle() { globallyVisible ? hide() : show() }
     public func show() { globallyVisible = true; prefs.globallyHidden = false; log("state visible=on") }
-    public func hide() { globallyVisible = false; expanded = false; prefs.globallyHidden = true; log("state visible=off") }
-    public func expand() { if !globallyVisible { show() }; guard !expanded else { return }; expanded = true; log("state expanded=on") }
+    public func hide() { dismissPeek(); globallyVisible = false; expanded = false; prefs.globallyHidden = true; log("state visible=off") }
+    public func expand() { if !globallyVisible { show() }; dismissPeek(); guard !expanded else { return }; expanded = true; log("state expanded=on") }
     public func collapse() { guard expanded else { return }; expanded = false; askText = nil; log("state expanded=off") }
+
+    /// Drop an alert out of the notch on `display`. Only a visible, collapsed Peak shows one; it retracts by itself.
+    public func showPeek(_ a: PeakAlert, on display: String?) {
+        guard globallyVisible, !expanded else { return }
+        peek = a; peekDisplay = display
+        log("state peek=\(a.kind.rawValue)")
+        schedulePeekRetract(a.holdSeconds)
+    }
+    /// The pointer is on the peek: give the coach a few more seconds to read it.
+    public func extendPeek(seconds: Double = 3) { guard peek != nil else { return }; schedulePeekRetract(seconds) }
+    public func dismissPeek() {
+        peekTask?.cancel(); peekTask = nil
+        guard peek != nil else { return }
+        peek = nil; peekDisplay = nil; log("state peek=off")
+    }
+    /// A tap on the peek opens the sheet on the display it dropped on, then hands the alert to the app.
+    public func openPeek() {
+        guard let a = peek else { expand(); return }
+        if let d = peekDisplay { activeDisplay = d }
+        expand(); onPeekOpen?(a)
+    }
+    private func schedulePeekRetract(_ seconds: Double) {
+        peekTask?.cancel()
+        let id = peek?.id
+        peekTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(max(0, seconds) * 1_000_000_000))
+            guard !Task.isCancelled, let self, self.peek?.id == id else { return }
+            self.dismissPeek()
+        }
+    }
 
     /// Opens the ask field prefilled (3PO's input when the 3PO module is on). Nothing is ever sent from here.
     public func openAsk(_ prefill: String?) {
@@ -230,10 +266,10 @@ public enum DemoData {
 
     /// `quiet`: the everyday desk (no meeting, no fixes, no approvals) so the Ghost is .idle and its ambient glow
     /// runs, as on a real coach's Mac most of the day (FORCEIQ_PEAK_DEMO_FEED=quiet; the CPU check uses it).
-    public static func snapshot(now: Date = Date(), quiet: Bool = false) -> EngineSnapshot {
+    public static func snapshot(now: Date = Date(), quiet: Bool = false, meetingInMinutes: Double = 42.3) -> EngineSnapshot {
         var s = EngineSnapshot()
         if quiet { s.familyEnabled = false; return s }
-        s.meeting = MeetingRow(client: "Sample Skater", scheduledAt: now.addingTimeInterval(42 * 60 + 18), durationMinutes: 60,
+        s.meeting = MeetingRow(client: "Sample Skater", scheduledAt: now.addingTimeInterval(meetingInMinutes * 60), durationMinutes: 60,
                                joinURL: nil, openURL: CommandLink.room(sessionID: "demo_session"))
         s.fixes = [FixRow(title: "Re-render crest title slide", client: "Demo Player", state: "running", message: "step 2 of 3")]
         s.fixesRunning = 0

@@ -98,6 +98,19 @@ process)" to phone.py, so Peak carries no token and no secret.
 - Raycast: `raycast/*.sh` script commands (package "ForceIQ Peak"). At install they're copied to `~/ForceIQ/peak/raycast/`.
   Add that folder once by hand: Raycast Settings → Extensions → + → Add Script Directory.
 
+## Notch alerts (the peek)
+Collapsed Peak is invisible: exactly the hardware notch. An urgent alert drops a one-line black strip out of the notch for
+6 s (8 s for a failed fix), then retracts. Urgent means a meeting starting within 10 minutes or a fix that fails after Peak
+is up (fixes already failing at launch are not news). Each line names its client; the dot is green for a meeting and gold for
+a failed fix; text is pure white. A tap opens the sheet (a meeting alert lands on the next-session card when the pill is
+on); the pointer resting on it holds it 3 s at a time. Nothing peeks while Peak is open, while dictating, during a live
+session, in quiet hours, under Do not disturb (menu bar: 1 hour / until tomorrow morning / off), or within a minute of the
+last peek. A held alert is not spent: it peeks when the gate lifts. The decision is `AlertPolicy` (PeakCore/Alerts.swift),
+pure and tested; logs carry the kind or the reason, never a client. Pushing the pointer to the very top edge within 40 pt
+of the notch also opens Peak (that strip never takes a click, so the menu bar stays usable). Only the Studio Display pill
+lifts on hover; the notch never scales or brightens, so nothing paints outside it. Demo: `FORCEIQ_PEAK_DEMO=1
+FORCEIQ_PEAK_DEMO_FEED=soon GOAT_PEAK_ROOT=<scratch root>` puts the sample meeting 9 min out.
+
 ## Settings (`<state_root>/settings.json`; `GOAT_PEAK_ROOT` overrides the root)
 Peak writes this file itself (menu bar, Settings); you can also hand-edit it. Every key is optional: a missing key (or a
 JSON `null`) gets its default and the keys that are present are kept, so `{"commandMeetingLink": true}` alone works.
@@ -114,6 +127,8 @@ Unknown keys are ignored.
 | `cuaActions` | true/false | `false` (no UI; the Cua backend, only inside the three live gates plus `FORCEIQ_PEAK_CUA_LIVE=1`) |
 | `commandMeetingLink` | true/false | `false` (no UI) |
 | `nextSessionPill` | true/false | `false` (no UI) |
+| `quietHoursStart`, `quietHoursEnd` | `"HH:mm"` (24 h, local) | unset (no quiet window; both keys needed; start later than end wraps midnight; a bad time is an invalid key) |
+| `dndUntil` | seconds since 1970 | unset (the menu's Do not disturb writes it) |
 
 - **No file** is normal (a new Mac, a fresh scratch root): silent defaults, nothing logged, nothing written until a setting
   changes.
