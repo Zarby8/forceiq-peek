@@ -20,6 +20,12 @@ final class PeakPanel: NSPanel {
     }
     override var canBecomeKey: Bool { true }      // the ask field needs keyboard focus (the app still doesn't activate)
     override var canBecomeMain: Bool { false }
+    /// Right-click (or ctrl-click) on Peak's shell, when no view under the pointer handled it: the same menu the menu-bar item
+    /// used to hold (Show, Displays, Presenting, Do not disturb, Shortcut, Quit). The wing is where the menu lives now.
+    var onContextMenu: ((NSEvent) -> Void)?
+    override func rightMouseDown(with event: NSEvent) {
+        if let f = onContextMenu { f(event) } else { super.rightMouseDown(with: event) }
+    }
 }
 
 enum Screens {
@@ -802,6 +808,10 @@ enum Screens {
                                      onDrop: { [weak self] urls in self?.dropped(urls, uuid: s.uuid) ?? false }))
             }
             hosts[s.uuid] = h
+            h.panel.onContextMenu = { [weak self, weak h] e in
+                guard let self, let v = h?.panel.contentView else { return }
+                NSMenu.popUpContextMenu(self.makeMenu(), with: e, for: v)
+            }
             log.log("panel mode=\(h.layout.mode.rawValue)")
         }
         syncPanels()
@@ -911,7 +921,10 @@ enum Screens {
     }
 
     // ── menu bar ──
+    /// The menu-bar item is OFF unless settings.json `menuBarItem` is true: the wing beside the notch is the always-on status
+    /// and its right-click menu holds the same actions (Chris 10.19.2026: "remove the one on the right").
     func buildStatusItem() {
+        guard prefs.menuBarItem else { log.log("menu-bar item=off (right-click the wing for the menu)"); return }
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem = item
         applyStatusBadge()

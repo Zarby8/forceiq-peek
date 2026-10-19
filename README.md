@@ -106,8 +106,10 @@ green (#4FFF4F), or **PRESENTING** in gold while presenting. This is the compact
 height, with ~6 pt top and ~14 pt bottom corner radii). Hover or click on the wing opens Peak; the top-edge trigger covers
 the whole shape. The wing is 96 pt (`PeakGeometry.wingWidth`; set it to 0 to go back to a bare notch), sized for the longest
 word; it covers whatever menu-bar items sit under it (the last app menus, on an app with very long menus). The Studio Display pill has no
-wing (the pill is the status). The menu-bar status item is the same capsule ("PEAK" / "PEAK · PRESENTING" on black); a crowded
-notch-Mac menu bar can hide it (the M5's had no on-screen status-item window), which is why the wing exists.
+wing (the pill is the status). **The menu-bar status item is off** (settings.json `menuBarItem`: true brings it back as a black "PEAK" capsule); the wing is
+the status. **Right-click (or ctrl-click) the wing for the Peak menu**: Show / Hide, Displays, Presenting, Do not disturb,
+Built-in hotkey, Shortcut, About, Quit. (A crowded notch-Mac menu bar can also hide a status item; the M5's had no on-screen
+status-item window until the wing left room.)
 
 ## Notch alerts (the peek)
 Collapsed Peak is the notch plus its green status wing. An urgent alert drops a one-line black strip out of the notch for

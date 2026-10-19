@@ -8,7 +8,7 @@ import Foundation
 ///   hiddenDisplays [] (shown on every display) · globallyHidden false · hotkeyEnabled unset (the profile's hotkey.enabled)
 ///   ghostFormat unset (h264-black) · voiceEnabled unset (the profile's modules.voice) · desktopActions false
 ///   commandMeetingLink false · nextSessionPill false · cuaActions false
-///   presenting false (hide every client detail on a shared screen)
+///   presenting false (hide every client detail on a shared screen) · menuBarItem false (the wing's right-click is the menu)
 ///   quietHoursStart / quietHoursEnd unset ("HH:mm" local; both set = no peeks in that window, wraps midnight) · dndUntil unset
 /// No file is normal (a fresh Mac): silent defaults. A file that exists but can't be used (unreadable, empty, not valid
 /// JSON, not an object, or any key of the wrong type) fails loudly and fails closed: ALL settings fall back to defaults,
@@ -20,11 +20,11 @@ public final class PeakPrefs: @unchecked Sendable {
         var hiddenDisplays: [String] = []; var hotkeyEnabled: Bool? = nil; var globallyHidden = false; var ghostFormat: String? = nil
         var voiceEnabled: Bool? = nil; var desktopActions: Bool? = nil; var commandMeetingLink: Bool? = nil
         var nextSessionPill: Bool? = nil; var cuaActions: Bool? = nil
-        var quietHoursStart: String? = nil; var quietHoursEnd: String? = nil; var dndUntil: Double? = nil; var presenting: Bool? = nil
+        var quietHoursStart: String? = nil; var quietHoursEnd: String? = nil; var dndUntil: Double? = nil; var presenting: Bool? = nil; var menuBarItem: Bool? = nil
         init() {}
         enum CodingKeys: String, CodingKey, CaseIterable {
             case hiddenDisplays, hotkeyEnabled, globallyHidden, ghostFormat, voiceEnabled, desktopActions, commandMeetingLink
-            case nextSessionPill, cuaActions, quietHoursStart, quietHoursEnd, dndUntil, presenting
+            case nextSessionPill, cuaActions, quietHoursStart, quietHoursEnd, dndUntil, presenting, menuBarItem
         }
         /// decodeIfPresent for every key: missing / null = the default. A key of the wrong type throws (typeMismatch),
         /// which load() turns into all defaults plus a logged, visible error.
@@ -43,6 +43,7 @@ public final class PeakPrefs: @unchecked Sendable {
             quietHoursEnd = try Doc.clock(c, .quietHoursEnd)
             dndUntil = try c.decodeIfPresent(Double.self, forKey: .dndUntil)
             presenting = try c.decodeIfPresent(Bool.self, forKey: .presenting)
+            menuBarItem = try c.decodeIfPresent(Bool.self, forKey: .menuBarItem)
         }
         /// An "HH:mm" key; anything that isn't a 24 h clock time is an invalid key (all defaults, visible notice).
         private static func clock(_ c: KeyedDecodingContainer<CodingKeys>, _ k: CodingKeys) throws -> String? {
@@ -180,6 +181,12 @@ public final class PeakPrefs: @unchecked Sendable {
     public var presenting: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.presenting ?? (loadIssue != nil) }
         set { edit { $0.presenting = newValue } }
+    }
+    /// Show the menu-bar status item (a black "PEAK" capsule with the Peak menu). OFF by default: the status wing beside the
+    /// notch is the always-on status and its right-click menu has the same actions. Missing key or unreadable file = off.
+    public var menuBarItem: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return doc.menuBarItem ?? false }
+        set { edit { $0.menuBarItem = newValue } }
     }
     /// A daily window with no alert peeks. Needs both keys; missing / unreadable file = none.
     public var quietHours: QuietHours? {
