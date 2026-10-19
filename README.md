@@ -286,8 +286,11 @@ Per coach: see `ADD-A-COACH.md` and `profile.template.json`. Third-party code: `
   is labelled `STALE (read 9:30 AM ET, 12 min ago)`. A source that didn't answer is said plainly and nothing is
   invented. Speech uses only macOS AVSpeechSynthesizer on this Mac, and only while Voice is on. Pressing the voice
   toggle again stops it mid-sentence.
-- **5090 light.** This is the dot under the expanded header. It's red when a meeting is on now, or starts within 2 h (Command
-  bookings, Command live on this Mac, or the calendar), and green otherwise. Unknown means no read, a read older than 300 s, or Command live
-  unreadable. Unknown is treated as red and labelled. While it isn't green, Peak refuses every 5090 GPU action (the shifts/upscale drop zone, GPU
-  proposals and GPU approvals) with one plain sentence, and nothing runs. Status reads only: Peak never talks to the 5090, its
-  recording service, the service that guards it, or the recorder machine.
+- **5090 light.** This is the dot under the expanded header. It's red from 2 h before a meeting through its end, including a
+  meeting in progress. Because the bookings read is upcoming-only, an in-progress meeting comes from Command live on this
+  Mac or from the calendar. The message names the case, e.g. "Meeting in progress (started 9:10 AM ET)" or "Meeting at
+  9:30 AM ET, within 2 h". Otherwise the light is green. It's unknown when there's no read, the read is older than 300 s, Command's live status
+  can't be read, or the calendar is unknown (missing, garbled, access not granted, no fetch time) or STALE (its
+  `fetched_at` is older than 300 s). Unknown is treated as red and labelled. While it isn't green, Peak refuses every 5090 GPU action (the
+  shifts/upscale drop zone, GPU proposals and GPU approvals) with one plain sentence, and nothing runs. Status reads only:
+  Peak never talks to the 5090, its recording service, the service that guards it, or the recorder machine.

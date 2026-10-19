@@ -6,7 +6,7 @@ import XCTest
 /// isn't green. FAKE client names only.
 let lightNow = EngineParse.date("2026-10-19T12:00:00Z")!                // 8:00 AM ET
 func win(_ startsIn: TimeInterval, minutes: Double = 60, live: Bool? = false) -> GPUWindow {
-    GPUWindow(spans: [GPUSpan(start: lightNow.addingTimeInterval(startsIn), end: lightNow.addingTimeInterval(startsIn + minutes * 60), source: "command")], live: live)
+    GPUWindow(spans: [GPUSpan(start: lightNow.addingTimeInterval(startsIn), end: lightNow.addingTimeInterval(startsIn + minutes * 60), source: "command")], live: live, calendarAt: lightNow)
 }
 
 final class GPULightStateTests: XCTestCase {
@@ -23,15 +23,15 @@ final class GPULightStateTests: XCTestCase {
         XCTAssertEqual(s, .green)
         XCTAssertNil(GPUGate.refusal(s))
         XCTAssertEqual(s.dotHex, Brand.greenHex)
-        XCTAssertEqual(GPULight.evaluate(GPUWindow(spans: [], live: false), readAt: lightNow, now: lightNow), .green)
+        XCTAssertEqual(GPULight.evaluate(GPUWindow(spans: [], live: false, calendarAt: lightNow), readAt: lightNow, now: lightNow), .green)
         XCTAssertEqual(GPULight.evaluate(win(-2 * 3600), readAt: lightNow, now: lightNow), .green, "an ended meeting doesn't hold")
     }
 
     func testAMeetingInProgressOrLiveIsRed() {
-        XCTAssertEqual(GPULight.evaluate(win(-20 * 60), readAt: lightNow, now: lightNow, tz: briefET), .red("meeting on now (since 7:40 AM ET)"))
-        let live = GPULight.evaluate(GPUWindow(spans: [], live: true), readAt: lightNow, now: lightNow)
-        XCTAssertEqual(live, .red("a Command meeting is live"))
-        XCTAssertEqual(GPUGate.refusal(live), "A Command meeting is live: 5090 GPU jobs are held so the recorder isn't disturbed. Nothing ran.")
+        XCTAssertEqual(GPULight.evaluate(win(-20 * 60), readAt: lightNow, now: lightNow, tz: briefET), .red("meeting in progress (started 7:40 AM ET)"))
+        let live = GPULight.evaluate(GPUWindow(spans: [], live: true, calendarAt: lightNow), readAt: lightNow, now: lightNow)
+        XCTAssertEqual(live, .red("meeting in progress (Command is live on this Mac)"))
+        XCTAssertEqual(GPUGate.refusal(live), "Meeting in progress (Command is live on this Mac): 5090 GPU jobs are held so the recorder isn't disturbed. Nothing ran.")
     }
 
     func testUnknownIsRedLabelledAndHolds() {
@@ -55,8 +55,9 @@ final class GPULightStateTests: XCTestCase {
 
     func testParseFailsClosed() throws {
         func doc(_ s: String) throws -> [String: Any] { try JSONSerialization.jsonObject(with: Data(s.utf8)) as! [String: Any] }
-        let ok = try doc(#"{"ok":true,"gpu_window":{"spans":[{"start":"2026-10-19T15:00:00+00:00","end":"2026-10-19T16:00:00+00:00","source":"command"}],"live":false}}"#)
+        let ok = try doc(#"{"ok":true,"gpu_window":{"spans":[{"start":"2026-10-19T15:00:00+00:00","end":"2026-10-19T16:00:00+00:00","source":"command"}],"live":false,"calendar_at":"2026-10-19T11:58:00+00:00","sources":{"calendar":"ok"}}}"#)
         XCTAssertEqual(GPUWindow.parse(ok)?.spans.count, 1)
+        XCTAssertEqual(GPUWindow.parse(ok)?.calendarAt, EngineParse.date("2026-10-19T11:58:00Z"))
         XCTAssertEqual(GPUWindow.parse(ok)?.live, false)
         XCTAssertNil(GPUWindow.parse(try doc(#"{"ok":false,"meeting":null,"error":"Command didn't answer for bookings."}"#)))
         XCTAssertNil(GPUWindow.parse(try doc(#"{"ok":true,"meeting":null}"#)), "an older engine: unknown")

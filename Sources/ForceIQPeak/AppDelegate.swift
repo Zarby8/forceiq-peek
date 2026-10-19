@@ -703,7 +703,7 @@ enum Screens {
         s.takenAt = now; s.liveAt = now; s.approvalsAt = now
         let m = s.meeting
         s.today = m.map { [SessionRow(client: $0.client, scheduledAt: $0.scheduledAt, durationMinutes: $0.durationMinutes)] } ?? []
-        s.gpuWindow = GPUWindow(spans: m.map { [GPUSpan(start: $0.scheduledAt, end: $0.scheduledAt.addingTimeInterval(Double($0.durationMinutes) * 60), source: "command")] } ?? [], live: false)
+        s.gpuWindow = GPUWindow(spans: m.map { [GPUSpan(start: $0.scheduledAt, end: $0.scheduledAt.addingTimeInterval(Double($0.durationMinutes) * 60), source: "command")] } ?? [], live: false, calendarAt: now)
         return s
     }
 

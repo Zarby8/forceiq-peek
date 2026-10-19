@@ -1,7 +1,9 @@
 import Foundation
 
-// ForceIQ Peak 5090 light (Chris 10.19.2026). A small dot: RED when a meeting starts within 2 h (or one is on), GREEN
-// otherwise. UNKNOWN (the meeting status is missing, unreadable or STALE) is drawn red, labelled, and holds GPU work:
+// ForceIQ Peak 5090 light (Chris 10.19.2026). A small dot: RED from 2 h before a meeting through its end (a meeting in
+// progress included: Command live on this Mac, or a calendar / booking span that has started and not ended), GREEN
+// otherwise. The bookings read is upcoming-only, so Command's live status AND the calendar must both be readable and
+// fresh, or the light is UNKNOWN. UNKNOWN (the meeting status is missing, unreadable or STALE) is drawn red, labelled, and holds GPU work:
 // it fails closed. While it isn't green, Peak refuses EVERY 5090 GPU action (the shifts / upscale drop zone, a 3PO
 // proposal or a GOAT approval that would upscale) with one plain message.
 // Source: GET /api/peak/next-meeting `gpu_window` (engine/peakmeeting.py: the Command bookings read Peak already makes
@@ -17,10 +19,16 @@ public struct GPUSpan: Equatable, Sendable {
 }
 
 /// `gpu_window` as the engine sent it. `live` nil = Command's live state wasn't read (unknown, never "not live").
+/// `calendarAt`: when the calendar snapshot was fetched (judged STALE by Peak's clock); nil with `calendarIssue` = the
+/// calendar couldn't be trusted (unknown, never "a clear day"). The default is unknown: fail closed.
 public struct GPUWindow: Equatable, Sendable {
     public let spans: [GPUSpan]
     public let live: Bool?
-    public init(spans: [GPUSpan], live: Bool?) { self.spans = spans; self.live = live }
+    public let calendarAt: Date?
+    public let calendarIssue: String?
+    public init(spans: [GPUSpan], live: Bool?, calendarAt: Date? = nil, calendarIssue: String? = nil) {
+        self.spans = spans; self.live = live; self.calendarAt = calendarAt; self.calendarIssue = calendarIssue
+    }
 
     /// nil when the doc has no usable gpu_window (an old engine, an error doc): Peak then shows UNKNOWN.
     public static func parse(_ o: [String: Any]) -> GPUWindow? {
@@ -31,13 +39,17 @@ public struct GPUWindow: Equatable, Sendable {
                   let e = EngineParse.date(EngineParse.str(d["end"])) else { return nil }      // one bad span: don't guess
             spans.append(GPUSpan(start: s, end: max(s, e), source: EngineParse.str(d["source"])))
         }
-        return GPUWindow(spans: spans.sorted { $0.start < $1.start }, live: w["live"] as? Bool)
+        let calOK = ((w["sources"] as? [String: Any])?["calendar"] as? String) == "ok"
+        let calAt = calOK ? EngineParse.date(EngineParse.str(w["calendar_at"])) : nil
+        let issue = ((w["calendar_issue"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)   // JSON null → none
+        return GPUWindow(spans: spans.sorted { $0.start < $1.start }, live: w["live"] as? Bool, calendarAt: calAt,
+                         calendarIssue: calAt != nil ? nil : (issue.isEmpty ? "calendar status unavailable" : issue))
     }
 }
 
 public enum GPULightState: Equatable, Sendable {
     case green
-    case red(String)          // a meeting within 2 h, or one is live: the reason in plain words
+    case red(String)          // a meeting in progress or within 2 h: the reason in plain words
     case unknown(String)      // status missing / unreadable / STALE: drawn red, labelled, holds GPU work
 
     public var holdsGPU: Bool { self != .green }
@@ -60,6 +72,8 @@ public enum GPULight {
     public static let window: TimeInterval = 2 * 3600
     /// The same threshold as the engine's threepo_clock (reading_stale_after_s): older status is STALE → unknown.
     public static let staleAfter: TimeInterval = BriefClock.staleAfter
+    /// The calendar snapshot (state/eventkit.json `fetched_at`) goes STALE on the same rule: older → unknown → held.
+    public static let calendarStaleAfter: TimeInterval = BriefClock.staleAfter
 
     /// Pure: the light for a gpu_window read at `readAt`, judged at `now` (Peak's own clock, so a meeting that slides
     /// inside 2 h turns the light red without a new read).
@@ -67,12 +81,22 @@ public enum GPULight {
         guard let w, let readAt else { return .unknown("meeting status unavailable") }
         let age = now.timeIntervalSince(readAt)
         if age > staleAfter { return .unknown("meeting status \(BriefClock.staleLabel(readAt, now: now, tz: tz))") }
-        if w.live == true { return .red("a Command meeting is live") }
-        if let s = w.spans.first(where: { $0.end > now && $0.start <= now.addingTimeInterval(window) }) {
-            return s.start <= now ? .red("meeting on now (since \(BriefClock.time(s.start, tz: tz)))")
-                                  : .red("meeting at \(BriefClock.time(s.start, tz: tz))")
+        // 1. A meeting in progress (a span that has started and not ended), named by when it started.
+        if let s = w.spans.filter({ $0.start <= now && $0.end > now }).min(by: { $0.start < $1.start }) {
+            return .red("meeting in progress (started \(BriefClock.time(s.start, tz: tz)))")
         }
+        // 2. Command is live on this Mac (a session the upcoming-only bookings read can't show).
+        if w.live == true { return .red("meeting in progress (Command is live on this Mac)") }
+        // 3. A meeting starting within 2 h.
+        if let s = w.spans.first(where: { $0.start > now && $0.start <= now.addingTimeInterval(window) }) {
+            return .red("meeting at \(BriefClock.time(s.start, tz: tz))")
+        }
+        // 4. Nothing seen, but a source that could show a meeting in progress is unknown or STALE: held.
         if w.live == nil { return .unknown("Command's live status couldn't be read") }
+        guard let cal = w.calendarAt else { return .unknown("calendar unknown: \(w.calendarIssue ?? "calendar status unavailable")") }
+        if now.timeIntervalSince(cal) > calendarStaleAfter {
+            return .unknown("calendar \(BriefClock.staleLabel(cal, now: now, tz: tz))")
+        }
         return .green
     }
 }
