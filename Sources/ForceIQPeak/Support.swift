@@ -7,7 +7,8 @@ import PeakCore
 @MainActor enum Session {
     static var profile = CoachProfile.none
     /// Before a profile loads: the default state root (same default engine/peakprofile.py uses).
-    static var defaultStateRoot: URL { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("ForceIQ/peak") }
+    /// GOAT_PEAK_ROOT (a scratch root) wins, as in CoachProfile.stateRootURL().
+    static var defaultStateRoot: URL { PeakRoot.override() ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("ForceIQ/peak") }
 }
 
 @MainActor final class FileLog: PeakLogging {

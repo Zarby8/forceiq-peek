@@ -95,6 +95,7 @@ enum Screens {
     var dropsStore: DropStore!
     var mouseMonitors: [Any] = []
     var hoveredDisplay: String?
+    var demoFeedLogged = false
 
     func applicationWillFinishLaunching(_ n: Notification) {
         NSAppleEventManager.shared().setEventHandler(self, andSelector: #selector(handleURL(_:reply:)),
@@ -311,7 +312,12 @@ enum Screens {
     }
 
     func refresh() {
-        if demo { cards.update(DemoData.snapshot(), profile: profile); return }
+        if demo {
+            let quiet = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "quiet"
+            cards.update(DemoData.snapshot(quiet: quiet), profile: profile)
+            if !demoFeedLogged { demoFeedLogged = true; log.log("feed demo=\(quiet ? "quiet" : "sample") ghost=\(cards.ghost.rawValue)") }
+            return
+        }
         guard controller.globallyVisible else { return }
         Task { @MainActor in
             let s = await engine.snapshot()

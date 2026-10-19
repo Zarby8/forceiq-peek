@@ -23,6 +23,8 @@ public enum PeakTokens {
     public static let disabledOpacity: Double = 1.0
     /// A collapsed pill plays the Ghost mark this long after a state change, then holds a still first frame.
     public static let markWakeSeconds: Double = 6
+    /// The Metal glow (only when the bundle has default.metallib) re-renders via SwiftUI, so it ticks at this rate.
+    public static let ambientShaderFPS: Double = 15
 }
 
 /// Switcher tile look. A listed app that isn't installed is never dimmed or desaturated: it gets a gold outline, its
@@ -56,4 +58,31 @@ public enum DisplayPlan {
     public static func modes(_ screens: [ScreenDescriptor], geometry: PeakGeometryProviding = PeakGeometry()) -> [String: PeakMode] {
         Dictionary(screens.map { ($0.uuid, geometry.layout(for: $0).mode) }, uniquingKeysWith: { a, _ in a })
     }
+}
+
+/// The Ghost glow's breath (the look approved on the native SwiftUI ring): phase = (sin(t * 1.6) + 1) / 2, a thin ring
+/// at 0.55…1.0 opacity and a soft ring (4 pt stroke) whose blur breathes 4…7 pt at strength × 0.35…0.75 opacity.
+/// It runs as a Core Animation layer animation (render server; no SwiftUI update per frame), so these are the
+/// animation's endpoints and half-period. See GhostMark.swift (CAGlowView).
+public struct GlowBreath: Equatable, Sendable {
+    public static let angularSpeed = 1.6
+    /// Trough → crest (one autoreverse leg): half of 2π / 1.6 ≈ 1.963 s.
+    public static var halfPeriod: Double { Double.pi / angularSpeed }
+    public let innerOpacity: ClosedRange<Double>
+    public let outerOpacity: ClosedRange<Double>
+    public let outerBlur: ClosedRange<Double>
+    public let innerWidth: Double = 1.5
+    public let outerWidth: Double = 4
+    public init(strength: Double) {
+        innerOpacity = 0.55...1.0
+        outerOpacity = (strength * 0.35)...(strength * 0.75)
+        outerBlur = 4...7
+    }
+    /// The SwiftUI formula at a phase in 0…1 (what the old TimelineView drew), for tests and the still frame.
+    public func at(phase p: Double) -> (inner: Double, outer: Double, blur: Double) {
+        func lerp(_ r: ClosedRange<Double>) -> Double { r.lowerBound + (r.upperBound - r.lowerBound) * p }
+        return (lerp(innerOpacity), lerp(outerOpacity), lerp(outerBlur))
+    }
+    public static func phase(at t: Double) -> Double { (sin(t * angularSpeed) + 1) / 2 }
+    public static func strength(_ s: GhostState) -> Double { s == .working ? 0.7 : 0.45 }
 }

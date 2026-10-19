@@ -7,6 +7,8 @@ black, green `#5BE37D` and gold `#F5C542` accents, no dim gray text.
 
 **Ghost mark:** BOB Motion **ForceIQ-Peak-BOB-v1, v1.1** (idle re-timed to a seamless 60-frame loop), h264 on black,
 masked to a circle, played with AVPlayerLooper and driven by the pack's MANIFEST.json. See `Resources/ASSETS.md`.
+Its glow breathes as a Core Animation layer animation (`CAGlowView`, curve in `GlowBreath`): the render server runs
+it, so an expanded, idle Peak does no per-frame SwiftUI work.
 
 ## What it shows (modules, on or off per coach profile)
 - **meetings**: the next Command meeting for this coach's client: the client name, a live countdown, Join (opens the
@@ -76,4 +78,20 @@ process)" to phone.py, so Peak carries no token and no secret.
 peak/build.sh      # → peak/build/ForceIQ Peak.app (scratch, SwiftPM cache and TMPDIR under ~/ForceIQ/)
 cd peak && TMPDIR=~/ForceIQ/peak-tmp swift test --scratch-path ~/ForceIQ/peak-derived/<name> --cache-path ~/ForceIQ/peak-derived/swiftpm-cache
 ```
+
+### Idle CPU check (run it before any PR that adds motion)
+```
+peak/scripts/cpu_idle_check.sh                      # chat open + idle, 30 s: exit 1 above 2.0 %
+peak/scripts/cpu_idle_check.sh --mode collapsed     # collapsed pills, idle: exit 1 above 0.5 %
+peak/scripts/cpu_idle_check.sh --app <other .app> --max 2.0 --seconds 30 --settle 8
+```
+It launches its own demo instance of the build (`FORCEIQ_PEAK_DEMO=1`, `FORCEIQ_PEAK_DEMO_TOUR=3po-idle`) with a scratch
+`GOAT_PEAK_ROOT` under `~/ForceIQ/peak-tmp/` and the quiet desk feed (`FORCEIQ_PEAK_DEMO_FEED=quiet`: no meeting, fixes
+or approvals, so the Ghost is idle and its glow runs, as on a coach's Mac most of the day). The sample demo feed has
+approvals, so the Ghost is in attention and the glow is off: a CPU number taken on it misses the glow. The script
+measures only that PID and quits it. `GOAT_PEAK_ROOT` also keeps any demo or test run out of the coach's
+`~/ForceIQ/peak` (logs, settings.json, profile.cache.json). Swift tests (`AmbientMotionGuardTests`) fail on a
+`.repeatForever`, an uncapped or unpausable `TimelineView(.animation)`, a TimelineView glow, a new display link, or
+repeating keyframes outside the busy-only ThinkingDots.
+
 Per coach: see `ADD-A-COACH.md` and `profile.template.json`. Third-party code: `THIRD_PARTY_NOTICES.md`.

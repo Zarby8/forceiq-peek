@@ -210,24 +210,85 @@ enum GlowTint {
     static func color(_ s: GhostState) -> Color { .peakGreen }
 }
 
-/// Native glow: a soft ring that breathes (TimelineView(.animation) runs at the display's refresh, 120 Hz on ProMotion).
+/// Native glow: a soft ring that breathes (GlowBreath). Core Animation layer animations, run by the render server:
+/// no SwiftUI update or CA commit per frame from Peak (the old TimelineView(.animation) re-rendered the whole expanded
+/// panel at display refresh: ~8-13 % CPU, chat open and idle). Not live (collapsed + idle, hidden): a still frame.
 @MainActor struct NativeGlowRenderer: GhostGlowRendering {
     func glow(state: GhostState, reduceMotion: Bool, active: Bool) -> AnyView {
         if state == .attention || state == .error { return AnyView(EmptyView()) }   // attention: the pack's own bloom
         let tint = GlowTint.color(state)
-        let strength: Double = state == .working ? 0.7 : 0.45
+        let strength = GlowBreath.strength(state)
         if reduceMotion {
             return AnyView(Circle().stroke(tint, lineWidth: 1.5).blur(radius: 2).opacity(strength))
         }
-        // Paused (one static frame) unless the mark is live: collapsed + idle costs no frames.
-        return AnyView(TimelineView(.animation(paused: !active)) { ctx in
-            let t = ctx.date.timeIntervalSinceReferenceDate
-            let phase = (sin(t * 1.6) + 1) / 2
-            ZStack {
-                Circle().stroke(tint, lineWidth: 1.5).opacity(0.55 + 0.45 * phase)
-                Circle().stroke(tint, lineWidth: 4).blur(radius: 4 + 3 * phase).opacity(strength * (0.35 + 0.4 * phase))
+        return AnyView(CAGlowView(tint: NSColor(tint), breath: GlowBreath(strength: strength), live: active))
+    }
+}
+
+/// The breathing ring as two CAShapeLayers: a thin stroke (opacity breathes) and a stroked shadow path (radius and
+/// opacity breathe). Animations are added once per (tint, strength, live) and run in the render server.
+struct CAGlowView: NSViewRepresentable {
+    let tint: NSColor
+    let breath: GlowBreath
+    let live: Bool
+    func makeNSView(context: Context) -> CAGlowNSView { CAGlowNSView() }
+    func updateNSView(_ v: CAGlowNSView, context: Context) { v.configure(tint: tint, breath: breath, live: live) }
+}
+
+final class CAGlowNSView: NSView {
+    private let inner = CAShapeLayer()
+    private let outer = CAShapeLayer()
+    private var key: (NSColor, GlowBreath, Bool)?
+    /// Test seam / debug: whether the breath is currently animating.
+    private(set) var animating = false
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.masksToBounds = false
+        for l in [outer, inner] { l.fillColor = nil; l.masksToBounds = false; layer?.addSublayer(l) }
+        outer.strokeColor = nil
+        outer.shadowOffset = .zero
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
+    override var isFlipped: Bool { true }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func layout() {
+        super.layout()
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        for l in [outer, inner] { l.frame = bounds }
+        let ring = CGPath(ellipseIn: bounds, transform: nil)       // = SwiftUI Circle() in this frame; strokes straddle it
+        inner.path = ring
+        outer.shadowPath = ring.copy(strokingWithWidth: CGFloat(key?.1.outerWidth ?? 4), lineCap: .butt, lineJoin: .miter, miterLimit: 10)
+        CATransaction.commit()
+    }
+    func configure(tint: NSColor, breath: GlowBreath, live: Bool) {
+        if let k = key, k.0 == tint, k.1 == breath, k.2 == live { return }   // SwiftUI updates never restart the breath
+        key = (tint, breath, live)
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        inner.strokeColor = tint.cgColor
+        inner.lineWidth = CGFloat(breath.innerWidth)
+        outer.shadowColor = tint.cgColor
+        let still = breath.at(phase: 0.5)
+        inner.opacity = Float(still.inner); outer.shadowOpacity = Float(still.outer); outer.shadowRadius = CGFloat(still.blur)
+        inner.removeAllAnimations(); outer.removeAllAnimations()
+        animating = live
+        if live {
+            let sine = CAMediaTimingFunction(controlPoints: 0.37, 0, 0.63, 1)   // ≈ (sin + 1) / 2 between trough and crest
+            func breathe(_ path: String, _ r: ClosedRange<Double>) -> CABasicAnimation {
+                let a = CABasicAnimation(keyPath: path)
+                a.fromValue = r.lowerBound; a.toValue = r.upperBound
+                a.duration = GlowBreath.halfPeriod; a.autoreverses = true; a.repeatCount = .infinity
+                a.timingFunction = sine; a.isRemovedOnCompletion = false
+                return a
             }
-        })
+            inner.add(breathe("opacity", breath.innerOpacity), forKey: "breath")
+            let g = CAAnimationGroup()
+            g.animations = [breathe("shadowOpacity", breath.outerOpacity), breathe("shadowRadius", breath.outerBlur)]
+            g.duration = .infinity; g.isRemovedOnCompletion = false
+            outer.add(g, forKey: "breath")
+        }
+        CATransaction.commit()
+        needsLayout = true
     }
 }
 
@@ -239,7 +300,8 @@ enum GlowTint {
         if state == .attention || state == .error { return AnyView(EmptyView()) }
         let tint = GlowTint.color(state)
         let start = Date()
-        return AnyView(TimelineView(.animation(paused: reduceMotion || !active)) { ctx in
+        // Ambient: capped at PeakTokens.ambientShaderFPS (a SwiftUI re-render per tick; never display refresh).
+        return AnyView(TimelineView(.animation(minimumInterval: 1 / PeakTokens.ambientShaderFPS, paused: reduceMotion || !active)) { ctx in
             let t = Float(ctx.date.timeIntervalSince(start))
             Circle().stroke(Color.white, lineWidth: 6).padding(-3)
                 .colorEffect(ShaderLibrary.default.ghostGlow(.float(t), .color(tint), .float(0.6)))

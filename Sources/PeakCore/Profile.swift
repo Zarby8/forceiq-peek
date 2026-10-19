@@ -46,7 +46,10 @@ public struct CoachProfile: Equatable, Sendable, Codable {
     public func isEnabled(_ m: PeakModuleID) -> Bool { configured && (modules[m.rawValue] ?? false) }
 
     /// The state root on this Mac (logs, settings, future memory store and spend meter).
-    public func stateRootURL(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
+    /// GOAT_PEAK_ROOT (tests, demo and CPU runs: a scratch root) wins, the same first rule as engine/peakprofile.peak_root().
+    public func stateRootURL(home: URL = FileManager.default.homeDirectoryForCurrentUser,
+                             env: [String: String] = ProcessInfo.processInfo.environment) -> URL {
+        if let o = PeakRoot.override(env: env, home: home) { return o }
         let s = stateRoot.isEmpty ? "~/ForceIQ/peak" : stateRoot
         if s.hasPrefix("~/") { return home.appendingPathComponent(String(s.dropFirst(2))) }
         return URL(fileURLWithPath: s)
@@ -69,6 +72,18 @@ public struct CoachProfile: Equatable, Sendable, Codable {
         roster: Roster(source: "none", names: []), folderRoots: [], nasPaths: [], accounts: Accounts(command: "", flow: ""),
         claudeKeyRef: KeyRef(keychainService: "", account: ""), hotkey: Hotkey(enabled: true, key: "g", modifiers: ["control", "option"]),
         modules: [:], apps: [], goatBundleID: "", commandOpenURL: "forceiq-command://app/open")
+}
+
+/// GOAT_PEAK_ROOT: a scratch Peak root for tests, demo instances and CPU checks, so they never write the coach's real
+/// ~/ForceIQ/peak (logs, settings.json, profile.cache.json). Empty or unset: no override.
+public enum PeakRoot {
+    public static func override(env: [String: String] = ProcessInfo.processInfo.environment,
+                                home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL? {
+        guard let s = env["GOAT_PEAK_ROOT"]?.trimmingCharacters(in: .whitespaces), !s.isEmpty else { return nil }
+        if s == "~" { return home }
+        if s.hasPrefix("~/") { return home.appendingPathComponent(String(s.dropFirst(2))) }
+        return URL(fileURLWithPath: s)
+    }
 }
 
 /// Load order: engine → cache under the state root. A good engine answer refreshes the cache.

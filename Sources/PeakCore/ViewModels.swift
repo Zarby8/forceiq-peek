@@ -196,8 +196,11 @@ public enum DemoData {
         return p
     }
 
-    public static func snapshot(now: Date = Date()) -> EngineSnapshot {
+    /// `quiet`: the everyday desk (no meeting, no fixes, no approvals) so the Ghost is .idle and its ambient glow
+    /// runs, as on a real coach's Mac most of the day (FORCEIQ_PEAK_DEMO_FEED=quiet; the CPU check uses it).
+    public static func snapshot(now: Date = Date(), quiet: Bool = false) -> EngineSnapshot {
         var s = EngineSnapshot()
+        if quiet { s.familyEnabled = false; return s }
         s.meeting = MeetingRow(client: "Sample Skater", scheduledAt: now.addingTimeInterval(42 * 60 + 18), durationMinutes: 60,
                                joinURL: nil, openURL: CommandLink.room(sessionID: "demo_session"))
         s.fixes = [FixRow(title: "Re-render crest title slide", client: "Demo Player", state: "running", message: "step 2 of 3")]
