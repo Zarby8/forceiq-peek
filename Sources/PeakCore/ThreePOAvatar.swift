@@ -232,6 +232,28 @@ public enum AvatarIdleCache {
     }
 }
 
+/// The loops tier's parked idle: an AVPlayer that keeps playing costs ~3.5 % CPU even for a 64 px clip (CoreMedia's
+/// queue, the decoder round trips and the image queue run every frame), so a steady idle loop parks like the rig does:
+/// the idle clip's own decoded frames (every frame, at the pack's fps) play as a Core Animation keyframe animation in
+/// phase with the player, and the player pauses. Any change unparks at once (the parked frame is the cut's frozen frame).
+public enum AvatarLoopPark {
+    /// Park only on the idle loop, settling into idle, with no crossfade up, while live, once every frame is decoded
+    /// and nothing has changed for AvatarIdleCache.settle (0.5 s, the rig's rule).
+    public static func shouldPark(current: AvatarClip, loopState: AvatarState, overlayUp: Bool, live: Bool,
+                                  framesReady: Bool, settledFor: Double) -> Bool {
+        current == .loop(.idle) && loopState == .idle && !overlayUp && live && framesReady && settledFor >= AvatarIdleCache.settle
+    }
+    /// The parked frame for `t` seconds into the idle loop (wraps; what the player would show at that time).
+    public static func frame(local t: Double, frames n: Int, fps: Double) -> Int {
+        guard n > 0, fps > 0 else { return 0 }
+        let T = Double(n) / fps
+        var u = t.truncatingRemainder(dividingBy: T); if u < 0 { u += T }
+        return min(n - 1, max(0, Int((u * fps + 1e-6).rounded(.down))))
+    }
+    /// A full decode: exactly the manifest's frame count, else no park (the player keeps playing).
+    public static func complete(decoded: Int, manifest: Int?) -> Bool { manifest.map { $0 > 0 && decoded == $0 } ?? false }
+}
+
 /// Which droid the 3PO slot shows: the live rig (rig/3po.usdz, RealityKit) when it loaded, else the pack's rendered
 /// loops when every clip is there, else the static droid mark. Reduce Motion: a still (the pack's neutral frame, or the mark).
 public enum AvatarTier: String, Sendable { case rig, loops, still, mark

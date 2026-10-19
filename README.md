@@ -128,6 +128,8 @@ cd peak && TMPDIR=~/ForceIQ/peak-tmp swift test --scratch-path ~/ForceIQ/peak-de
 ```
 peak/scripts/cpu_idle_check.sh                      # chat open + idle, 30 s: exit 1 above 2.0 %
 peak/scripts/cpu_idle_check.sh --mode collapsed     # collapsed pills, idle: exit 1 above 0.5 %
+peak/scripts/cpu_idle_check.sh --tier loops       # the rendered-loops fallback (rig off/failed), same limits
+peak/scripts/cpu_idle_check.sh --all               # rig + loops x expanded + collapsed (4 runs, exit 1 if any fails)
 peak/scripts/cpu_idle_check.sh --app <other .app> --max 2.0 --seconds 30 --settle 8
 ```
 It launches its own demo instance of the build (`FORCEIQ_PEAK_DEMO=1`, `FORCEIQ_PEAK_DEMO_TOUR=3po-idle`) with a scratch

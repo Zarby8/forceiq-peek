@@ -125,6 +125,8 @@ final class ThreePOClipItem: AVPlayerItem {
 /// is the one change queued behind the clip on screen. Paused while not live; torn down when the chat unmounts.
 /// Frame rate: the 120 fps clips only while the window is on a ≥ 120 Hz screen (ThreePOAssets.rate); a screen change
 /// re-queues everything behind the clip on screen at the new rate (same names and durations), so the swap is gapless.
+/// A steady idle parks (AvatarLoopPark): the idle clip's decoded frames play as a layer animation, the player pauses
+/// (no CoreMedia work per frame); any change unparks with the parked frame as the cut's frozen frame.
 final class ThreePOPlayerView: NSView {
     private let px: Int
     private(set) var rate: AvatarFrameRate = .fps60
@@ -132,6 +134,12 @@ final class ThreePOPlayerView: NSView {
     private var announced = false
     private let playerLayer = AVPlayerLayer()
     private let snapLayer = CALayer()                              // the frozen frame a cut crossfades from
+    private let parkLayer = CALayer()                              // the parked idle loop (a contents keyframe animation)
+    private(set) var parked = false
+    private var parkBegin = 0.0                                    // host time of the parked loop's frame 0
+    private var settleGen = 0                                      // bumped by every change; a park check needs it unchanged
+    @MainActor private static var idleFrames: [URL: [CGImage]] = [:]
+    @MainActor private static var decoding: Set<URL> = []
     private let player = AVQueuePlayer()
     private var loopState: AvatarState = .idle                     // what the queue settles into (topped up with its passes)
     private var director = ThreePOAvatarDirector()
@@ -155,6 +163,10 @@ final class ThreePOPlayerView: NSView {
         playerLayer.videoGravity = .resizeAspect
         playerLayer.backgroundColor = NSColor.clear.cgColor
         layer?.addSublayer(playerLayer)
+        parkLayer.contentsGravity = .resizeAspect
+        parkLayer.isHidden = true
+        parkLayer.actions = ["contents": NSNull(), "hidden": NSNull(), "bounds": NSNull(), "position": NSNull()]
+        layer?.addSublayer(parkLayer)
         snapLayer.contentsGravity = .resizeAspect
         snapLayer.opacity = 0
         snapLayer.actions = ["opacity": NSNull(), "contents": NSNull(), "bounds": NSNull(), "position": NSNull()]
@@ -176,6 +188,7 @@ final class ThreePOPlayerView: NSView {
         super.layout()
         CATransaction.begin(); CATransaction.setDisableActions(true)
         playerLayer.frame = bounds
+        parkLayer.frame = bounds
         snapLayer.frame = bounds
         CATransaction.commit()
     }
@@ -189,7 +202,7 @@ final class ThreePOPlayerView: NSView {
             }
             screenChanged()
         }
-        if window == nil { player.pause(); stopLink() } else if live { player.play() }
+        if window == nil { unpark(resume: false); player.pause(); stopLink() } else if live { player.play(); settled() }
     }
 
     /// Re-choose the rate for the window's screen. Changed: the queue behind the clip on screen is rebuilt at the new
@@ -202,6 +215,7 @@ final class ThreePOPlayerView: NSView {
             if first { ThreePOAssets.log?("3po avatar fps=\(r.rawValue) screen_max=\(window?.screen?.maximumFramesPerSecond ?? 0) tier=loops") }
             return
         }
+        unpark(resume: true)                                     // the parked frames are per rate; re-park after the swap
         rate = r
         let cur = player.currentItem
         let fresh = (cur?.currentTime().seconds ?? 0) < 0.001 && player.rate == 0
@@ -212,6 +226,7 @@ final class ThreePOPlayerView: NSView {
         for c in clips { if let it = item(c) { player.insert(it, after: after); after = it } }
         topUp()
         ThreePOAssets.log?("3po avatar fps=\(r.rawValue) screen_max=\(window?.screen?.maximumFramesPerSecond ?? 0) tier=loops")
+        settled()
     }
 
     func update(signals s: AvatarSignals, live l: Bool) {
@@ -219,13 +234,15 @@ final class ThreePOPlayerView: NSView {
             signals = s
             if let plan = director.update(s, current: current) { route(plan) }
         }
-        if l != live || (l && player.rate == 0) {
+        if l != live || (l && player.rate == 0 && !parked) {
             live = l
-            if l { player.play() } else { player.pause() }      // paused: the frame on screen stays (a still), no decode
+            if l { player.play(); settled() } else { unpark(resume: true); player.pause() }    // paused: a still, no decode
         }
     }
 
     func tearDown() {
+        settleGen += 1
+        parkLayer.removeAllAnimations()
         itemObs = nil
         if let o = screenObs { NotificationCenter.default.removeObserver(o); screenObs = nil }
         stopLink()
@@ -240,6 +257,7 @@ final class ThreePOPlayerView: NSView {
         if c != current {
             current = c
             ThreePOAssets.log?("3po avatar clip=\(c.name)\(Self.kind(c)) t=\(Self.epoch())")
+            settled()
         }
         if let plan = director.update(signals, current: c) { route(plan) }
     }
@@ -273,8 +291,9 @@ final class ThreePOPlayerView: NSView {
         _ = ci.createCGImage(im.composited(over: im), from: im.extent)
     }
 
-    /// The frame on screen now, from the current item's video output.
+    /// The frame on screen now: the parked loop's frame, else the current item's video output.
     private func frameOnScreen() -> CGImage? {
+        if parked, let f = parkedFrame(CACurrentMediaTime()) { return f }
         guard let it = player.currentItem, let o = Self.output(it) else { return nil }
         let t = o.itemTime(forHostTime: CACurrentMediaTime())
         guard let pb = o.copyPixelBuffer(forItemTime: t.isValid ? t : it.currentTime(), itemTimeForDisplay: nil)
@@ -308,6 +327,7 @@ final class ThreePOPlayerView: NSView {
         case .frame: snap = frameOnScreen()
         case .composite(let a): snap = composite(alpha: a)
         }
+        unpark(resume: false)                                    // the parked frame is the frozen frame; the queue is replaced
         CATransaction.begin(); CATransaction.setDisableActions(true)
         snapLayer.contents = snap
         snapLayer.opacity = snap == nil ? 0 : 1
@@ -324,6 +344,7 @@ final class ThreePOPlayerView: NSView {
     /// Queue `plan` behind the clip on screen (the alert flash settling back to idle: the flash plays whole).
     private func queue(_ plan: AvatarPlan) {
         guard ThreePOAssets.pack != nil else { return }
+        unpark(resume: true)
         let cur = player.currentItem
         for it in player.items() where it !== cur { player.remove(it) }
         insert(plan, after: cur)
@@ -364,6 +385,109 @@ final class ThreePOPlayerView: NSView {
         snapLayer.opacity = Float(fade.opacity(now))
         if !active { snapLayer.contents = nil; snap = nil }
         CATransaction.commit()
-        if !active { stopLink() }
+        if !active { stopLink(); settled() }
+    }
+
+    // ── the parked idle (AvatarLoopPark) ──
+    private var idleURL: URL? { ThreePOAssets.url(.loop(.idle), px: px, rate: rate) }
+    private var idleFPS: Double { ThreePOAssets.pack(rate)?.fps ?? 60 }
+
+    /// Something changed (or may now be steady): check again after the settle, if nothing else changes first.
+    private func settled() {
+        settleGen += 1
+        let g = settleGen
+        loadIdleFrames()
+        DispatchQueue.main.asyncAfter(deadline: .now() + AvatarIdleCache.settle + 0.02) { [weak self] in
+            MainActor.assumeIsolated { if let self, self.settleGen == g { self.tryPark() } }
+        }
+    }
+
+    private func tryPark() {
+        guard !parked, window != nil, let u = idleURL, let frames = Self.idleFrames[u],
+              let it = player.currentItem as? ThreePOClipItem, it.clip == current, it.status == .readyToPlay, player.rate != 0,
+              AvatarLoopPark.shouldPark(current: current, loopState: loopState, overlayUp: link != nil, live: live,
+                                        framesReady: true, settledFor: AvatarIdleCache.settle) else { return }
+        let now = CACurrentMediaTime()
+        let t = it.currentTime().seconds
+        guard t.isFinite else { return }
+        parkBegin = now - t
+        let a = CAKeyframeAnimation(keyPath: "contents")
+        a.values = frames
+        a.calculationMode = .discrete
+        a.duration = Double(frames.count) / idleFPS
+        a.repeatCount = .infinity
+        a.beginTime = parkLayer.convertTime(parkBegin, from: nil)
+        a.isRemovedOnCompletion = false
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        parkLayer.contents = parkedFrame(now)
+        parkLayer.add(a, forKey: "idle")
+        parkLayer.isHidden = false
+        playerLayer.isHidden = true                               // never both: the alpha edges would double up
+        CATransaction.commit()
+        player.pause()
+        parked = true
+        ThreePOAssets.log?("3po loops parked frames=\(frames.count) t=\(Self.epoch())")
+    }
+
+    private func parkedFrame(_ now: Double) -> CGImage? {
+        guard let u = idleURL, let f = Self.idleFrames[u], !f.isEmpty else { return nil }
+        return f[AvatarLoopPark.frame(local: now - parkBegin, frames: f.count, fps: idleFPS)]
+    }
+
+    /// Back to the player. `resume`: the idle item picks up at the parked loop's phase (same frame, no jump).
+    private func unpark(resume: Bool) {
+        guard parked else { return }
+        parked = false
+        let now = CACurrentMediaTime()
+        if resume, let it = player.currentItem {
+            let t = (now - parkBegin).truncatingRemainder(dividingBy: max(0.001, it.duration.seconds.isFinite ? it.duration.seconds : 2.5))
+            it.seek(to: CMTime(seconds: t, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero, completionHandler: nil)
+        }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        playerLayer.isHidden = false
+        parkLayer.removeAllAnimations()
+        parkLayer.contents = nil
+        parkLayer.isHidden = true
+        CATransaction.commit()
+        if live, resume { player.play() }
+        ThreePOAssets.log?("3po loops unparked t=\(Self.epoch())")
+    }
+
+    /// Decodes the idle clip once per launch and size (off the main thread): every frame, BGRA with its alpha, the
+    /// same CoreImage path as the cut's frozen frame. A short or failed decode never parks.
+    private func loadIdleFrames() {
+        guard let u = idleURL, Self.idleFrames[u] == nil, !Self.decoding.contains(u) else { return }
+        Self.decoding.insert(u)
+        let want = ThreePOAssets.pack(rate)?.frames["idle"]
+        Task.detached(priority: .utility) {
+            let frames = Self.decode(u)
+            await MainActor.run {
+                Self.decoding.remove(u)
+                if AvatarLoopPark.complete(decoded: frames.count, manifest: want) {
+                    Self.idleFrames[u] = frames
+                    ThreePOAssets.log?("3po loops idle decoded frames=\(frames.count)")
+                } else {
+                    ThreePOAssets.log?("3po loops idle decode short frames=\(frames.count) want=\(want ?? 0): stays on the player")
+                }
+            }
+        }
+    }
+
+    nonisolated private static func decode(_ u: URL) -> [CGImage] {
+        let asset = AVURLAsset(url: u)
+        guard let track = asset.tracks(withMediaType: .video).first, let r = try? AVAssetReader(asset: asset) else { return [] }
+        let out = AVAssetReaderTrackOutput(track: track, outputSettings: outputAttrs)
+        out.alwaysCopiesSampleData = false
+        guard r.canAdd(out) else { return [] }
+        r.add(out)
+        guard r.startReading() else { return [] }
+        let ctx = CIContext(options: [.cacheIntermediates: false])
+        var frames: [CGImage] = []
+        while let sb = out.copyNextSampleBuffer() {
+            guard let pb = CMSampleBufferGetImageBuffer(sb) else { continue }
+            let im = CIImage(cvPixelBuffer: pb)
+            if let cg = ctx.createCGImage(im, from: im.extent) { frames.append(cg) }
+        }
+        return r.status == .completed ? frames : []
     }
 }
