@@ -96,30 +96,35 @@ struct ThreePOVideo: NSViewRepresentable {
 /// Carries the KVO's new item to the main queue.
 struct ItemRef: @unchecked Sendable { let item: AVPlayerItem?; init(_ i: AVPlayerItem?) { item = i } }
 
-/// A queued clip that knows what it is (looper replicas are plain AVPlayerItems).
+/// A queued clip that knows what it is, with a video output (the frame a cut freezes is read from it).
 final class ThreePOClipItem: AVPlayerItem {
     var clip: AvatarClip = .loop(.idle)
-    var last = false
 }
 
-/// One AVQueuePlayer on a transparent AVPlayerLayer. Each state loops with its own AVPlayerLooper. A state change
-/// disables the current looper (its pass finishes, so switches land on a loop boundary) and queues the pack's 20-frame
-/// transitions after it; when the last transition comes on screen the target state's looper starts behind it
-/// (`.loopingItemsFollowExistingItems` with only that item queued: gapless). Paused while not live; torn down when
-/// the chat unmounts (Peak collapsed).
+/// One AVQueuePlayer on a transparent AVPlayerLayer. The queue is the plan's clips then the settled state's loop,
+/// kept topped up with passes of that loop (gapless, like AVPlayerLooper, but every item is ours and carries a video
+/// output: AVPlayerLooper's replicas drop outputs). A state change starts at once (AvatarSwitch): the frame on screen
+/// freezes into an overlay, the queue is replaced under it with the pack's 20-frame transitions, and once the first
+/// new frame is up the overlay fades out (AvatarCrossfade, 130 ms, ease-out). The alert flash settling back to idle
+/// is the one change queued behind the clip on screen. Paused while not live; torn down when the chat unmounts.
 final class ThreePOPlayerView: NSView {
     private let px: Int
     private let playerLayer = AVPlayerLayer()
+    private let snapLayer = CALayer()                              // the frozen frame a cut crossfades from
     private let player = AVQueuePlayer()
-    private var looper: AVPlayerLooper?
-    private var looperState: AvatarState = .idle
-    private var retired: [(AVPlayerLooper, AvatarState)] = []      // disabled loopers whose last pass may still be on screen
-    private var pendingLoop: AvatarState?                          // starts when the plan's last clip is on screen
+    private var loopState: AvatarState = .idle                     // what the queue settles into (topped up with its passes)
     private var director = ThreePOAvatarDirector()
     private var signals = AvatarSignals()
     private(set) var current: AvatarClip = .loop(.idle)
     private var itemObs: NSKeyValueObservation?
     private var live = false
+    private var fade = AvatarCrossfade()
+    private var snap: CGImage?
+    private var cutFrom: AVPlayerItem?                             // the item that was on screen when the cut landed
+    private var link: CADisplayLink?
+    private static let ci = CIContext(options: [.cacheIntermediates: false])
+    private static let outputAttrs: [String: Any] = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+                                                     kCVPixelBufferIOSurfacePropertiesKey as String: [String: Any]()]
 
     init(px: Int) {
         self.px = px
@@ -129,13 +134,16 @@ final class ThreePOPlayerView: NSView {
         playerLayer.videoGravity = .resizeAspect
         playerLayer.backgroundColor = NSColor.clear.cgColor
         layer?.addSublayer(playerLayer)
+        snapLayer.contentsGravity = .resizeAspect
+        snapLayer.opacity = 0
+        snapLayer.actions = ["opacity": NSNull(), "contents": NSNull(), "bounds": NSNull(), "position": NSNull()]
+        layer?.addSublayer(snapLayer)
         player.isMuted = true
         player.preventsDisplaySleepDuringVideoPlayback = false
         player.automaticallyWaitsToMinimizeStalling = false
         playerLayer.player = player
-        if let u = ThreePOAssets.url(.loop(.idle), px: px) {
-            looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: u))
-        }
+        insert(AvatarPlan(clips: [], loop: .idle), after: nil)
+        Self.warm()
         itemObs = player.observe(\.currentItem, options: [.new]) { [weak self] _, change in
             let item = ItemRef(change.newValue ?? nil)               // the item that came on screen, not whatever is current later
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.itemChanged(item.item) } }
@@ -147,18 +155,19 @@ final class ThreePOPlayerView: NSView {
         super.layout()
         CATransaction.begin(); CATransaction.setDisableActions(true)
         playerLayer.frame = bounds
+        snapLayer.frame = bounds
         CATransaction.commit()
     }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if window == nil { player.pause() } else if live { player.play() }
+        if window == nil { player.pause(); stopLink() } else if live { player.play() }
     }
 
     func update(signals s: AvatarSignals, live l: Bool) {
         if s != signals {
             signals = s
-            if let plan = director.update(s, current: current) { apply(plan) }
+            if let plan = director.update(s, current: current) { route(plan) }
         }
         if l != live || (l && player.rate == 0) {
             live = l
@@ -168,68 +177,142 @@ final class ThreePOPlayerView: NSView {
 
     func tearDown() {
         itemObs = nil
+        stopLink()
         player.pause()
-        looper?.disableLooping(); looper = nil
-        for (l, _) in retired { l.disableLooping() }
-        retired = []
         player.removeAllItems()
         playerLayer.player = nil
     }
 
-    private func clip(of item: AVPlayerItem?) -> AvatarClip? {
-        guard let item else { return nil }
-        if let c = item as? ThreePOClipItem { return c.clip }
-        if let l = looper, l.loopingPlayerItems.contains(where: { $0 === item }) { return .loop(looperState) }
-        for (l, s) in retired where l.loopingPlayerItems.contains(where: { $0 === item }) { return .loop(s) }
-        return .loop(looperState)
-    }
-
     private func itemChanged(_ item: AVPlayerItem?) {
-        if let ci = item as? ThreePOClipItem, ci.last, let s = pendingLoop { startLoop(s) }
-        guard let c = clip(of: item) else { return }
+        topUp()
+        guard let c = (item as? ThreePOClipItem)?.clip else { return }
         if c != current {
             current = c
-            ThreePOAssets.log?("3po avatar clip=\(c.name)\(Self.kind(c)) t=\(String(format: "%.3f", Date().timeIntervalSince1970))")
+            ThreePOAssets.log?("3po avatar clip=\(c.name)\(Self.kind(c)) t=\(Self.epoch())")
         }
-        if let plan = director.update(signals, current: c) { apply(plan) }
+        if let plan = director.update(signals, current: c) { route(plan) }
     }
 
-    /// The target state's looper, behind the item on screen (the only item left queued when this runs).
-    private func startLoop(_ s: AvatarState) {
-        pendingLoop = nil
-        guard let u = ThreePOAssets.url(.loop(s), px: px) else { return }
-        for it in player.items() where it !== player.currentItem { player.remove(it) }
-        looper = AVPlayerLooper(player: player, templateItem: AVPlayerItem(url: u), timeRange: .invalid,
-                                existingItemsOrdering: .loopingItemsFollowExistingItems)
-        looperState = s
+    /// Keep two passes of the settled loop queued behind whatever is playing (gapless looping).
+    private func topUp() {
+        guard player.currentItem != nil || player.items().isEmpty == false else { return }
+        while player.items().count < 3, let it = item(.loop(loopState)) { player.insert(it, after: player.items().last) }
+    }
+    private func item(_ c: AvatarClip) -> ThreePOClipItem? {
+        guard let u = ThreePOAssets.url(c, px: px) else { return nil }
+        let it = ThreePOClipItem(url: u); it.clip = c
+        it.add(AVPlayerItemVideoOutput(pixelBufferAttributes: Self.outputAttrs))
+        return it
     }
     private static func kind(_ c: AvatarClip) -> String {
         switch c { case .loop: return " loop"; case .once: return " once"; case .transition: return "" }
     }
+    private static func epoch() -> String { String(format: "%.3f", Date().timeIntervalSince1970) }
 
-    /// Replace everything queued after the clip on screen with `plan` (the clip on screen always finishes).
-    private func apply(_ plan: AvatarPlan) {
+    // ── frames (the cut's frozen frame) ──
+    private static func output(_ it: AVPlayerItem) -> AVPlayerItemVideoOutput? {
+        it.outputs.lazy.compactMap { $0 as? AVPlayerItemVideoOutput }.first
+    }
+    /// The first CoreImage render costs ~50 ms; pay it before the first cut.
+    private static var warmed = false
+    private static func warm() {
+        guard !warmed else { return }
+        warmed = true
+        let im = CIImage(color: .clear).cropped(to: CGRect(x: 0, y: 0, width: 4, height: 4))
+        _ = ci.createCGImage(im.composited(over: im), from: im.extent)
+    }
+
+    /// The frame on screen now, from the current item's video output.
+    private func frameOnScreen() -> CGImage? {
+        guard let it = player.currentItem, let o = Self.output(it) else { return nil }
+        let t = o.itemTime(forHostTime: CACurrentMediaTime())
+        guard let pb = o.copyPixelBuffer(forItemTime: t.isValid ? t : it.currentTime(), itemTimeForDisplay: nil)
+                ?? o.copyPixelBuffer(forItemTime: it.currentTime(), itemTimeForDisplay: nil) else { return nil }
+        let im = CIImage(cvPixelBuffer: pb)
+        return Self.ci.createCGImage(im, from: im.extent)
+    }
+    /// What is on screen mid-fade: the old overlay at `alpha` over the live frame, flattened into one image.
+    private func composite(alpha a: Double) -> CGImage? {
+        let live = frameOnScreen()
+        guard let old = snap else { return live }
+        var top = CIImage(cgImage: old).applyingFilter("CIColorMatrix", parameters: ["inputAVector": CIVector(x: 0, y: 0, z: 0, w: CGFloat(a))])
+        if let live { top = top.composited(over: CIImage(cgImage: live)) }
+        return Self.ci.createCGImage(top, from: CGRect(x: 0, y: 0, width: old.width, height: old.height))
+    }
+
+    private func route(_ plan: AvatarPlan) {
+        switch AvatarSwitch.mode(current: current, plan: plan) {
+        case .cut: cut(plan)
+        case .boundary: queue(plan)
+        }
+    }
+
+    /// Start `plan` now: freeze the frame on screen, replace the queue under it, fade the frozen frame out once the
+    /// new clip shows (latest wins: one overlay, one queue).
+    private func cut(_ plan: AvatarPlan) {
+        guard ThreePOAssets.pack != nil else { return }
+        let how = fade.cut(now: CACurrentMediaTime())
+        switch how {
+        case .keep: break
+        case .frame: snap = frameOnScreen()
+        case .composite(let a): snap = composite(alpha: a)
+        }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        snapLayer.contents = snap
+        snapLayer.opacity = snap == nil ? 0 : 1
+        CATransaction.commit()
+        cutFrom = player.currentItem
+        player.removeAllItems()
+        insert(plan, after: nil)
+        let snapKind: String = { switch how { case .keep: return "keep"; case .frame: return "frame"; case .composite: return "composite" } }()
+        ThreePOAssets.log?("3po avatar cut plan=\(plan.clips.map(\.name).joined(separator: ",")) then=\(plan.loop.rawValue) snap=\(snap == nil ? "none" : snapKind) t=\(Self.epoch())")
+        if live, player.rate == 0 { player.play() }
+        startLink()
+    }
+
+    /// Queue `plan` behind the clip on screen (the alert flash settling back to idle: the flash plays whole).
+    private func queue(_ plan: AvatarPlan) {
         guard ThreePOAssets.pack != nil else { return }
         let cur = player.currentItem
-        if let l = looper { l.disableLooping(); retired.append((l, looperState)); if retired.count > 2 { retired.removeFirst() } }
-        looper = nil
-        pendingLoop = nil
         for it in player.items() where it !== cur { player.remove(it) }
-        var after = cur
-        var items: [ThreePOClipItem] = []
-        for c in plan.clips {
-            guard let u = ThreePOAssets.url(c, px: px) else { continue }
-            let it = ThreePOClipItem(url: u); it.clip = c
-            player.insert(it, after: after); after = it; items.append(it)
-        }
-        if let lastItem = items.last {
-            lastItem.last = true
-            pendingLoop = plan.loop
-            if lastItem === player.currentItem { startLoop(plan.loop) }
-        } else {
-            startLoop(plan.loop)                      // same state again: its looper follows the pass on screen
-        }
+        insert(plan, after: cur)
         ThreePOAssets.log?("3po avatar plan=\(plan.clips.map(\.name).joined(separator: ",")) then=\(plan.loop.rawValue)")
         if live, player.rate == 0 { player.play() }
+    }
+
+    /// The plan's clips after `first` (nil: from the top), then passes of the state it settles in.
+    private func insert(_ plan: AvatarPlan, after first: AVPlayerItem?) {
+        var after = first
+        loopState = plan.loop
+        for c in plan.clips {
+            guard let it = item(c) else { continue }
+            player.insert(it, after: after); after = it
+        }
+        for _ in 0..<2 { if let it = item(.loop(plan.loop)) { player.insert(it, after: after); after = it } }
+    }
+
+    // ── the crossfade clock (runs only while a frozen frame is up) ──
+    private func startLink() {
+        guard link == nil else { return }
+        let l = displayLink(target: self, selector: #selector(step(_:)))
+        l.add(to: .main, forMode: .common)
+        link = l
+    }
+    private func stopLink() { link?.invalidate(); link = nil }
+
+    @objc private func step(_ l: CADisplayLink) {
+        let now = CACurrentMediaTime()
+        if case .armed = fade.phase, let it = player.currentItem, it !== cutFrom, it.status == .readyToPlay,
+           let o = Self.output(it), o.hasNewPixelBuffer(forItemTime: it.currentTime()) || it.currentTime().seconds > 0.001 {
+            if let w = fade.ready(now: now) { ThreePOAssets.log?("3po avatar crossfade ready_ms=\(Int(w * 1000)) t=\(Self.epoch())") }
+        }
+        let wasArmed: Bool = { if case .armed = fade.phase { return true }; return false }()
+        let active = fade.tick(now: now)
+        if wasArmed, case .fading = fade.phase { ThreePOAssets.log?("3po avatar crossfade ready=deadline t=\(Self.epoch())") }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        snapLayer.opacity = Float(fade.opacity(now))
+        if !active { snapLayer.contents = nil; snap = nil }
+        CATransaction.commit()
+        if !active { stopLink() }
     }
 }

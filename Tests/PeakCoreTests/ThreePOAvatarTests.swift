@@ -259,3 +259,162 @@ final class ThreePOAvatarBundleTests: XCTestCase {
         }
     }
 }
+
+/// The no-hitch bar: every state change starts on screen within 100 ms (rig and loops), and fast flips coalesce
+/// (latest wins, one blend / one frozen frame at a time, no queue build-up).
+final class ThreePOAvatarSwitchTests: XCTestCase {
+    /// Every clip the player can be on, at the start, middle and end of it.
+    private var onScreen: [(AvatarClip, Double)] {
+        var out: [(AvatarClip, Double)] = []
+        var clips: [AvatarClip] = AvatarState.allCases.map { .loop($0) } + [.once(.alert)]
+        for s in AvatarState.allCases where s != .idle { clips += [.transition(.idle, s), .transition(s, .idle)] }
+        for c in clips { let T = ThreePOCurves.seconds(c); out += [(c, 0.01), (c, T / 2), (c, T - 0.02)] }
+        return out
+    }
+
+    func testEveryStateChangeCutsAtOnceExceptTheFlashSettling() {
+        for (c, _) in onScreen {
+            for target in AvatarState.allCases where target != c.endState {
+                let p = AvatarPlanner.plan(after: c, to: target)
+                let flash: Bool = { switch c { case .once(.alert), .transition(.idle, .alert): return true; default: return false } }()
+                let expect: AvatarSwitchMode = flash && p.loop == .idle ? .boundary : .cut
+                XCTAssertEqual(AvatarSwitch.mode(current: c, plan: p), expect, "\(c.name) → \(target)")
+            }
+        }
+        // a send, the mic or a new card during the flash still cuts it
+        XCTAssertEqual(AvatarSwitch.mode(current: .once(.alert), plan: AvatarPlanner.plan(after: .once(.alert), to: .thinking)), .cut)
+        XCTAssertEqual(AvatarSwitch.mode(current: .transition(.idle, .alert), plan: AvatarPlanner.plan(after: .transition(.idle, .alert), to: .listening)), .cut)
+    }
+
+    func testRigChangeStartsWithin100msFromAnyClipAndPhase() {
+        for (c, phase) in onScreen {
+            for target in AvatarState.allCases where target != c.endState {
+                let p = AvatarPlanner.plan(after: c, to: target)
+                guard AvatarSwitch.mode(current: c, plan: p) == .cut else { continue }
+                var t = timeline(on: c, at: phase)
+                let now = 100.0
+                let before = t.params(now)
+                let started = t.cut(p, now: now)
+                XCTAssertEqual(started, p.clips.first ?? .loop(p.loop), "\(c.name) → \(target)")
+                XCTAssertEqual(t.start, now)                                                          // the plan's clock starts now
+                XCTAssertLessThan(ThreePOCurves.distance(t.params(now), before), 1e-9)               // no jump on the cut frame
+                // by one display frame the pose is already moving toward the plan; by 100 ms it's 95 %+ of the way
+                let k1 = ThreePOCurves.easeOut((1.0 / 60) / AvatarSwitch.fade)
+                XCTAssertGreaterThan(k1, 0.2)
+                let at100 = t.params(now + AvatarSwitch.maxStart)
+                let pure = ThreePOCurves.params(started, AvatarSwitch.maxStart)
+                let gap = ThreePOCurves.distance(before, pure)
+                XCTAssertLessThanOrEqual(ThreePOCurves.distance(at100, pure), 0.06 * gap + 1e-9, "\(c.name) → \(target)")
+                var u = t; u.advance(to: now + AvatarSwitch.fade + 0.001)
+                XCTAssertNil(u.fadeFrom)                                                              // one short blend, then the plan's own curves
+            }
+        }
+    }
+
+    func testRigFastFlipsCoalesceLatestWins() {
+        var d = ThreePOAvatarDirector(), t = AvatarTimeline(now: 0)
+        _ = t.advance(to: 1.234)
+        let sends: [(Double, AvatarSignals)] = [
+            (1.300, AvatarSignals(streaming: true, thinking: true)),                     // send
+            (1.360, AvatarSignals(streaming: true, replyHasText: true)),                 // first token 60 ms later
+            (1.420, AvatarSignals(streaming: true, thinking: true, replyHasText: true)), // a tool, 60 ms after that
+            (1.480, AvatarSignals(streaming: true, replyHasText: true)),                 // talking again
+        ]
+        var last = t.params(1.234)
+        var cuts = 0
+        for (now, s) in sends {
+            let shown = t.params(now)
+            XCTAssertLessThan(ThreePOCurves.distance(shown, last), 0.6)                 // continuous between flips
+            guard let p = d.update(s, current: t.current) else { continue }
+            XCTAssertEqual(AvatarSwitch.mode(current: t.current, plan: p), .cut)
+            t.cut(p, now: now); cuts += 1
+            XCTAssertLessThan(ThreePOCurves.distance(t.params(now), shown), 1e-9)       // each cut starts from what's on screen
+            XCTAssertLessThanOrEqual(t.queue.count, 1)                                 // nothing stacks up
+            last = t.params(now)
+        }
+        XCTAssertEqual(cuts, 4)
+        XCTAssertEqual(d.settled, .talking)                                             // latest wins
+        XCTAssertEqual(t.settle, .talking)
+        for f in stride(from: 1.48, to: 2.4, by: 1.0 / 60) {                           // and it lands there without a hitch
+            for c in t.advance(to: f) { _ = c }
+            let p = t.params(f); XCTAssertLessThan(ThreePOCurves.distance(p, last), 0.5, "t=\(f)"); last = p
+        }
+        _ = t.advance(to: 3)
+        XCTAssertEqual(t.current, .loop(.talking))
+    }
+
+    func testCrossfadeFreezesOnceAndFadesFromTheFirstNewFrame() {
+        var x = AvatarCrossfade()
+        XCTAssertEqual(x.opacity(0), 0)
+        XCTAssertEqual(x.cut(now: 10), .frame)
+        XCTAssertEqual(x.opacity(10.01), 1)                         // the frame on screen holds while the new clip loads
+        let wait = x.ready(now: 10.012)
+        XCTAssertEqual(wait!, 0.012, accuracy: 1e-9)
+        XCTAssertLessThanOrEqual(wait!, AvatarSwitch.maxStart)
+        XCTAssertLessThan(x.opacity(10.012 + 1.0 / 60), 0.8)        // the first frame after it shows already moves
+        XCTAssertLessThan(x.opacity(10.012 + 0.1), 0.06)
+        XCTAssertTrue(x.tick(now: 10.1))
+        XCTAssertFalse(x.tick(now: 10.012 + AvatarSwitch.fade + 0.001))
+        XCTAssertEqual(x.phase, .none); XCTAssertEqual(x.opacity(11), 0)
+    }
+
+    func testCrossfadeFastFlipsCoalesceLatestWins() {
+        var x = AvatarCrossfade()
+        XCTAssertEqual(x.cut(now: 0), .frame)
+        XCTAssertEqual(x.cut(now: 0.005), .keep)                    // before the new clip shows: retarget under the same frame
+        XCTAssertEqual(x.phase, .armed(since: 0))                   // the hold is still bounded from the first cut
+        x.ready(now: 0.02)
+        guard case .composite(let a) = x.cut(now: 0.06) else { return XCTFail("mid-fade: flatten what's on screen") }
+        XCTAssertEqual(a, 1 - ThreePOCurves.easeOut(0.04 / AvatarSwitch.fade), accuracy: 1e-9)
+        XCTAssertEqual(x.phase, .armed(since: 0.06))                // one overlay, held at full (it IS the screen)
+        XCTAssertEqual(x.opacity(0.07), 1)
+        x.ready(now: 0.075)
+        XCTAssertTrue(x.tick(now: 0.1))
+        XCTAssertFalse(x.tick(now: 0.075 + AvatarSwitch.fade + 0.001))
+        // a slow clip never pins the frozen frame
+        var y = AvatarCrossfade(); _ = y.cut(now: 0)
+        XCTAssertTrue(y.tick(now: AvatarCrossfade.readyDeadline + 0.001))
+        XCTAssertEqual(y.phase, .fading(start: AvatarCrossfade.readyDeadline + 0.001))
+        XCTAssertNil(y.ready(now: 0.3))
+    }
+
+    private func timeline(on c: AvatarClip, at phase: Double) -> AvatarTimeline {
+        AvatarTimeline(current: c, start: 100 - phase, settle: c.loopState)
+    }
+}
+
+private extension AvatarClip {
+    var isLoop: Bool { if case .loop = self { return true }; return false }
+    var loopState: AvatarState { endState == .alert ? .idle : endState }
+}
+
+/// The rig parks only in a settled, steady idle with a full captured pass, and the playback stays in phase.
+final class ThreePORigParkTests: XCTestCase {
+    func testParksOnlyWhenSteadyIdleCapturedAndSettled() {
+        XCTAssertEqual(AvatarIdleCache.bins, 50)                                   // 2.5 s idle at 20 fps
+        XCTAssertTrue(AvatarIdleCache.shouldPark(steadyIdle: true, complete: true, settledFor: AvatarIdleCache.settle))
+        XCTAssertFalse(AvatarIdleCache.shouldPark(steadyIdle: true, complete: true, settledFor: AvatarIdleCache.settle - 0.01))
+        XCTAssertFalse(AvatarIdleCache.shouldPark(steadyIdle: true, complete: false, settledFor: 10))
+        XCTAssertFalse(AvatarIdleCache.shouldPark(steadyIdle: false, complete: true, settledFor: 10))
+    }
+
+    func testBinsFollowTheRigClockAcrossPasses() {
+        XCTAssertEqual(AvatarIdleCache.bin(local: 0), 0)
+        XCTAssertEqual(AvatarIdleCache.bin(local: 0.049), 0)
+        XCTAssertEqual(AvatarIdleCache.bin(local: 0.05), 1)
+        XCTAssertEqual(AvatarIdleCache.bin(local: 2.499), 49)
+        XCTAssertEqual(AvatarIdleCache.bin(local: 2.5 + 0.06), 1)                  // a long parked stretch stays in phase
+        XCTAssertEqual(AvatarIdleCache.bin(local: 250.0 + 1.23), AvatarIdleCache.bin(local: 1.23))
+    }
+
+    func testSteadyIdleIsTheOnlyParkableTimeline() {
+        var t = AvatarTimeline(now: 0)
+        let steady = { (t: AvatarTimeline) in t.current == .loop(.idle) && t.fadeFrom == nil && t.queue.isEmpty }
+        XCTAssertTrue(steady(t))
+        t.cut(AvatarPlan(clips: [.transition(.idle, .thinking)], loop: .thinking), now: 1)
+        XCTAssertFalse(steady(t))
+        t.cut(AvatarPlan(clips: [.transition(.thinking, .idle)], loop: .idle), now: 2)
+        _ = t.advance(to: 2.2); XCTAssertFalse(steady(t))                         // blending / transition in flight
+        _ = t.advance(to: 2.5); XCTAssertTrue(steady(t))
+    }
+}

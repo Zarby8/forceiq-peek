@@ -142,6 +142,8 @@ public final class DemoKnobs: @unchecked Sendable {
     public var spendWarn = false
     public var statusReads = 0
     public var slowTurn = false          // the 3PO avatar tour: a longer think + a slower stream so every state shows
+    public var quickTurn = false         // the 3PO send-latency tour: a short solo turn (think, stream, done; no card)
+    public var flipTurn = false          // … with thinking ⇄ talking flips 60 ms apart (the coalescing check)
     public init() {}
 }
 
@@ -152,7 +154,8 @@ public struct DemoThreePOTransport: ThreePOTransport {
         AsyncStream { cont in
             let task = Task {
                 var t0: TimeInterval = 0
-                for (at, e) in DemoData.threePOTurn(slow: knobs.slowTurn) {
+                let script = knobs.quickTurn ? DemoData.threePOQuickTurn(flip: knobs.flipTurn) : DemoData.threePOTurn(slow: knobs.slowTurn)
+                for (at, e) in script {
                     try? await Task.sleep(nanoseconds: UInt64(max(0, at - t0) * 1_000_000_000)); t0 = at
                     cont.yield(e)
                 }

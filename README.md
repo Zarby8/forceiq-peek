@@ -20,8 +20,12 @@ masked to a circle, played with AVPlayerLooper and driven by the pack's MANIFEST
 **3PO droid:** BOB Motion **ForceIQ-Peak-3PO-v1**. The chat header plays the live RealityKit rig (`rig/3po.usdz`),
 then the rendered hevc_alpha loops, then the static droid mark, by what loads (`AvatarTier`). States follow the chat:
 idle (waiting), listening (mic open; voice flag), thinking (send → first token, tools, 'consulting Opus'), talking
-(tokens streaming), and one alert flash per new approval or refusal card. Switches land on a loop boundary through
-the pack's 20-frame transitions (non-idle → non-idle via idle). The droid lives only in the expanded chat, so a
+(tokens streaming), and one alert flash per new approval or refusal card. Every change starts at once (within
+100 ms): the rig blends its parameters from the pose on screen, and the loops crossfade (130 ms) from the frame on
+screen into the pack's 20-frame transitions (non-idle → non-idle via idle); fast flips coalesce, latest wins. Only
+the alert flash settling back to idle waits for the flash to finish. A steady idle rig parks: one captured idle pass
+plays as a layer animation and RealityKit leaves the window until something changes (chat-open idle CPU about the
+static mark's). Proof tours: `FORCEIQ_PEAK_DEMO_TOUR=3po-send` (send latency), `3po-idle` (chat-open idle CPU). The droid lives only in the expanded chat, so a
 collapsed Peak renders and decodes nothing; Reduce Motion shows a still. Proof tour: `FORCEIQ_PEAK_DEMO=1
 FORCEIQ_PEAK_DEMO_TOUR=3po`. See `Resources/ASSETS.md`.
 

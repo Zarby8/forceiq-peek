@@ -77,42 +77,82 @@ import simd
         }
     }
 
+    private var drive: Double?
+
     func update(signals s: AvatarSignals, now: Double) {
         meter.observe(chars: s.replyChars, now: now)
         guard s != signals else { return }
         signals = s
-        if let p = director.update(s, current: timeline.current) {
+        if let p = director.update(s, current: timeline.current) { route(p, now: now) }
+    }
+
+    /// Cut now (blend from the pose on screen) or, for the alert flash settling, queue behind it (AvatarSwitch).
+    private func route(_ p: AvatarPlan, now: Double) {
+        let plan = p.clips.map(\.name).joined(separator: ",")
+        switch AvatarSwitch.mode(current: timeline.current, plan: p) {
+        case .cut:
+            let c = timeline.cut(p, now: now, talkDrive: drive)
+            let t = String(format: "%.3f", Date().timeIntervalSince1970)
+            ThreePOAssets.log?("3po avatar cut plan=\(plan) then=\(p.loop.rawValue) t=\(t) tier=rig")
+            ThreePOAssets.log?("3po avatar clip=\(c.name) t=\(t) tier=rig")
+            apply(timeline.params(now, talkDrive: drive))          // this frame already moves
+        case .boundary:
             timeline.apply(p)
-            ThreePOAssets.log?("3po avatar plan=\(p.clips.map(\.name).joined(separator: ",")) then=\(p.loop.rawValue) tier=rig")
+            ThreePOAssets.log?("3po avatar plan=\(plan) then=\(p.loop.rawValue) tier=rig")
         }
     }
 
     func tick(now: Double) {
         for c in timeline.advance(to: now) {
             ThreePOAssets.log?("3po avatar clip=\(c.name) t=\(String(format: "%.3f", Date().timeIntervalSince1970)) tier=rig")
-            if let p = director.update(signals, current: c) { timeline.apply(p) }
+            if let p = director.update(signals, current: c) { route(p, now: now) }
         }
-        let drive = meter.tick(now: now)
-        apply(ThreePOCurves.params(timeline.current, timeline.local(now), talkDrive: signals.streaming ? drive : nil))
+        let lvl = meter.tick(now: now)
+        drive = signals.streaming ? lvl : nil
+        // Idle and nothing changing: the slow idle sway at 20 Hz is indistinguishable at 32 pt, and an untouched scene
+        // costs RealityKit far less than one rewritten every frame. Any change (a cut, a stream) is back to every frame.
+        level = lvl
+        if throttle, isSteadyIdle, now - lastApply < 1.0 / AvatarIdleCache.hz { return }
+        apply(timeline.params(now, talkDrive: drive))
+        lastApply = now
+    }
+    /// Off while the idle loop is being captured (every frame is posed exactly at its phase).
+    var throttle = true
+    private var lastApply = -1.0
+    private var level = 0.0
+    /// The idle loop with nothing in flight: no blend, nothing queued, no stream (what the parked playback can stand in for).
+    var isSteadyIdle: Bool {
+        timeline.current == .loop(.idle) && timeline.fadeFrom == nil && timeline.queue.isEmpty && !signals.streaming && level < 0.001
     }
 
+    /// Writes only what changed: a material swap is the expensive part of a frame, and idle leaves the talk light,
+    /// the gold and (between blinks) the eyes untouched.
     func apply(_ p: ThreePOParams) {
         let d = Float.pi / 180
         let qx = simd_quatf(angle: Float(p.headPitch) * d, axis: [1, 0, 0])
         let qy = simd_quatf(angle: Float(p.headTilt) * d, axis: [0, 1, 0])
         let qz = simd_quatf(angle: Float(p.headYaw) * d, axis: [0, 0, 1])
-        head.orientation = headBase * (qz * qy * qx)                   // == Blender XYZ euler
+        let o = headBase * (qz * qy * qx)                              // == Blender XYZ euler
+        if o != head.orientation { head.orientation = o }
         let lid = Float(ThreePOCurves.lid(p))
-        eye.scale = [eyeScale.x, eyeScale.y, eyeScale.z * lid]
-        scan.scale = [scanScale.x, scanScale.y, scanScale.z * lid]
-        scan.orientation = scanBase * simd_quatf(angle: Float(p.scanAngle) * d, axis: [0, 0, 1])
-        set(eyeMats, Float(ThreePOCurves.eyeIntensity(p)))
-        set(scanMats, Float(ThreePOCurves.scanIntensity(p)))
-        set(talkMats, Float(p.talkAmp))
-        set(goldMats, Float(0.5 * p.goldFlash))
+        if lid != lastLid {
+            eye.scale = [eyeScale.x, eyeScale.y, eyeScale.z * lid]
+            scan.scale = [scanScale.x, scanScale.y, scanScale.z * lid]
+            lastLid = lid
+        }
+        let so = scanBase * simd_quatf(angle: Float(p.scanAngle) * d, axis: [0, 0, 1])
+        if so != scan.orientation { scan.orientation = so }
+        set(eyeMats, Float(ThreePOCurves.eyeIntensity(p)), &last.eye)
+        set(scanMats, Float(ThreePOCurves.scanIntensity(p)), &last.scan)
+        set(talkMats, Float(p.talkAmp), &last.talk)
+        set(goldMats, Float(0.5 * p.goldFlash), &last.gold)
     }
+    private var lastLid: Float = -1
+    private var last = (eye: Float(-1), scan: Float(-1), talk: Float(-1), gold: Float(-1))
 
-    private func set(_ slots: [Slot], _ v: Float) {
+    private func set(_ slots: [Slot], _ v: Float, _ was: inout Float) {
+        guard abs(v - was) > 0.002 else { return }                    // below a visible step (8-bit emission)
+        was = v
         for s in slots {
             var m = s.base; m.emissiveIntensity = v
             s.entity.model?.materials[s.index] = m
@@ -124,9 +164,118 @@ import simd
 struct ThreePORigView: NSViewRepresentable {
     @ObservedObject var rig: ThreePORigLoader
     let signals: AvatarSignals
-    func makeNSView(context: Context) -> ThreePORigARView { ThreePORigARView(template: rig.template!) }
-    func updateNSView(_ v: ThreePORigARView, context: Context) { v.driver.update(signals: signals, now: CACurrentMediaTime()) }
-    static func dismantleNSView(_ v: ThreePORigARView, coordinator: ()) { v.tearDown() }
+    func makeNSView(context: Context) -> ThreePORigHost { ThreePORigHost(template: rig.template!) }
+    func updateNSView(_ v: ThreePORigHost, context: Context) { v.update(signals: signals) }
+    static func dismantleNSView(_ v: ThreePORigHost, coordinator: ()) { v.tearDown() }
+}
+
+/// The rig slot. RealityKit's ARView renders every display frame while it is in a window (an empty, untouched scene
+/// costs the same), so a steady idle droid parks it: one idle pass of the live rig is captured (20 fps, 50 frames,
+/// once per launch and size), the ARView leaves the window and a layer animation plays those frames in phase with
+/// the rig's clock (Core Animation, ~no app CPU). Any change re-attaches the ARView at once; the parked frame stays
+/// over it until the rig has drawn, so the switch shows no gap.
+@available(macOS 15.0, *)
+final class ThreePORigHost: NSView {
+    let ar: ThreePORigARView
+    private let overlay = NSView()
+    private(set) var parked = false
+    private var settledSince = CACurrentMediaTime()
+    private var snapping = false
+    private var lastBin = 0
+    private var reveal = 0                                         // rig frames to wait before dropping the parked frame
+    @MainActor static var cache: [Int: CGImage] = [:]
+    @MainActor static var cacheKey = ""
+    @MainActor static var capturePasses = 0
+
+    init(template: Entity) {
+        ar = ThreePORigARView(template: template)
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.black.cgColor
+        addSubview(ar)
+        overlay.wantsLayer = true
+        overlay.layer?.contentsGravity = .resizeAspect
+        overlay.layer?.actions = ["contents": NSNull(), "hidden": NSNull(), "opacity": NSNull()]
+        overlay.isHidden = true
+        addSubview(overlay)
+        ar.onTick = { [weak self] now in self?.ticked(now) }
+    }
+    required init?(coder: NSCoder) { nil }
+
+    override func layout() {
+        super.layout()
+        ar.frame = bounds; overlay.frame = bounds
+    }
+
+    func update(signals s: AvatarSignals) {
+        let now = CACurrentMediaTime()
+        if s != ar.driver.signals { unpark(); settledSince = now }
+        ar.driver.update(signals: s, now: now)
+    }
+
+    func tearDown() { overlay.layer?.removeAllAnimations(); if parked { addSubview(ar) }; ar.tearDown() }
+
+    private var key: String { "\(Int(bounds.width))x\(Int(bounds.height))@\(window?.backingScaleFactor ?? 2)" }
+
+    private func ticked(_ now: Double) {
+        let d = ar.driver
+        if reveal > 0 { reveal -= 1; if reveal == 0 { overlay.isHidden = true; overlay.layer?.removeAllAnimations() } }
+        guard d.isSteadyIdle else { settledSince = now; d.throttle = true; return }
+        if Self.cacheKey != key { Self.cache = [:]; Self.cacheKey = key; Self.capturePasses = 0 }
+        let complete = Self.cache.count == AvatarIdleCache.bins
+        d.throttle = complete || Self.capturePasses > AvatarIdleCache.maxPasses
+        if !complete, Self.capturePasses <= AvatarIdleCache.maxPasses, !snapping, bounds.width > 0 {
+            let b = AvatarIdleCache.bin(local: d.timeline.local(now))
+            if b < lastBin { Self.capturePasses += 1 }               // wrapped: one more idle pass
+            lastBin = b
+            if Self.cache[b] == nil {
+                snapping = true
+                let k = key
+                ar.snapshot(saveToHDR: false) { [weak self] img in
+                    MainActor.assumeIsolated {
+                        self?.snapping = false
+                        guard Self.cacheKey == k, let cg = img?.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return }
+                        Self.cache[b] = cg
+                        if Self.cache.count == AvatarIdleCache.bins { ThreePOAssets.log?("3po rig idle captured frames=\(AvatarIdleCache.bins) size=\(k)") }
+                    }
+                }
+            }
+        }
+        if AvatarIdleCache.shouldPark(steadyIdle: true, complete: complete, settledFor: now - settledSince) { park(now) }
+    }
+
+    private func park(_ now: Double) {
+        guard !parked, let l = overlay.layer else { return }
+        let frames = (0..<AvatarIdleCache.bins).compactMap { Self.cache[$0] }
+        guard frames.count == AvatarIdleCache.bins else { return }
+        let a = CAKeyframeAnimation(keyPath: "contents")
+        a.values = frames
+        a.calculationMode = .discrete
+        a.duration = ThreePOCurves.loopSeconds[.idle] ?? 2.5
+        a.repeatCount = .infinity
+        a.beginTime = l.convertTime(now, from: nil) - ar.driver.timeline.local(now)   // in phase with the rig's clock
+        a.isRemovedOnCompletion = false
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        l.contents = frames[AvatarIdleCache.bin(local: ar.driver.timeline.local(now))]
+        l.add(a, forKey: "idle")
+        overlay.isHidden = false
+        reveal = 0
+        CATransaction.commit()
+        parked = true
+        DispatchQueue.main.async { [weak self] in                // after the parked frame is on screen
+            guard let self, self.parked else { return }
+            self.ar.removeFromSuperview()
+            ThreePOAssets.log?("3po rig parked t=\(String(format: "%.3f", Date().timeIntervalSince1970))")
+        }
+    }
+
+    private func unpark() {
+        guard parked else { return }
+        parked = false
+        if ar.superview == nil { addSubview(ar, positioned: .below, relativeTo: overlay); ar.frame = bounds }
+        reveal = 2                                               // drop the parked frame once the rig has drawn
+        ThreePOAssets.log?("3po rig unparked t=\(String(format: "%.3f", Date().timeIntervalSince1970))")
+    }
 }
 
 /// A non-AR RealityKit view on black: the pack's camera (85 mm, fov 14.25°, at (0, -0.30, 15) looking down -Z) and
@@ -154,11 +303,15 @@ final class ThreePORigARView: ARView {
         scene.addAnchor(anchor)
         driver.apply(ThreePOCurves.state(.idle, 0))
         sub = scene.subscribe(to: SceneEvents.Update.self) { [weak self] _ in
-            MainActor.assumeIsolated { self?.driver.tick(now: CACurrentMediaTime()) }
+            MainActor.assumeIsolated {
+                let now = CACurrentMediaTime()
+                self?.driver.tick(now: now); self?.onTick?(now)
+            }
         }
     }
     @MainActor required dynamic init(frame: CGRect) { fatalError("unused") }
     @MainActor required dynamic init?(coder: NSCoder) { fatalError("unused") }
 
+    var onTick: ((Double) -> Void)?
     func tearDown() { sub?.cancel(); sub = nil; scene.anchors.removeAll() }
 }

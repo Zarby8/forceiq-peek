@@ -217,6 +217,20 @@ public enum DemoData {
     /// A scripted 3PO turn for screenshots / the visual proof (no tokens, no network): thinking → Opus advisor → streamed
     /// text → a describe-first proposal → done. Delays in seconds.
     /// `slow` (the avatar tour): the advisor holds ~3.6 s and words land every 0.12 s.
+    /// The send-latency tour's turn: ~1 s think, ~1 s of streamed text, done (no card, no advisor). `flip`: the first
+    /// token, a tool, a token, a tool, … 60 ms apart (thinking ⇄ talking faster than any transition), then the stream.
+    public static func threePOQuickTurn(flip: Bool = false) -> [(TimeInterval, ThreePOEvent)] {
+        let words = "Fixed: the title slide now uses the home crest for Sample Skater.".split(separator: " ").map { String($0) + " " }
+        var out: [(TimeInterval, ThreePOEvent)] = [(0.05, .start(route: "claude", modelAlias: "haiku", mode: "solo", cached: true))]
+        var t = 1.0
+        if flip {
+            for i in 0..<3 { out.append((t, .delta(i == 0 ? "Checking " : ""))); out.append((t + 0.06, .toolCall("lookup"))); t += 0.12 }
+        }
+        for w in words { out.append((t, .delta(w))); t += 0.09 }
+        out.append((t + 0.2, .done(text: "", costUSD: 0.0011, peakMTD: 12.34, warn: false, firstTokenMs: 980)))
+        return out
+    }
+
     public static func threePOTurn(slow: Bool = false) -> [(TimeInterval, ThreePOEvent)] {
         let card = ProposalCard(id: "demo0000card", action: "rerender", label: "Re-render the title slide", client: "Sample Skater",
                                 inputs: ["text: Sample Skater vs Demo Hawks 10.18.2026"], touches: "Scratch render, then the client's title folder after confirm",

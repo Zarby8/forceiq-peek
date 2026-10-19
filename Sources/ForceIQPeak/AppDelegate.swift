@@ -165,6 +165,8 @@ enum Screens {
         for u in queued { route(u) }
         if demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "1" { tour() }
         if avatarTour { threePOAvatarTour() }
+        if sendTour { threePOSendTour() }
+        if idleTour { threePOIdleTour() }
     }
 
     /// First-use costs paid once, off-screen, right after launch instead of on the first tap: the multi-line text
@@ -237,6 +239,8 @@ enum Screens {
     }
 
     var avatarTour: Bool { demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "3po" }
+    var sendTour: Bool { demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "3po-send" }
+    var idleTour: Bool { demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "3po-idle" }
 
     /// Visual proof of the 3PO droid (demo mode + FORCEIQ_PEAK_DEMO_TOUR=3po): every state and transition with the
     /// scripted transport (no engine, no tokens): idle → mic (listening) → idle → send on Auto (thinking + the gold
@@ -258,6 +262,46 @@ enum Screens {
         at(16.0, "chat-send") { store.draft = "Why is the title slide wrong?"; await store.send() }
         at(32.0, "collapse") { c.tab = .home; c.collapse() }
         at(34.0, "tour-end") {}
+    }
+
+    /// Send latency proof (demo mode + FORCEIQ_PEAK_DEMO_TOUR=3po-send): five sends from idle at different points of
+    /// the idle loop, each through store.send() (what the Send button calls), then one turn whose thinking ⇄ talking
+    /// flips land 60 ms apart. Each send flips the Send button to "…" in the same update the droid's state changes in.
+    func threePOSendTour() {
+        guard let scr = NSScreen.screens.first else { return }
+        let main = Screens.uuid(scr)
+        let c = controller!, store = threePO!
+        demoKnobs.quickTurn = true
+        func at(_ t: Double, _ name: String, _ f: @escaping @MainActor () async -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + t) { [weak self] in
+                self?.log.log("tour step=\(name) t=\(String(format: "%.3f", Date().timeIntervalSince1970))"); Task { @MainActor in await f() }
+            }
+        }
+        at(1.5, "chat") { c.activeDisplay = main; c.tab = .threePO; c.expand() }
+        let sends = [7.5, 13.8, 20.2, 26.7, 33.1, 39.5]   // the first one 6 s after the chat opens (two idle passes to compare against)
+        for (i, t) in sends.enumerated() {
+            let last = i == sends.count - 1
+            at(t - 1.2, "type-\(i + 1)") { store.draft = "Fix the title slide for Sample Skater" }
+            at(t, last ? "send-flip" : "send-\(i + 1)") { if last { self.demoKnobs.flipTurn = true }; await store.send() }
+        }
+        at(45.5, "collapse") { c.tab = .home; c.collapse() }
+        at(47.5, "tour-end") {}
+    }
+
+    /// CPU proof (demo mode + FORCEIQ_PEAK_DEMO_TOUR=3po-idle): the 3PO chat opens and stays open, idle, for 90 s; then
+    /// Peak collapses.
+    func threePOIdleTour() {
+        guard let scr = NSScreen.screens.first else { return }
+        let main = Screens.uuid(scr)
+        let c = controller!
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+            self?.log.log("tour step=chat t=\(String(format: "%.3f", Date().timeIntervalSince1970))")
+            c.activeDisplay = main; c.tab = .threePO; c.expand()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 91.5) { [weak self] in
+            self?.log.log("tour step=collapse t=\(String(format: "%.3f", Date().timeIntervalSince1970))")
+            c.tab = .home; c.collapse()
+        }
     }
 
     func refresh() {

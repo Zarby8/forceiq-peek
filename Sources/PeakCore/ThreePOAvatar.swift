@@ -2,7 +2,8 @@ import Foundation
 
 // ForceIQ Peak 3PO avatar: BOB Motion's ForceIQ-Peak-3PO-v1 pack (Resources/threepo). Pure logic, unit-tested: which
 // state the chat is in (from the transcript Peak already keeps), how the player gets there (the pack's 20-frame
-// transitions, switching only at a loop boundary, non-idle to non-idle through idle), and which files the pack carries.
+// transitions, non-idle to non-idle through idle), when a change starts (at once, crossfading from the frame on
+// screen: AvatarSwitch / AvatarCrossfade), and which files the pack carries.
 
 /// The pack's five states (MANIFEST.json `states`).
 public enum AvatarState: String, Sendable, CaseIterable {
@@ -51,7 +52,7 @@ public enum AvatarStateMap {
 
 /// One clip in the player queue.
 public enum AvatarClip: Hashable, Sendable {
-    case loop(AvatarState)                         // AVPlayerLooper over the state's seamless loop
+    case loop(AvatarState)                         // the state's seamless loop, pass after pass
     case once(AvatarState)                         // one pass of a loop (alert: one gold flash, never a repeating one)
     case transition(AvatarState, AvatarState)      // the pack's 20-frame X_to_Y clip
 
@@ -125,6 +126,88 @@ public struct ThreePOAvatarDirector: Equatable, Sendable {
         guard steady != settled else { return nil }
         settled = steady
         return AvatarPlanner.plan(after: current, to: steady)
+    }
+}
+
+/// When a planned change starts. Every state change starts at once (well inside 100 ms): the clip on screen is cut
+/// and the plan crossfades in from the frame on screen (the rig blends its parameters the same way). The one change
+/// that waits for its clip to end is the alert flash settling back to idle, so a card's flash always plays whole; a
+/// user-driven change (mic, send, first token) still cuts the flash.
+public enum AvatarSwitchMode: String, Sendable { case cut, boundary }
+
+public enum AvatarSwitch {
+    /// Crossfade from the frame on screen into the plan (seconds; ease-out, so the first frame already moves).
+    public static let fade = 0.13
+    /// The no-hitch bar: a change must start on screen within this.
+    public static let maxStart = 0.1
+    public static func mode(current: AvatarClip, plan: AvatarPlan) -> AvatarSwitchMode {
+        switch current {
+        case .once(.alert), .transition(.idle, .alert): return plan.loop == .idle ? .boundary : .cut
+        default: return .cut
+        }
+    }
+}
+
+/// The video tier's crossfade: on a cut the frame on screen is frozen into an overlay at full opacity, the player
+/// switches under it, and once the new clip's first frame is up the overlay fades out (AvatarSwitch.fade, ease-out).
+/// Latest wins, nothing stacks: a cut before the new frame is up keeps the frozen frame and just retargets the player;
+/// a cut mid-fade freezes what is on screen (overlay at its opacity over the live frame) into one new overlay.
+public struct AvatarCrossfade: Equatable, Sendable {
+    public enum Phase: Equatable, Sendable { case none, armed(since: Double), fading(start: Double) }
+    public enum Snapshot: Equatable, Sendable { case frame, keep, composite(alpha: Double) }
+    public private(set) var phase: Phase = .none
+    /// Never hold a frozen frame longer than this if the new clip is slow to show (logged; normal is a few ms).
+    public static let readyDeadline = 0.25
+    public init() {}
+
+    public mutating func cut(now: Double) -> Snapshot {
+        switch phase {
+        case .armed: return .keep                                   // the frozen frame is still fully up
+        case .fading:
+            let a = opacity(now); phase = .armed(since: now)
+            return a > 0.001 ? .composite(alpha: a) : .frame
+        case .none: phase = .armed(since: now); return .frame
+        }
+    }
+    /// The new clip's first frame is on screen: the overlay starts fading. Returns how long it waited, nil if not armed.
+    @discardableResult public mutating func ready(now: Double) -> Double? {
+        guard case .armed(let s) = phase else { return nil }
+        phase = .fading(start: now)
+        return now - s
+    }
+    /// Per display frame. Returns false once the overlay is gone (the display link can stop).
+    public mutating func tick(now: Double) -> Bool {
+        switch phase {
+        case .none: return false
+        case .armed(let s): if now - s >= Self.readyDeadline { phase = .fading(start: now) }; return true
+        case .fading(let s): if now - s >= AvatarSwitch.fade { phase = .none; return false }; return true
+        }
+    }
+    public func opacity(_ now: Double) -> Double {
+        switch phase {
+        case .none: return 0
+        case .armed: return 1
+        case .fading(let s): return 1 - ThreePOCurves.easeOut((now - s) / AvatarSwitch.fade)
+        }
+    }
+}
+
+/// The rig's parked idle: RealityKit draws every display frame while its view is in a window, so a steady idle
+/// rig plays a captured pass of itself (20 fps) and leaves the window until something changes.
+public enum AvatarIdleCache {
+    public static let hz = 20.0
+    public static var bins: Int { Int(((ThreePOCurves.loopSeconds[.idle] ?? 2.5) * hz).rounded()) }
+    /// Give up capturing after this many idle passes (the rig then simply stays live, throttled).
+    public static let maxPasses = 3
+    /// Idle this long with nothing changing before the rig parks.
+    public static let settle = 0.5
+    public static func bin(local t: Double) -> Int {
+        let T = ThreePOCurves.loopSeconds[.idle] ?? 2.5
+        let u = t.truncatingRemainder(dividingBy: T)
+        return min(bins - 1, max(0, Int(((u < 0 ? u + T : u) * hz).rounded(.down))))
+    }
+    public static func shouldPark(steadyIdle: Bool, complete: Bool, settledFor: Double) -> Bool {
+        steadyIdle && complete && settledFor >= settle
     }
 }
 

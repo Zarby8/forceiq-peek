@@ -25,6 +25,25 @@ public enum ThreePOCurves {
 
     static func clamp01(_ x: Double) -> Double { min(1, max(0, x)) }
     static func smoothstep(_ u: Double) -> Double { let x = clamp01(u); return x * x * (3 - 2 * x) }
+    /// The switch crossfade's ease: fast out of the gate (the first frame already moves), soft landing.
+    public static func easeOut(_ u: Double) -> Double { let x = clamp01(u); return 1 - (1 - x) * (1 - x) }
+
+    /// a → b by k (every parameter, linear).
+    public static func mix(_ a: ThreePOParams, _ b: ThreePOParams, _ k: Double) -> ThreePOParams {
+        func l(_ x: Double, _ y: Double) -> Double { x + (y - x) * k }
+        var p = ThreePOParams()
+        p.headPitch = l(a.headPitch, b.headPitch); p.headYaw = l(a.headYaw, b.headYaw); p.headTilt = l(a.headTilt, b.headTilt)
+        p.eyeGlow = l(a.eyeGlow, b.eyeGlow); p.blink = l(a.blink, b.blink)
+        p.scanAngle = l(a.scanAngle, b.scanAngle); p.scanBoost = l(a.scanBoost, b.scanBoost)
+        p.talkAmp = l(a.talkAmp, b.talkAmp); p.goldFlash = l(a.goldFlash, b.goldFlash); p.micLevel = l(a.micLevel, b.micLevel)
+        return p
+    }
+    /// Largest per-parameter gap (degrees for the head, 0…1 for the lights): how far apart two poses look.
+    public static func distance(_ a: ThreePOParams, _ b: ThreePOParams) -> Double {
+        [abs(a.headPitch - b.headPitch) / 10, abs(a.headYaw - b.headYaw) / 10, abs(a.headTilt - b.headTilt) / 10,
+         abs(a.eyeGlow - b.eyeGlow), abs(a.blink - b.blink), abs(a.scanAngle - b.scanAngle) / 30, abs(a.scanBoost - b.scanBoost),
+         abs(a.talkAmp - b.talkAmp), abs(a.goldFlash - b.goldFlash), abs(a.micLevel - b.micLevel)].max() ?? 0
+    }
 
     /// One state at `t` seconds into its loop. `talkDrive` (0…1, the stream rate) scales the simulated syllables
     /// while tokens arrive; nil = the rendered loop's own syllables.
@@ -86,19 +105,43 @@ public enum ThreePOCurves {
     public static func lid(_ p: ThreePOParams) -> Double { 1 - 0.8 * p.blink }
 }
 
-/// The same queue the video player keeps, in the time domain (for the live rig): the clip on screen always finishes;
-/// then the planned transitions play, then the settled state loops.
+/// The same queue the video player keeps, in the time domain (for the live rig). `cut` starts a plan now, blending
+/// from the pose on screen (AvatarSwitch.fade); `apply` queues it behind the clip on screen (the alert flash only).
+/// Then the planned transitions play, then the settled state loops.
 public struct AvatarTimeline: Equatable, Sendable {
     public private(set) var current: AvatarClip = .loop(.idle)
     public private(set) var start: Double
     public private(set) var queue: [AvatarClip] = []
     public private(set) var settle: AvatarState = .idle
+    /// The pose on screen when the last cut landed (one blend at a time: a cut mid-blend starts from the blended pose).
+    public private(set) var fadeFrom: ThreePOParams?
+    public private(set) var fadeStart = 0.0
     public init(now: Double) { start = now }
+    /// Tests: a timeline already on `current` since `start`.
+    init(current: AvatarClip, start: Double, settle: AvatarState) { self.current = current; self.start = start; self.settle = settle }
 
     public mutating func apply(_ p: AvatarPlan) { queue = p.clips; settle = p.loop }
 
+    /// Start `p` now. Returns the clip that started.
+    @discardableResult public mutating func cut(_ p: AvatarPlan, now: Double, talkDrive: Double? = nil) -> AvatarClip {
+        let shown = params(now, talkDrive: talkDrive)
+        queue = p.clips; settle = p.loop
+        current = queue.isEmpty ? .loop(settle) : queue.removeFirst()
+        start = now; fadeFrom = shown; fadeStart = now
+        return current
+    }
+
+    /// The pose to draw at `now` (the clip's curves, blended in from the cut pose for AvatarSwitch.fade).
+    public func params(_ now: Double, talkDrive: Double? = nil) -> ThreePOParams {
+        let p = ThreePOCurves.params(current, local(now), talkDrive: talkDrive)
+        guard let f = fadeFrom else { return p }
+        let k = (now - fadeStart) / AvatarSwitch.fade
+        return k >= 1 ? p : ThreePOCurves.mix(f, p, ThreePOCurves.easeOut(k))
+    }
+
     /// Moves to `now`. Returns the clips that started on the way (oldest first).
     @discardableResult public mutating func advance(to now: Double) -> [AvatarClip] {
+        if fadeFrom != nil, now - fadeStart >= AvatarSwitch.fade { fadeFrom = nil }
         if now - start > 30 { start = now - fmod(now - start, ThreePOCurves.seconds(current)) }   // woke from a long pause
         var started: [AvatarClip] = []
         while now - start >= ThreePOCurves.seconds(current) {
