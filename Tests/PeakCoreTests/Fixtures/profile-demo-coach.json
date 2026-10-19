@@ -1,0 +1,10 @@
+{"schema": 1, "configured": true, "coach_id": "demo-coach-b", "display_name": "Second Coach",
+ "state_root": "~/ForceIQ/peak-second-coach",
+ "roster": {"source": "fixture", "names": ["Pat Example", "Robin Sample"]},
+ "folder_roots": ["~/Demo/Clients"], "nas_paths": ["/Volumes/DemoNAS"],
+ "accounts": {"command": "demo-command-account", "flow": "demo-flow-account"},
+ "claude_key_ref": {"keychain_service": "demo-claude", "account": "demo"},
+ "hotkey": {"enabled": false, "key": "p", "modifiers": ["control", "shift"]},
+ "modules": {"meetings": true, "approvals": false, "switcher": true, "family": false},
+ "apps": [{"name": "Demo App", "bundle_id": "com.example.demoapp"}],
+ "goat_bundle_id": "com.example.goat", "command_open_url": "forceiq-command://app/open"}

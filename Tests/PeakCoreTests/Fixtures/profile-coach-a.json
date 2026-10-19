@@ -1,0 +1,10 @@
+{"schema": 1, "configured": true, "coach_id": "coach-a", "display_name": "First Coach",
+ "state_root": "~/ForceIQ/peak-first-coach",
+ "roster": {"source": "fixture", "names": ["Sample Skater", "Demo Player"]},
+ "folder_roots": [], "nas_paths": [],
+ "accounts": {"command": "a-command", "flow": "a-flow"},
+ "claude_key_ref": {"keychain_service": "a-claude", "account": "a"},
+ "hotkey": {"enabled": true, "key": "g", "modifiers": ["control", "option"]},
+ "modules": {"meetings": true, "approvals": true, "switcher": true, "family": true},
+ "apps": [{"name": "Alpha", "bundle_id": "com.example.alpha"}, {"name": "Beta", "bundle_id": "com.example.beta"}],
+ "goat_bundle_id": "com.example.goat", "command_open_url": "forceiq-command://app/open"}

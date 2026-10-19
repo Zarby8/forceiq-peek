@@ -1,13 +1,81 @@
 {
-  "_comment": "Peak keys for a coach's overlay/profile.json (merge into the existing profile; the rest of the profile is unchanged). Values are REFERENCES: never put a key in a profile. Only Chris's profile sets spend.show_account_line true.",
+  "_comment": "ForceIQ Peak coach section. Merge \"peak\" (and \"spend\") into THIS coach's GOAT overlay/profile.json (cbprofile.P). Placeholder values only; key fields are Keychain REFERENCES, never a key. Only the owner's profile sets spend.show_account_line true.",
   "peak": {
-    "root": "~/ForceIQ/peak",
-    "anthropic": {"keychain_service": "forceiq-anthropic", "keychain_account": "anthropic", "env": "ANTHROPIC_API_KEY"},
-    "anthropic_admin": {"keychain_service": "forceiq-anthropic-admin", "keychain_account": "admin", "env": "ANTHROPIC_ADMIN_KEY"},
+    "coach_id": "coach-id",
+    "display_name": "Coach Name",
+    "state_root": "~/ForceIQ/peak",
+    "folder_roots": [
+      "~/Path/To/Clients"
+    ],
+    "nas_paths": [
+      "/Volumes/NAS-Share/Coach-Private"
+    ],
+    "accounts": {
+      "command": "command-account-ref",
+      "flow": "flow-account-ref"
+    },
+    "hotkey": {
+      "enabled": true,
+      "key": "g",
+      "modifiers": [
+        "control",
+        "option"
+      ]
+    },
+    "modules": {
+      "meetings": true,
+      "approvals": true,
+      "switcher": true,
+      "family": true,
+      "drops": false,
+      "3po": true,
+      "voice": false,
+      "machine_glance": false,
+      "spend": true
+    },
+    "apps": [
+      {
+        "name": "FLOW",
+        "bundle_id": "com.example.flow"
+      },
+      {
+        "name": "Command",
+        "bundle_id": "com.example.command"
+      },
+      {
+        "name": "QuickCut",
+        "bundle_id": "com.example.quickcut"
+      },
+      {
+        "name": "Ghost",
+        "bundle_id": "com.example.ghost"
+      },
+      {
+        "name": "Export",
+        "bundle_id": "com.example.export"
+      },
+      {
+        "name": "GOAT",
+        "bundle_id": "com.example.goat"
+      }
+    ],
+    "goat_bundle_id": "com.example.goat",
+    "command_open_url": "forceiq-command://app/open",
+    "anthropic": {
+      "keychain_service": "forceiq-anthropic",
+      "keychain_account": "anthropic",
+      "env": "ANTHROPIC_API_KEY"
+    },
+    "anthropic_admin": {
+      "keychain_service": "forceiq-anthropic-admin",
+      "keychain_account": "admin"
+    },
     "budget_usd": 250.0,
     "warn_fraction": 0.8,
-    "default_pick": "sonnet",
+    "default_pick": "haiku",
     "model_overrides": {}
   },
-  "spend": {"show_account_line": false}
+  "spend": {
+    "show_account_line": false
+  }
 }
