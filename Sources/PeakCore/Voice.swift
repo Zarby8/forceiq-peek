@@ -117,8 +117,12 @@ public struct VoiceLine: Equatable, Sendable {
         }
         return false
     }
-    /// Pending words: white at this opacity (never gray).
-    public static let pendingOpacity = 0.7
+    /// Pending words stay pure white at full opacity (never dimmed, never gray). The only pending cue is this gold
+    /// caret after the last word; it goes when the final pass lands.
+    public static let pendingCaret = "\u{258D}"
+    public static let pendingCaretHex = Brand.goldHex
+    /// True until the final pass: the caret shows.
+    public var pending: Bool { !isEmpty && segments.contains { !$0.final } }
 }
 
 public enum LiveWords {

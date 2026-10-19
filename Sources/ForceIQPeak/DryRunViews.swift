@@ -79,25 +79,25 @@ struct DryRunView: View {
             Text(model.live
                  ? "Presses FLOW's 'Code Window' menu item for \(model.client)'s package after the checks. Nothing else is clicked or typed. STOP or Esc halts it."
                  : "Locate and report only. Nothing is clicked, typed, opened or booked\(model.action.hasPrefix("flow") ? "; FLOW may come forward" : "").")
-                .font(.system(size: 11)).foregroundStyle(Color.white.opacity(0.8))
+                .font(.system(size: 11)).foregroundStyle(Color.white)
             ForEach(model.steps) { s in
                 HStack(alignment: .top, spacing: 8) {
                     Text(icon(model.status[s.id] ?? .pending)).font(.system(size: 13, weight: .bold)).frame(width: 18)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(s.id). \(s.title)").font(.system(size: 12, weight: .semibold)).foregroundStyle(.white)
                         if let d = detail(model.status[s.id] ?? .pending) {
-                            Text(d).font(.system(size: 10.5)).foregroundStyle(Color.white.opacity(0.75)).lineLimit(3)
+                            Text(d).font(.system(size: 10.5)).foregroundStyle(Color.white).lineLimit(3)
                         }
                     }
                 }
             }
             if let s = model.summary {
-                Text(s).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color(red: 0.96, green: 0.77, blue: 0.26)).lineLimit(5)
+                Text(s).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.peakGold).lineLimit(5)
             }
         }
         .padding(16).frame(width: 520, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 16).fill(Color.black))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(model.running ? Color.red : Color.gray, lineWidth: 2))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(model.running ? Color.red : Color.peakGold, lineWidth: 2))
     }
 
     func icon(_ s: DryRunModel.Status) -> String {

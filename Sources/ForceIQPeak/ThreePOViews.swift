@@ -180,9 +180,8 @@ struct SpendMeter: View {
                 }
             }
             .frame(height: big ? 6 : 4)
-            Text("\(usd(l.totalUSD)) / \(usd(l.budgetUSD))").font(.system(size: big ? 12 : 11, weight: .heavy).monospacedDigit())
-                .foregroundStyle(l.warn ? Color.peakGold : Color.white)
-                .contentTransition(.numericText())
+            SwapText(text: "\(usd(l.totalUSD)) / \(usd(l.budgetUSD))", font: .system(size: big ? 12 : 11, weight: .heavy).monospacedDigit(),
+                     color: l.warn ? Color.peakGold : Color.white)     // digits roll up at full opacity (numericText cross-fades them)
         }
     }
 
@@ -277,7 +276,7 @@ struct ThreePOView: View {
                         if dictating {          // the live words sit in the field (confirmed only; pure white once final)
                             Group {
                                 if voice.line.isEmpty {
-                                    Text("Listening…").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.white.opacity(VoiceLine.pendingOpacity))
+                                    Text("Listening…").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.white)
                                 } else { LiveWordsText(line: voice.line).lineLimit(1...4) }
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -292,9 +291,8 @@ struct ThreePOView: View {
                 }
             }
             if voice.enabled, let l = voice.phase.line {
-                Text(l).font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle({ if case .failed = voice.phase { return Color.peakGold }; return Color.white }())
-                    .lineLimit(2).contentTransition(.numericText())
+                SwapText(text: l, font: .system(size: 11, weight: .semibold),
+                         color: { if case .failed = voice.phase { return Color.peakGold }; return Color.white }(), lines: 2)
             }
     }
 }

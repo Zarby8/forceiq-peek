@@ -64,9 +64,13 @@ Command". Peak uploads nothing, and client video stays local.
 - **3PO chat:** bubbles slide in from their own side (you: trailing, 3PO: leading); the thinking dots stay (busy only);
   each streamed chunk lands at full white (no opacity fade on text); proposal and skill cards pop in; the model pill, Chat / Memory and Peak / 3PO
   slide their selection (matched geometry); the composer ring eases to green 2 pt with a soft halo on focus.
+- **Number rolls** (spend total, voice status line): the new value rolls up 6 pt from a light blur at full opacity and the
+  old one leaves at once (`SwapText`). No `numericText` (it cross-fades the changing digits); Reduce Motion swaps in place.
 - **Ease:** every tap target is at least 28 pt. Esc collapses (the Collapse button carries it), Return sends, ⌘K focuses
   the composer (switching back to Chat).
-- Every move is a finite one-shot on an event (no repeat, no clock, no TimelineView). Text is never opacity-faded, in or out; entries
+- Every move is a finite one-shot on an event (no repeat, no clock, no TimelineView). Text is never opacity-faded, in or out, and
+  never dimmed or gray anywhere, voice included (guards: `testNoDimmedOrGrayTextAnywhere`, `testVoiceTextIsFullWhite`,
+  `testNumberRollNeverFadesDigits`); entries
   rise and sharpen at full opacity and exits leave at once. Reduce Motion: no motion (the shell crossfades). Proof tour (sample names only):
   `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_FEED=sample FORCEIQ_PEAK_DEMO_TOUR=polish GOAT_PEAK_ROOT=<scratch root>`.
 
@@ -102,8 +106,10 @@ process)" to phone.py, so Peak carries no token and no secret.
   enable, into `<Peak root>/models` (pinned HF commits; progress line in the 3PO field and Settings). No NVIDIA Open Model
   License models. Audio stays in memory on this Mac: never written, never uploaded.
 - **Live words** in the notch / pill (when Peak is collapsed) and in the 3PO field: confirmed words only (the prefix two
-  decodes agree on, about 0.5 s in), white at reduced opacity until the final pass, then pure white; client names
-  underlined in gold.
+  decodes agree on, about 0.5 s in), pure white at full opacity from the first word (never dimmed or gray); until the
+  final pass a gold caret (▍) trails the last word, then it goes. 'Listening…' is pure white too. Client names
+  underlined in gold. The mic shows "…" while it loads or finishes (never half-faded). The voice status line under the
+  field rolls each new state up at full opacity (`SwapText`; no numericText cross-fade).
 - **Name guard** (PeakCore `VoiceNameGuard`): the boost may replace a word only when it sounds like the name. Months,
   weekdays, numbers, function words and Peak's command words are never replaced ("October", "compare" never become
   "Cooper"); any other dictionary word (macOS `/usr/share/dict/web2`) only by a near-homophone ("Holiday" → "Halliday").

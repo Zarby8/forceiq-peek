@@ -129,14 +129,72 @@ final class MotionPolishGuardTests: XCTestCase {
     /// Brand: no opacity fade on text. No view transition or content transition in the panel views may use .opacity
     /// (the one exception is the pill's glass fill, a shape with no text).
     func testNoOpacityFadeOnText() throws {
-        for name in ["Views.swift", "ThreePOViews.swift", "ThreePOMemoryViews.swift", "DropViews.swift", "MotionViews.swift"] {
-            let lines = codeLines(try source(name))
+        for (name, text) in appSourceFiles() {         // every app view file, voice included
+            let lines = codeLines(text)
             for (i, l) in lines.enumerated() where (l.contains(".transition(") || l.contains("contentTransition(") || l.contains("AnyTransition"))
                 && l.range(of: #"[ (:]\.opacity\b"#, options: .regularExpression) != nil {
                 let ctx = lines[max(0, i - 3)...i].joined(separator: " ")
                 XCTAssertTrue(ctx.contains("glassEffect"), "\(name):\(i + 1): an opacity transition fades text; rise / sharpen at full opacity instead")
             }
         }
+    }
+
+    /// No dimmed or gray text anywhere: every text colour is a brand colour at full opacity, no system grays, no
+    /// muted hierarchical styles, no opacity on a Text.
+    func testNoDimmedOrGrayTextAnywhere() throws {
+        let banned = [#"\.opacity\("#, #"\bgray\b"#, #"\.secondary\b"#, #"\.tertiary\b"#, #"\.quaternary\b"#, #"Color\(white:"#, #"Color\(red:"#, #"\.placeholder\b"#]
+        for (name, text) in appSourceFiles() {
+            for (i, l) in codeLines(text).enumerated() {
+                for r in l.components(separatedBy: "foregroundStyle(").dropFirst() {
+                    let arg = String(r.prefix { $0 != "\n" })
+                    for b in banned where arg.range(of: b, options: .regularExpression) != nil {
+                        XCTFail("\(name):\(i + 1): text colour \(b) dims or grays text; pure white, green or gold at full opacity")
+                    }
+                }
+                if l.contains("Text(") && l.contains(".opacity(") { XCTFail("\(name):\(i + 1): opacity on a Text line") }
+                XCTAssertNil(l.range(of: #"(Color\.gray|\.gray\b|NSColor\.(secondary|tertiary|disabled)|secondaryLabel)"#, options: .regularExpression),
+                             "\(name):\(i + 1): gray in a panel view")
+            }
+        }
+    }
+
+    /// Voice: 'Listening…' and pending words are pure white at full opacity; pending is cued by a gold caret only,
+    /// and the mic button never half-fades.
+    func testVoiceTextIsFullWhite() throws {
+        let core = codeLines(try String(contentsOf: appSources.deletingLastPathComponent().appendingPathComponent("PeakCore/Voice.swift"), encoding: .utf8)).joined(separator: "\n")
+        XCTAssertFalse(core.contains("pendingOpacity"), "no pending opacity token: pending words are not dimmed")
+        let v = try code("Voice.swift")
+        let live = try body(v, from: "struct LiveWordsText", to: "\n}\n")
+        XCTAssertTrue(live.contains("Text(s.text).foregroundStyle(Color.white)"), "every live word is pure white")
+        XCTAssertTrue(live.contains("VoiceLine.pendingCaret).foregroundStyle(Color.peakGold)"), "pending is a gold caret")
+        XCTAssertFalse(live.contains("opacity"))
+        let mic = try body(v, from: "struct MicButton", to: "\n}\n")
+        let fades = codeLines(mic).filter { $0.contains(".opacity(") }
+        XCTAssertEqual(fades.count, 1, "only the listening pulse ring (a shape) fades: \(fades)")
+        XCTAssertTrue(fades.allSatisfy { $0.contains("Circle().stroke") || $0.contains("phaseAnimator") }, "the mic glyph is never half-faded")
+        let strip = try body(v, from: "struct VoiceStrip", to: "\n}\n")
+        XCTAssertFalse(strip.contains("opacity"))
+        let t = try code("ThreePOViews.swift")
+        XCTAssertTrue(t.contains(#"Text("Listening…").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.white)"#), "'Listening…' is pure white")
+    }
+
+    /// Number rolls (spend total, voice status line) never fade digits: SwapText rolls at full opacity; numericText
+    /// (which cross-fades the changing digits) and every other non-identity content transition are banned.
+    func testNumberRollNeverFadesDigits() throws {
+        for (name, text) in appSourceFiles() {
+            for (i, l) in codeLines(text).enumerated() where l.contains("contentTransition(") {
+                XCTAssertTrue(l.contains("contentTransition(.identity)"), "\(name):\(i + 1): a content transition fades text; use SwapText (full-opacity roll)")
+            }
+        }
+        let d = try code("DropViews.swift")
+        let swap = try body(d, from: "struct SwapText", to: "\n}\n")
+        XCTAssertFalse(swap.contains("opacity"), "SwapText rolls at full opacity")
+        XCTAssertTrue(swap.contains("removal: .identity") && swap.contains("reduceMotion ? .identity"), "old value leaves at once; Reduce Motion swaps in place")
+        let blur = try body(d, from: "struct BlurUp", to: "\n}\n")
+        XCTAssertFalse(blur.contains("opacity"))
+        let t = try code("ThreePOViews.swift")
+        XCTAssertTrue(t.contains(#"SwapText(text: "\(usd(l.totalUSD)) / \(usd(l.budgetUSD))""#), "spend total rolls via SwapText")
+        XCTAssertTrue(t.contains("SwapText(text: l, font: .system(size: 11, weight: .semibold)"), "voice status line rolls via SwapText")
     }
 
     /// The tour is demo-only and taps nothing that runs.
