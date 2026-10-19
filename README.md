@@ -97,6 +97,16 @@ process)" to phone.py, so Peak carries no token and no secret.
   prompt); an unclear client gets a pick card. Run only opens Command's own UI (the booking's room page, else the
   schedule) or brings FLOW forward. Peak never joins, records or books, and never touches the recorder. The code-button
   click is a desktop (Cua) action: behind `settings.json` `desktopActions`, OFF, and not wired until the STOP dry run passes.
+- **Desktop actions STOP dry run (locate and report only).** `FORCEIQ_PEAK_DESKTOP_DRYRUN=1` with a scratch `GOAT_PEAK_ROOT`
+  (never `~/ForceIQ/peak`) turns a client command card's Run into a dry run: each step (FLOW: find the client's latest
+  package → bring FLOW forward → the code-window button; Command: the app → the room / schedule link → its start control)
+  is located the safe way first (Peak's deep link, the app's URL scheme, App Intents, Accessibility read-only lookup, Cua
+  last; Cua is not wired, only reported) and reported in a floating panel with a red **STOP** (Esc). STOP aborts between
+  steps or mid-lookup and logs `dryrun STOPPED phase=… step=… latency_ms=… skipped=[…]`. Nothing is clicked, typed, opened
+  or written in another app; bringing FLOW forward is the only effect. There is no live mode (`DesktopActionMode` is
+  `off` / `dry_run`), `desktopActions` stays OFF with no UI, and `DesktopDryRunTests` fails if a perform / click / key /
+  open / write API appears in the dry-run sources. Live proof: add `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=dryrun-flow`
+  (or `dryrun-meeting`) and optionally `FORCEIQ_PEAK_DRYRUN_PACE_MS=<ms between lookups>` so a STOP can land mid-step.
 - **Live smoke:** `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=voice GOAT_PEAK_ROOT=<scratch root> FORCEIQ_PEAK_VOICE_FEED=<folder
   of .wav>` feeds recorded `say` clips in real time through the mic's conversion path (fake roster) and logs
   `voice turn first_confirmed_ms=… final_ms=… cpu_pct=…` per clip plus a summary.

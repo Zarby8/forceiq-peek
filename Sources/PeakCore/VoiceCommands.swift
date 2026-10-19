@@ -26,10 +26,12 @@ public struct ClientCommandContext: Sendable {
     public var flowApp: String?            // the profile's FLOW app name (allow-listed), if any
     public var now: Date
     public var timeZone: TimeZone
+    /// .dryRun only from DesktopActionGate (env + scratch root); Run then locates and reports, nothing else.
+    public var desktopMode: DesktopActionMode
     public init(roster: [String], meeting: MeetingRow? = nil, desktopActions: Bool = false, flowApp: String? = nil,
-                now: Date = Date(), timeZone: TimeZone = .current) {
+                now: Date = Date(), timeZone: TimeZone = .current, desktopMode: DesktopActionMode = .off) {
         self.roster = roster; self.meeting = meeting; self.desktopActions = desktopActions; self.flowApp = flowApp
-        self.now = now; self.timeZone = timeZone
+        self.now = now; self.timeZone = timeZone; self.desktopMode = desktopMode
     }
 }
 
@@ -191,6 +193,13 @@ public enum ClientCommands {
             c.appName = ctx.flowApp ?? "FLOW"
         }
         c.origin = .command
+        if ctx.desktopMode == .dryRun {
+            c.touches = "Dry run for \(client): Run plans each step and locates its target (deep link, URL scheme, App Intents, "
+                + "Accessibility, Cua last) and reports. Nothing is clicked, typed, opened or booked" + (cmd.kind == .flowPackage ? "; FLOW may come forward." : ".")
+                + " STOP aborts at once."
+            c.message = "Nothing has run. Run starts a dry run for \(client) (locate and report only)."
+            c.outputs = ["A dry-run report for \(client)"]
+        }
         return c
     }
 }
