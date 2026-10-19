@@ -29,8 +29,8 @@ public enum EngineParse {
 
     /// GET /api/live → fixes + running counts (downloads only count toward the "working" Ghost state) + the percent each
     /// running download reports (a row without a numeric percent contributes none, so nothing is ever estimated).
-    public static func live(_ d: Data) -> (fixes: [FixRow], fixing: Int, downloading: Int, percents: [Double]) {
-        guard let o = obj(d) else { return ([], 0, 0, []) }
+    public static func live(_ d: Data) -> (fixes: [FixRow], fixing: Int, downloading: Int, percents: [Double], done: [DownloadDone]) {
+        guard let o = obj(d) else { return ([], 0, 0, [], []) }
         let fixes: [FixRow] = ((o["fixes"] as? [[String: Any]]) ?? []).map { f in
             let who = str(f["who"]).isEmpty ? (strs(f["clients"]).first ?? "") : str(f["who"])
             return FixRow(title: str(f["title"]).isEmpty ? str(f["what"]) : str(f["title"]), client: who,
@@ -45,7 +45,16 @@ public enum EngineParse {
             guard let n = r["percent"] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID() else { return nil }
             return n.doubleValue
         }
-        return (fixes, fixing, downloading, percents)
+        let done: [DownloadDone] = rows.compactMap { r in
+            guard str(r["state"]) == "done" else { return nil }
+            let parts = str(r["what"]).components(separatedBy: " · ")
+            guard parts.count >= 2, parts[0] == "Shift download" else { return nil }        // shift downloads only, never a provider grab
+            let client = parts[1].trimmingCharacters(in: .whitespaces)
+            guard !client.isEmpty else { return nil }
+            let id = str(r["file"]).isEmpty ? str(r["what"]) + str(r["at"]) : str(r["file"])
+            return DownloadDone(id: id, client: client)
+        }
+        return (fixes, fixing, downloading, percents, done)
     }
 
     /// GET /api/approvals

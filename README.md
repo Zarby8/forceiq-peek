@@ -120,9 +120,12 @@ it shows (a coarse tick, no animation). Demo: `FORCEIQ_PEAK_DEMO=1` with `{"next
 
 ## Notch alerts (the peek)
 Collapsed Peak is the notch plus its green status wing. An urgent alert widens the collapsed shape INLINE in the menu bar row (notch height, ~145 pt each side of the notch, the way Boring Notch's
-sneak peek works) for 6 s (8 s for a failed fix): the client on the left of the notch, what happened on the right, then it retracts. Urgent means a meeting starting within 10 minutes or a fix that fails after Peak
-is up (fixes already failing at launch are not news). Each line names its client; the dot is green for a meeting and gold for
-a failed fix; text is pure white. A tap opens the sheet (a meeting alert lands on the next-session card when the pill is
+sneak peek works) for 6 s (8 s for a failed fix): the client on the left of the notch, what happened on the right, then it retracts. What peeks: a meeting starting within 10 minutes; a fix that fails after Peak is up; Command's sign-in expiring
+("Command sign-in | expired"); a new approval waiting ("<client> | needs your OK"); a new family-delivery alert; a shift
+download finishing for one of the coach's clients ("<client> | download finished"; shift downloads only, never a provider grab).
+Everything except the meeting is news only: what was already there when Peak first read that source is the baseline and never
+peeks. When several wait, the most urgent goes first (meeting, fix, sign-in, approval, family, download), one a minute. Each line names its client (Command's sign-in names Command); the dot is green for a meeting or a finished
+download and gold for anything that needs you; text is pure white. A tap opens the sheet (a meeting alert lands on the next-session card when the pill is
 on); the pointer resting on it holds it 3 s at a time. Nothing peeks while Peak is open, while dictating, during a live
 session, in quiet hours, under Do not disturb (menu bar: 1 hour / until tomorrow morning / off), or within a minute of the
 last peek. A held alert is not spent: it peeks when the gate lifts. The decision is `AlertPolicy` (PeakCore/Alerts.swift),

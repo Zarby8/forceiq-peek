@@ -53,7 +53,7 @@ enum Motion {
 struct PeekInline: View {
     let alert: PeakAlert
     let notchWidth: CGFloat
-    var dot: Color { alert.kind == .fixFailed ? Color.peakGold : Color.peakGreen }
+    var dot: Color { alert.kind.dotHex == Brand.greenHex ? Color.peakGreen : Color.peakGold }
     var body: some View {
         Group {
             if notchWidth > 0 {

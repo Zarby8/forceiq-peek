@@ -756,7 +756,8 @@ enum Screens {
         let listening = voice.phase.isListening || voice.phase == .finishing
         let ctx = AlertContext(now: Date(), expanded: controller.expanded, dictating: listening,
                                dndUntil: prefs.dndUntil, quietHours: prefs.quietHours)
-        guard let a = alertPolicy.next(snapshot: s, cards: cards.cards, context: ctx) else {
+        let profile = self.profile
+        guard let a = alertPolicy.next(snapshot: s, cards: cards.cards, context: ctx, isMyClient: { profile.isMyClient($0) }) else {
             if alertPolicy.lastSuppression != lastSuppressionLogged, let why = alertPolicy.lastSuppression { log.log("alert held=\(why.rawValue)") }
             lastSuppressionLogged = alertPolicy.lastSuppression
             return

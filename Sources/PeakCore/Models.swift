@@ -86,6 +86,13 @@ public struct ApprovalRow: Equatable, Sendable {
     public let test: Bool
 }
 
+/// A finished shift download from GOAT's live doc (`what` is "Shift download · <client> · <opponent> · <date>").
+public struct DownloadDone: Equatable, Sendable {
+    public let id: String
+    public let client: String
+    public init(id: String, client: String) { self.id = id; self.client = client }
+}
+
 public struct FamilyRow: Equatable, Sendable {
     public let jobID: String
     public let client: String
@@ -102,6 +109,7 @@ public struct EngineSnapshot: Equatable, Sendable {
     public var fixesRunning: Int = 0
     public var downloadsRunning: Int = 0
     public var downloadPercents: [Double] = []         // percent (0-100) of each running download that reports one
+    public var downloadsDone: [DownloadDone] = []      // shift downloads GOAT reports finished (the Live Activity set: shift downloads only)
     public var approvals: [ApprovalRow] = []
     public var familyEnabled = false
     public var family: [FamilyRow] = []

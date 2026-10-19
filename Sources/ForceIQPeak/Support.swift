@@ -192,7 +192,7 @@ final class EngineClient: ThreePOTransport, Sendable {
         }
         let (lc, ld) = await l
         if lc == 200 {
-            let x = EngineParse.live(ld); s.fixes = x.fixes; s.fixesRunning = x.fixing; s.downloadsRunning = x.downloading; s.downloadPercents = x.percents
+            let x = EngineParse.live(ld); s.fixes = x.fixes; s.fixesRunning = x.fixing; s.downloadsRunning = x.downloading; s.downloadPercents = x.percents; s.downloadsDone = x.done
             let o = (try? JSONSerialization.jsonObject(with: ld)) as? [String: Any] ?? [:]
             s.fixesNeeded = EngineParse.fixesNeeded(o); s.liveAt = EngineParse.docAt(o)
         } else { s.errors.append("live") }
