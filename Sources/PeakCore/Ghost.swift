@@ -85,3 +85,34 @@ public struct GhostPack: Sendable {
         return format == .hevcAlpha ? "hevc-alpha/peak-bob-\(a)-\(px).mov" : "h264-black/peak-bob-\(a)-\(px).mp4"
     }
 }
+
+/// The Ghost mark parks its steady loop the way the 3PO droid does (AvatarLoopPark): a playing AVPlayerLooper cost
+/// ~1.1 % CPU with the chat open and idle (CoreMedia's image queue + decoder every frame, a looper item swap every
+/// pass), nearly all of Peak's idle cost. Parked, the loop's decoded frames run as a Core Animation keyframe
+/// animation (the render server draws it; Peak itself wakes for nothing). Same frames, same phase, same timing.
+public enum GhostMarkPark {
+    /// The frames that repeat: a loop's loop range (whole clip when unset); intro_then_loop's loop range once the
+    /// intro has played. One-shots never park (they end).
+    public static func loopRange(_ pb: GhostPlayback) -> ClosedRange<Int>? {
+        switch pb.mode {
+        case .loop, .introThenLoop:
+            let r = pb.loop ?? 0...max(0, pb.frames - 1)
+            return r.upperBound < pb.frames ? r : nil
+        case .oneShot, .oneShotHold: return nil
+        }
+    }
+    /// Park only a looping mark that is playing (live), inside its loop, with every loop frame decoded, after the
+    /// rig's settle (nothing changed for AvatarIdleCache.settle).
+    public static func shouldPark(_ pb: GhostPlayback, inLoop: Bool, playing: Bool, framesReady: Bool, settledFor: Double) -> Bool {
+        loopRange(pb) != nil && inLoop && playing && framesReady && settledFor >= AvatarIdleCache.settle
+    }
+    /// A full decode of the loop range, else no park (the player keeps playing).
+    public static func complete(decoded: Int, _ pb: GhostPlayback) -> Bool {
+        loopRange(pb).map { decoded == $0.count } ?? false
+    }
+    /// The parked frame (index into the loop's frames) for an item time `t` seconds into the clip.
+    public static func frame(itemTime t: Double, _ pb: GhostPlayback) -> Int {
+        guard let r = loopRange(pb) else { return 0 }
+        return AvatarLoopPark.frame(local: t - Double(r.lowerBound) / pb.fps, frames: r.count, fps: pb.fps)
+    }
+}
