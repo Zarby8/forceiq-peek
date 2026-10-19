@@ -7,7 +7,7 @@ import Foundation
 /// that are present are kept, so a partial file like {"commandMeetingLink": true} works. Defaults:
 ///   hiddenDisplays [] (shown on every display) · globallyHidden false · hotkeyEnabled unset (the profile's hotkey.enabled)
 ///   ghostFormat unset (h264-black) · voiceEnabled unset (the profile's modules.voice) · desktopActions false
-///   commandMeetingLink false
+///   commandMeetingLink false · nextSessionPill false
 /// No file is normal (a fresh Mac): silent defaults. A file that exists but can't be used (unreadable, empty, not valid
 /// JSON, not an object, or any key of the wrong type) fails loudly and fails closed: ALL settings fall back to defaults,
 /// desktopActions / commandMeetingLink / voice are off, `loadIssue` names the path and the bad key or parse error
@@ -17,9 +17,11 @@ public final class PeakPrefs: @unchecked Sendable {
     struct Doc: Codable {
         var hiddenDisplays: [String] = []; var hotkeyEnabled: Bool? = nil; var globallyHidden = false; var ghostFormat: String? = nil
         var voiceEnabled: Bool? = nil; var desktopActions: Bool? = nil; var commandMeetingLink: Bool? = nil
+        var nextSessionPill: Bool? = nil
         init() {}
         enum CodingKeys: String, CodingKey, CaseIterable {
             case hiddenDisplays, hotkeyEnabled, globallyHidden, ghostFormat, voiceEnabled, desktopActions, commandMeetingLink
+            case nextSessionPill
         }
         /// decodeIfPresent for every key: missing / null = the default. A key of the wrong type throws (typeMismatch),
         /// which load() turns into all defaults plus a logged, visible error.
@@ -32,6 +34,7 @@ public final class PeakPrefs: @unchecked Sendable {
             voiceEnabled = try c.decodeIfPresent(Bool.self, forKey: .voiceEnabled)
             desktopActions = try c.decodeIfPresent(Bool.self, forKey: .desktopActions)
             commandMeetingLink = try c.decodeIfPresent(Bool.self, forKey: .commandMeetingLink)
+            nextSessionPill = try c.decodeIfPresent(Bool.self, forKey: .nextSessionPill)
         }
     }
 
@@ -145,6 +148,12 @@ public final class PeakPrefs: @unchecked Sendable {
     public var commandMeetingLink: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.commandMeetingLink ?? false }
         set { edit { $0.commandMeetingLink = newValue } }
+    }
+    /// The next-session pill + gap warnings (NextSessionGate; read-only, GET /api/peak/next-session). OFF by default, no
+    /// UI. Missing key or unreadable file = off, and with it off Peak never asks the engine for the feed.
+    public var nextSessionPill: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return doc.nextSessionPill ?? false }
+        set { edit { $0.nextSessionPill = newValue } }
     }
     public var globallyHidden: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.globallyHidden }

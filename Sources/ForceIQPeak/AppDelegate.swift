@@ -105,6 +105,10 @@ enum Screens {
     /// "Start a meeting with <client>" → Command's Start sheet by deep link (Command #685). OFF unless settings.json
     /// commandMeetingLink is true or FORCEIQ_PEAK_COMMAND_MEETING_LINK=1 (CommandMeetingLinkGate); no UI toggle.
     var commandMeetingLink = false
+    /// The next-session pill + gap warnings (read-only). OFF unless settings.json nextSessionPill is true; no UI toggle.
+    var nextSession: NextSessionModel!
+    /// Demo only: what Ask TRON / Copy would have put on the clipboard (the coach's real clipboard is never touched).
+    var demoClipboard = ""
     var dryRunPanel: DryRunPanel?
 
     func applicationWillFinishLaunching(_ n: Notification) {
@@ -147,6 +151,12 @@ enum Screens {
         performer = Performer(engine: engine, demo: demo)
         cards = CardStackViewModel(performer: performer, logger: log, signInTransport: demo ? nil : engine)
         cards.settingsNotice = prefs.settingsNotice
+        nextSession = NextSessionModel(transport: demo ? DemoThreePOTransport(knobs: demoKnobs) : engine,
+                                       enabled: NextSessionGate.enabled(setting: prefs.nextSessionPill), roster: p.roster.names, logger: log)
+        nextSession.onCopy = { [weak self] s in                               // clipboard only; nothing is ever sent
+            guard let self else { return }
+            if self.demo { self.demoClipboard = s } else { self.performer.copy(s) }
+        }
         threePO = ThreePOStore(transport: demo ? DemoThreePOTransport(knobs: demoKnobs) : engine, session: "peak-\(p.coachID)", logger: log)
         threePO.onCopy = { [weak self] s in self?.performer.copy(s) }
         controller.wireAsk(to: threePO)                                      // ask links prefill 3PO's field, open or collapsed
@@ -202,7 +212,9 @@ enum Screens {
         if isVoiceTour { voiceTour() }
         log.log("desktop mode=\(desktopMode.rawValue)")
         log.log("command meeting-link=\(commandMeetingLink ? "on" : "off")")
+        log.log("next-session pill=\(nextSession.enabled ? "on" : "off")")
         if meetingLinkTour { meetingLinkTourRun() }
+        if nextSessionTour { nextSessionTourRun() }
         if let t = dryRunTour { dryRunTourRun(t) }
     }
 
@@ -269,6 +281,51 @@ enum Screens {
         guard NSWorkspace.shared.open(u) else { log.log("command meeting-link open ok=0"); return "Command didn't open. Nothing started." }
         log.log("command meeting-link open ok=1")
         return "Command's Start sheet is open for \(who). Nothing starts until you tap Start there."
+    }
+
+    var nextSessionTour: Bool { demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "next-session" }
+
+    /// Next-session smoke (demo mode + FORCEIQ_PEAK_DEMO_TOUR=next-session; the flag is read from a scratch GOAT_PEAK_ROOT's
+    /// settings.json): the demo transport's mocked feed (fake clients only). Fetches once, opens the pill's card, checks
+    /// every warning offers only Ask TRON / Copy, taps both (demo: an in-memory clipboard), and checks a second tick inside
+    /// 5 min does not fetch. Logs counts and states only, never a client name.
+    func nextSessionTourRun() {
+        guard let scr = NSScreen.screens.first else { return }
+        let main = Screens.uuid(scr)
+        let c = controller!, m = nextSession!
+        func at(_ t: Double, _ name: String, _ f: @escaping @MainActor () async -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + t) { [weak self] in
+                self?.log.log("tour step=\(name) t=\(String(format: "%.3f", Date().timeIntervalSince1970))"); Task { @MainActor in await f() }
+            }
+        }
+        at(1.0, "fetch") {
+            let went = await m.tick()
+            var raw = 0
+            if case let .loaded(_, _, w) = NextSessionResult.parse(200, Data(DemoData.nextSessionJSON().utf8)) { raw = w.count }
+            let named = m.session.map { self.profile.isMyClient($0.client) && (m.pillText(now: Date()) ?? "").hasPrefix($0.client) } ?? false
+            self.log.log("tour next-session flag=\(m.enabled ? "on" : "off") fetched=\(went ? 1 : 0) outcome=\(m.result?.outcome ?? "none") pill=\(m.showsPill ? "shown" : "hidden") named=\(named ? 1 : 0) gold=\(m.gold ? 1 : 0) gaps=\(m.warnings.filter { $0.state == .present }.count) unknown=\(m.warnings.filter { $0.state == .unknown }.count) roster_dropped=\(m.enabled ? raw - m.warnings.count : 0) since=\(m.since?.state ?? "none") since_lines=\(m.since?.lines.count ?? 0)")
+        }
+        at(2.5, "open-card") {
+            c.activeDisplay = main; c.tab = .home; c.expand(); m.openCard()
+            let acts = Set(m.warnings.map { $0.actions.map(\.rawValue).joined(separator: ",") })
+            self.log.log("tour next-session card=\(m.showingCard ? "open" : "closed") warnings=\(m.warnings.count) named_all=\(m.warnings.allSatisfy { self.profile.isMyClient($0.client) && $0.text.contains($0.client) } ? 1 : 0) actions=\(acts.sorted().joined(separator: "|"))")
+        }
+        at(4.0, "ask-tron") {
+            guard let w = m.warnings.first(where: { $0.state == .present }) else { self.log.log("tour next-session no-gap"); return }
+            let r = m.perform(.askTRON, on: w)
+            self.log.log("tour next-session ask-tron copied_chars=\(self.demoClipboard.count) addressed_tron=\(self.demoClipboard.hasPrefix("TRON") ? 1 : 0) says_nothing_sent=\(r.contains("nothing was sent") ? 1 : 0) sent=0")
+        }
+        at(5.5, "copy") {
+            guard let w = m.warnings.first else { return }
+            let r = m.perform(.copy, on: w)
+            self.log.log("tour next-session copy copied_chars=\(self.demoClipboard.count) says_nothing_sent=\(r.contains("Nothing was sent") ? 1 : 0) sent=0")
+        }
+        at(7.0, "repoll") {
+            let went = await m.tick()
+            self.log.log("tour next-session repoll_within_5min=\(went ? 1 : 0) fetches=\(m.fetches)")
+        }
+        at(8.5, "collapse") { m.closeCard(); c.collapse() }
+        at(9.5, "tour-end") { self.log.log("tour next-session end fetches=\(m.fetches)") }
     }
 
     var meetingLinkTour: Bool { demo && commandMeetingLink && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "meeting-link" }
@@ -606,6 +663,7 @@ enum Screens {
             let s = DemoData.snapshot(quiet: quiet); cards.update(s, profile: profile)
             lastMeeting = isVoiceTour ? DemoData.voiceMeeting() : s.meeting
             if !demoFeedLogged { demoFeedLogged = true; log.log("feed demo=\(quiet ? "quiet" : "sample") ghost=\(cards.ghost.rawValue)") }
+            if !nextSessionTour { Task { await nextSession.tick() } }          // at most every 5 min; flag off: never
             return
         }
         guard controller.globallyVisible else { return }
@@ -614,6 +672,7 @@ enum Screens {
             cards.update(s, profile: profile)
             lastMeeting = s.meeting
             log.log("feed meeting=\(s.meeting != nil ? "yes" : "no") fixes=\(s.fixes.count) approvals=\(s.approvals.count) family=\(s.familyEnabled ? "on" : "off") ghost=\(cards.ghost.rawValue)")
+            await nextSession.tick()                                         // at most every 5 min; flag off: never
         }
     }
 
@@ -626,7 +685,7 @@ enum Screens {
             if let h = hosts[s.uuid] { h.relayout(s, geometry: geometry); continue }
             let entries = profile.isEnabled(.switcher) ? AppSwitcher.entries(profile, WorkspaceLocator()) : []
             let h = PanelHost(screen: s, geometry: geometry) { [unowned self] st in
-                AnyView(PeakRootView(controller: controller, cards: cards, panel: st, threePO: threePO, drops: dropsStore, voice: voice, switcher: entries, mark: mark, glow: glow,
+                AnyView(PeakRootView(controller: controller, cards: cards, panel: st, threePO: threePO, drops: dropsStore, voice: voice, nextSession: nextSession, switcher: entries, mark: mark, glow: glow,
                                      onSwitch: { [weak self] id in self?.controller.handle(.switchApp(id)) },
                                      onDrop: { [weak self] urls in self?.dropped(urls, uuid: s.uuid) ?? false }))
             }

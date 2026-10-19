@@ -379,6 +379,9 @@ public struct DemoThreePOTransport: ThreePOTransport {
         if path == DirectoryCache.path {            // the meeting-link smoke: a mocked Command directory, fake clients only
             return (200, Data(DemoData.directoryJSON.utf8))
         }
+        if path == NextSessionModel.path {          // the next-session smoke: a mocked feed, fake clients only
+            return (200, Data(DemoData.nextSessionJSON().utf8))
+        }
         if path.hasPrefix("/api/peak/shift-drop/status/") {
             let steps = ["waiting", "identified", "staged", "running", "succeeded"]
             let s = steps[min(knobs.statusReads, steps.count - 1)]; knobs.statusReads += 1

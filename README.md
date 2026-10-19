@@ -80,6 +80,7 @@ Command". Peak uploads nothing, and client video stays local.
 | `GET /api/peak/profile` | **new**, this Mac only: this coach's `peak` overlay section (engine/peakprofile.py), no secrets |
 | `GET /api/peak/next-meeting` | **new**, this Mac only, read-only: the next Command booking (engine/peakmeeting.py → panels.command_get) |
 | `GET /api/peak/client-directory` | **new**, this Mac only, read-only, asked only with `commandMeetingLink` on: this coach's active Command clients `[{id, display_name}]` (engine/peakdirectory.py → panels.command_get → Command `GET /clients/directory`); ids re-validated as UUIDs; nothing persisted or logged but counts |
+| `GET /api/peak/next-session` | **new**, this Mac only (403 for phones), read-only, asked only with `nextSessionPill` on, at most every 5 min: this coach's next session and gap checks (engine/peaknextsession.py → panels.command_get → Command `GET /schedule/bookings?upcoming_only=true&recent_hours=12` and `GET /invoices/`; Ghost `GET /v1/portal/{id}/meeting-bundles` and `GET /v1/ghost/client/{id}/games` for "since last met"); this coach's roster only; nothing persisted, logs are counts and states only |
 | `GET /api/live` | existing: fixes and download counts |
 | `GET /api/approvals`, `POST /api/approvals/<id>/approve\|ask\|prompt` | existing (approve without confirm only previews strong gates; Peak never sends confirm) |
 | `GET /api/family-delivery-alerts` | existing (flag off → enabled=false, no Command call) |
@@ -111,6 +112,7 @@ Unknown keys are ignored.
 | `voiceEnabled` | true/false | unset: the profile's `modules.voice` (false by default); an unreadable file: off |
 | `desktopActions` | true/false | `false` (no UI; on only matters in a scratch root with the live opt-in) |
 | `commandMeetingLink` | true/false | `false` (no UI) |
+| `nextSessionPill` | true/false | `false` (no UI) |
 
 - **No file** is normal (a new Mac, a fresh scratch root): silent defaults, nothing logged, nothing written until a setting
   changes.
@@ -185,6 +187,30 @@ Unknown keys are ignored.
   of scope). Smoke: `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=meeting-link GOAT_PEAK_ROOT=<scratch root with
   settings.json {"commandMeetingLink": true}>` types unique / ambiguous / none against a mocked directory (fake clients)
   and taps Run once (demo: nothing opens).
+- **Next-session pill and gap warnings (flag, OFF by default; read-only).** With `settings.json` `nextSessionPill: true`
+  (no UI, no env opt-in), Peak asks `GET /api/peak/next-session` at most every 5 min (30 min after a sign-in loss; 403 →
+  one dead state, no more asks) and keeps the answer in memory only. Flag off → no fetches, no pill. The engine reads
+  Command through its existing auth and back-off (`panels.command_get`, the #23 dead-after-3 gate); Peak carries no token.
+  Everything is scoped to this coach's profile and roster (`peakdrop.roster`); a booking for anyone else is dropped.
+  - **Pill:** names the client and counts down locally (`in 42m`, `now`, `started 5m ago`; a 30 s `TimelineView`, no
+    loop). Collapsed: the pill in pill mode, a gold dot in notch mode. Expanded: the pill sits on top of the home list;
+    tap it for the card.
+  - **Card (describes, never acts):** client, session time, countdown, **since last met** from Ghost (last meeting date,
+    games since, G/A/P, latest game, Ghost score average, team change), and the gaps. It says "Read-only. Nothing here
+    sends, books or changes an invoice."
+  - **Gaps** (each names the client; any *present* gap turns the pill brand gold, `Brand.goldHex`; *unknown* gaps are
+    listed with a note and leave the pill outline green; text is always pure white): (a) breakdown export missing for today's session; (b) invoice missing
+    for today's session (same client and service month, status draft/pending/paid, from Command `/invoices/`); (c) an
+    invoice pending 7 days or more (Command, never Square; 6d23h is not a gap, 7d is).
+  - **Actions:** only **Ask TRON** (copies a prompt for TRON; nothing is sent) and **Copy**. No Run, no family contact, no
+    booking or invoice change.
+  - **Unknown until Command adds** (requested via TRON): (a) a read endpoint for a booking's breakdown export, e.g.
+    `GET /schedule/bookings/{booking_id}/exports`, so (a) is always "unknown" today; (b) `invoice_id` (or `package_id`) on
+    bookings rows so an invoice can be tied to the exact session instead of client + month.
+  - Logs: `next-session outcome=… session=yes|no gaps=<present> unknown=<n> gold=yes|no fetches=<n>`, never a name. Smoke:
+    `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=next-session GOAT_PEAK_ROOT=<scratch root with settings.json
+    {"nextSessionPill": true}>` fetches a mocked feed (fake clients), opens the card, taps Ask TRON and Copy (demo: an
+    in-memory clipboard) and logs counts only.
 - **Live smoke:** `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=voice GOAT_PEAK_ROOT=<scratch root> FORCEIQ_PEAK_VOICE_FEED=<folder
   of .wav>` feeds recorded `say` clips in real time through the mic's conversion path (fake roster) and logs
   `voice turn first_confirmed_ms=… final_ms=… cpu_pct=…` per clip plus a summary.

@@ -96,6 +96,7 @@ struct PeakRootView: View {
     @ObservedObject var threePO: ThreePOStore
     @ObservedObject var drops: DropStore
     @ObservedObject var voice: VoiceController
+    @ObservedObject var nextSession: NextSessionModel
     let switcher: [SwitcherEntry]
     let mark: GhostMarkRendering
     let glow: GhostGlowRendering
@@ -233,6 +234,10 @@ struct PeakRootView: View {
             ghost(panel.collapsedSize.height - 10)
             if panel.mode == .notch {
                 Spacer().frame(width: panel.notchWidth)
+                NextSessionDot(model: nextSession)
+            } else if nextSession.showsPill {
+                NextSessionPill(model: nextSession, compact: true)          // names the client; gold on a gap
+                Spacer(minLength: 0)
             } else {
                 Text("ForceIQ Peak").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
                     .matchedGeometryEffect(id: "title", in: ns)
@@ -278,11 +283,20 @@ struct PeakRootView: View {
                     AskView(initial: ask, close: { controller.closeAsk() })
                         .id(controller.askSeq)                       // a new link while open re-seeds the field
                         .transition(.slideUpFull(reduceMotion))
+                } else if nextSession.showingCard {
+                    NextSessionCard(model: nextSession)                      // describe-first: Ask TRON / Copy only
+                        .transition(reduceMotion ? .identity : .asymmetric(insertion: .move(edge: .trailing), removal: .identity))
                 } else if let card = cards.describedCard {
                     DescriptionView(card: card, cards: cards)
                         .transition(reduceMotion ? .identity : .asymmetric(insertion: .move(edge: .trailing), removal: .identity))
                 } else {
-                    CardList(cards: cards).transition(.slideUpFull(reduceMotion))
+                    VStack(alignment: .leading, spacing: 8) {
+                        if nextSession.showsPill {
+                            NextSessionPill(model: nextSession).onTapGesture { Haptic.tick(); nextSession.openCard() }
+                        }
+                        CardList(cards: cards)
+                    }
+                    .transition(.slideUpFull(reduceMotion))
                 }
             }
             .frame(maxHeight: .infinity, alignment: .top)
