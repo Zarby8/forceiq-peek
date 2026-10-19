@@ -35,10 +35,14 @@ public struct ClientCommandContext: Sendable {
     /// "start a meeting" command resolves the client in this coach's Command directory and Run opens Command's Start
     /// sheet (CommandMeetingLink.swift). Off: the meeting card is exactly what it was.
     public var commandMeetingLink: Bool
+    /// Cua is the live press's backend (CuaGate open; only ever with desktopMode .live). The card then says so.
+    public var cua: Bool
     public init(roster: [String], meeting: MeetingRow? = nil, desktopActions: Bool = false, flowApp: String? = nil,
-                now: Date = Date(), timeZone: TimeZone = .current, desktopMode: DesktopActionMode = .off, commandMeetingLink: Bool = false) {
+                now: Date = Date(), timeZone: TimeZone = .current, desktopMode: DesktopActionMode = .off, commandMeetingLink: Bool = false,
+                cua: Bool = false) {
         self.roster = roster; self.meeting = meeting; self.desktopActions = desktopActions; self.flowApp = flowApp
         self.now = now; self.timeZone = timeZone; self.desktopMode = desktopMode; self.commandMeetingLink = commandMeetingLink
+        self.cua = cua && desktopMode == .live
     }
     /// The meeting link path applies: the flag is on and no desktop dry-run / live gate is active (those stay locate-only).
     public var usesMeetingLink: Bool { commandMeetingLink && desktopMode == .off }
@@ -206,6 +210,7 @@ public enum ClientCommands {
             c.touches = "Live for \(client): Run finds \(client)'s latest FLOW package, brings FLOW forward, then presses FLOW's "
                 + "'Code Window' menu item (an Accessibility press on that exact item, only if FLOW's front window is \(client)'s package). "
                 + "Nothing else is clicked or typed. STOP (or Esc) halts it at once, even right before the press."
+                + (ctx.cua ? " Cua makes that press (cua-driver invokes the menu item through Accessibility), and only after a second card says what it will do and what it touches and you tap its Run." : "")
             c.message = "Nothing has run. Run presses FLOW's Code Window for \(client) after those checks; STOP halts it."
             c.outputs = ["FLOW's Code Window for \(client)'s package"]
         } else if ctx.desktopMode == .dryRun || ctx.desktopMode == .live {      // live mode: everything else stays locate-only

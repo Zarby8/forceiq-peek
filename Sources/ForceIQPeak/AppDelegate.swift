@@ -140,6 +140,10 @@ enum Screens {
         prefs.reportLoad(to: log)                          // a settings.json that exists but can't be used: one loud line
         desktopMode = DesktopActionGate.mode(env: ProcessInfo.processInfo.environment, desktopActions: prefs.desktopActions, stateRoot: root.path)
         commandMeetingLink = CommandMeetingLinkGate.enabled(env: ProcessInfo.processInfo.environment, setting: prefs.commandMeetingLink)
+        // Cua backend for the one live action: only inside the live gates, with settings.json cuaActions (no UI) and the
+        // Cua env opt-in (CuaGate.env). Off: no backend exists, so nothing imports, spawns or calls Cua.
+        CuaWiring.shared.install(CuaBackend.make(env: ProcessInfo.processInfo.environment, cuaActions: prefs.cuaActions, mode: desktopMode,
+                                                 config: CuaConfig.standard(resources: Bundle.main.resourcePath, env: ProcessInfo.processInfo.environment)))
         GhostAssets.format = prefs.ghostFormat
         ThreePOAssets.log = { [weak self] e in self?.log.log(e) }
         ThreePOAssets.demoReduceMotion = demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_REDUCE_MOTION"] == "1"
@@ -201,6 +205,7 @@ enum Screens {
         }
         if isVoiceTour { voiceTour() }
         log.log("desktop mode=\(desktopMode.rawValue)")
+        log.log("desktop cua=\(CuaWiring.shared.backend == nil ? "off" : "on")")
         log.log("command meeting-link=\(commandMeetingLink ? "on" : "off")")
         if meetingLinkTour { meetingLinkTourRun() }
         if let t = dryRunTour { dryRunTourRun(t) }
@@ -223,7 +228,7 @@ enum Screens {
             guard let self else { return nil }
             return ClientCommandContext(roster: self.profile.roster.names, meeting: self.lastMeeting, desktopActions: self.prefs.desktopActions,
                                         flowApp: self.profile.apps.first { $0.name.lowercased() == "flow" }?.name, desktopMode: self.desktopMode,
-                                        commandMeetingLink: self.commandMeetingLink)
+                                        commandMeetingLink: self.commandMeetingLink, cua: CuaWiring.shared.backend != nil)
         }
         threePO.onCommandSignIn = { [weak self] n in self?.cards.signIn.update(n) }      // the existing sign-in row; no retry
         threePO.onCommandRun = { [weak self] c in self?.runCommand(c) ?? "Nothing ran." }
@@ -331,6 +336,18 @@ enum Screens {
         if dryRunPanel != nil { return "A dry run is already on screen." }
         let model = DryRunModel(client: client, action: c.action, steps: steps, live: live)
         dryRunPanel = DryRunPanel(model: model) { [weak self] in self?.dryRunPanel?.close(); self?.dryRunPanel = nil }
+        if live && CuaWiring.shared.backend != nil {          // Cua: the press waits for this panel's approval card + Run tap
+            let log = self.log
+            CuaWiring.shared.desk.onRequest { card in
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        log.log("cua approval card shown pid=\(card.pid) path=\(card.menuPath.joined(separator: ">")) t=\(String(format: "%.3f", Date().timeIntervalSince1970))")
+                        model.showCua(card)
+                    }
+                }
+            }
+            model.onCuaDecision = { ran in log.log("cua approval \(ran ? "run tapped" : "closed") t=\(String(format: "%.3f", Date().timeIntervalSince1970))") }
+        }
         let pace = Int(ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DRYRUN_PACE_MS"] ?? "") ?? 0
         let env = ProcessInfo.processInfo.environment
         let arm = Int(env["FORCEIQ_PEAK_LIVE_ARM_MS"] ?? "") ?? 1500                // the window to STOP before the press
@@ -348,6 +365,14 @@ enum Screens {
                     model.finish(report)
                     if let p = model.stopPressedAt { log.log(String(format: "dryrun stop pressed t=%.3f", p.timeIntervalSince1970)) }
                     log.log("dryrun summary total_ms=\(report.totalMs) \(report.summary)")
+                    if live, CuaWiring.shared.backend != nil, let dir = env["FORCEIQ_PEAK_CUA_PROOF_DIR"], !dir.isEmpty,
+                       let front = NSWorkspace.shared.frontmostApplication, front.bundleIdentifier == steps.first?.bundleID,
+                       ProductionGuard.reason(pid: front.processIdentifier, bundleID: front.bundleIdentifier, bundlePath: front.bundleURL?.path,
+                                              protectedPids: ProductionGuard.protectedPids(env: env)) == nil {
+                        let why = WindowCapture.captureRedacted(pid: front.processIdentifier, names: self.profile.roster.names + [client], strict: true,
+                                                                outDir: dir, label: report.pressed ? "after-press" : "after-run")
+                        log.log("cua capture \(why ?? "saved (window only, redacted)")")
+                    }
                 }
             }
         }

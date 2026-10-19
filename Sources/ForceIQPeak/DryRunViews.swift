@@ -14,6 +14,9 @@ import SwiftUI
     @Published var status: [Int: Status] = [:]
     @Published var running = true
     @Published var summary: String?
+    /// Cua backend only: the approval card the presser is waiting on (what Cua will do, what it touches). Run approves it.
+    @Published var cuaCard: CuaApprovalCard?
+    var onCuaDecision: ((Bool) -> Void)?
     var stopPressedAt: Date?
 
     init(client: String, action: String, steps: [DryRunStep], live: Bool = false) {
@@ -52,7 +55,22 @@ import SwiftUI
         }
     }
 
-    func finish(_ r: DryRunReport) { running = false; summary = r.summary }
+    func finish(_ r: DryRunReport) { running = false; summary = r.summary; cuaCard = nil }
+
+    func showCua(_ card: CuaApprovalCard) { cuaCard = card }
+    /// The card's Run: an explicit tap, the only way a Cua run is approved.
+    func approveCua() {
+        guard let c = cuaCard else { return }
+        let ok = CuaWiring.shared.desk.approve(cardID: c.id, source: .tap)
+        cuaCard = nil
+        onCuaDecision?(ok)
+    }
+    func declineCua() {
+        guard let c = cuaCard else { return }
+        CuaWiring.shared.desk.decline(cardID: c.id)
+        cuaCard = nil
+        onCuaDecision?(false)
+    }
 }
 
 struct DryRunView: View {
@@ -91,6 +109,24 @@ struct DryRunView: View {
                     }
                 }
             }
+            if let card = model.cuaCard {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(card.title).font(.system(size: 13, weight: .heavy)).foregroundStyle(.white)
+                    Text("What it does: " + card.does).font(.system(size: 11)).foregroundStyle(Color.white)
+                    Text("What it touches: " + card.touches).font(.system(size: 11)).foregroundStyle(Color.white)
+                    HStack(spacing: 10) {
+                        Button(action: { model.approveCua() }) {
+                            Text("Run").font(.system(size: 14, weight: .black)).foregroundStyle(.black)
+                                .padding(.horizontal, 20).padding(.vertical, 6)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(Color.peakGold))
+                        }
+                        .buttonStyle(.plain).accessibilityLabel("Run").accessibilityIdentifier("peak-cua-run")
+                        Button("Cancel", action: { model.declineCua() }).accessibilityIdentifier("peak-cua-cancel")
+                    }
+                }
+                .padding(10)
+                .background(RoundedRectangle(cornerRadius: 10).stroke(Color.peakGold, lineWidth: 1.5))
+            }
             if let s = model.summary {
                 Text(s).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.peakGold).lineLimit(5)
             }
@@ -117,7 +153,7 @@ struct DryRunView: View {
     private var escMonitors: [Any] = []
     init(model: DryRunModel, onClose: @escaping () -> Void) {
         let host = NSHostingView(rootView: DryRunView(model: model, onClose: onClose))
-        let size = NSSize(width: 520, height: 330)
+        let size = NSSize(width: 520, height: 470)
         let scr = NSScreen.screens.first?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         panel = NSPanel(contentRect: NSRect(x: scr.maxX - size.width - 24, y: scr.maxY - size.height - 24, width: size.width, height: size.height),
                         styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)

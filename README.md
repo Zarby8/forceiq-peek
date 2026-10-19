@@ -110,6 +110,7 @@ Unknown keys are ignored.
 | `ghostFormat` | `"h264-black"` / `"hevc-alpha"` | `"h264-black"` |
 | `voiceEnabled` | true/false | unset: the profile's `modules.voice` (false by default); an unreadable file: off |
 | `desktopActions` | true/false | `false` (no UI; on only matters in a scratch root with the live opt-in) |
+| `cuaActions` | true/false | `false` (no UI; the Cua backend, only inside the three live gates plus `FORCEIQ_PEAK_CUA_LIVE=1`) |
 | `commandMeetingLink` | true/false | `false` (no UI) |
 
 - **No file** is normal (a new Mac, a fresh scratch root): silent defaults, nothing logged, nothing written until a setting
@@ -201,6 +202,37 @@ Unknown keys are ignored.
   (or `--out`). No screen captures. The script never activates, quits or opens a FLOW (only Peak's step 2 brings the
   isolated FLOW forward, by pid) and never changes the installed Peak, its settings or the engine. Accessibility for the terminal is required (the helper `scripts/real_press_ax.swift` is
   compiled into `$TMPDIR`).
+- **Cua backend (flag, OFF by default, no UI; waits for Chris's GO on his real setup).** [Cua](https://github.com/trycua/cua)'s
+  `cua-driver` (MIT, pinned `0.36.0` with hashes in `peak/cua/requirements.lock`) can make the ONE live press instead of
+  Peak's own AXPress. It lives in its own venv, `~/ForceIQ/.venv-peak-cua` (`peak/cua/install.sh`: `uv pip sync
+  --require-hashes`, TMPDIR `~/ForceIQ/peak-tmp/cua/`), never the test venv or system Python. It is on only when all four
+  hold: a scratch root (not `~/ForceIQ/peak`), `desktopActions: true`, `FORCEIQ_PEAK_DESKTOP_LIVE=1`, and `cuaActions: true`
+  plus `FORCEIQ_PEAK_CUA_LIVE=1` (PeakCore `CuaGate`; log `desktop cua=on|off`). Off, Peak never imports, spawns or calls
+  Cua (`CuaBackend.make` returns nil, `spawnCount` stays 0).
+  - **One choke point.** Cua runs only from `DesktopPresser.pressCodeWindow`, after the same frontmost, production and
+    PressGuard checks. `CuaBackend.invokeMenu` needs a `PressAuthorization` (minted only by re-running every guard) and an
+    `ApprovalTicket` (minted only when the approval card's Run is tapped); neither can be built elsewhere.
+  - **Approval card first.** Before every Cua run Peak shows a card: what it does ("Cua will press FLOW's Tools ›
+    Code Window"), what it touches (that FLOW's pid and bundle id; no files, no other app, no database, no network), then
+    Run / Cancel. Only a tap on that card's Run (`peak-cua-run`) mints the ticket; voice or a link never does; STOP,
+    Cancel or 2 minutes without a tap cancel it. After the tap every guard runs again before the child starts.
+  - **Production FLOW refused** as before (pid 11311 / any production pid, `com.forceiq.flowai`, `/Applications/FLOW.app`),
+    and again inside the Cua child (`peak/cua/peak_cua_runner.py`) before `cua_driver` is imported and against the live
+    process list after it. The child runs Cua embedded (never the CuaDriver.app daemon), calls only `list_apps`,
+    `list_windows`, `invoke_menu` (fails closed, never falls back to pixels), never requests permissions, and gets a
+    minimal environment (no keys or tokens, telemetry off).
+  - **STOP** kills the child's whole process group (SIGKILL) and reaps it; `CuaBackendTests` measures ≤ 100 ms.
+  - **Captures** are window-only (`screencapture -l <window id>`), opt-in for scratch proofs
+    (`FORCEIQ_PEAK_CUA_PROOF_DIR`), read with Vision and blacked out (client names, or strict: every line except menu
+    words) before anything is kept; nothing is kept if the text can't be read. No capture or title goes to Claude.
+  - **Live smoke** (`peak/scripts/cua_live_smoke.sh`, same refusals and AX proof as the real-press smoke):
+    ```
+    peak/scripts/cua_live_smoke.sh --pid <isolated FLOW pid> --package <its .flowaipkg> --mode press
+    peak/scripts/cua_live_smoke.sh --pid <isolated FLOW pid> --package <same> --mode stop   # STOP mid Cua run
+    ```
+    `--mode stop` holds the child in flight (`FORCEIQ_PEAK_CUA_SMOKE_HOLD_MS=3000`, after its checks, before Cua is
+    imported) and passes on `stop_latency_ms` ≤ 100, the child gone, no press. If an isolated FLOW restores an empty
+    window state instead of opening its package, launch it with `-ApplePersistenceIgnoreState YES` (this process only).
 - **Command meeting link (flag, OFF by default; waits for Command #685's deploy).** With `settings.json`
   `commandMeetingLink: true` (no UI) or `FORCEIQ_PEAK_COMMAND_MEETING_LINK=1`, and desktop actions off, "start a meeting
   with <client>" resolves the client in this coach's Command directory (`GET /api/peak/client-directory`, kept in memory

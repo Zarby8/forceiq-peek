@@ -7,7 +7,7 @@ import Foundation
 /// that are present are kept, so a partial file like {"commandMeetingLink": true} works. Defaults:
 ///   hiddenDisplays [] (shown on every display) · globallyHidden false · hotkeyEnabled unset (the profile's hotkey.enabled)
 ///   ghostFormat unset (h264-black) · voiceEnabled unset (the profile's modules.voice) · desktopActions false
-///   commandMeetingLink false
+///   commandMeetingLink false · cuaActions false
 /// No file is normal (a fresh Mac): silent defaults. A file that exists but can't be used (unreadable, empty, not valid
 /// JSON, not an object, or any key of the wrong type) fails loudly and fails closed: ALL settings fall back to defaults,
 /// desktopActions / commandMeetingLink / voice are off, `loadIssue` names the path and the bad key or parse error
@@ -16,10 +16,10 @@ import Foundation
 public final class PeakPrefs: @unchecked Sendable {
     struct Doc: Codable {
         var hiddenDisplays: [String] = []; var hotkeyEnabled: Bool? = nil; var globallyHidden = false; var ghostFormat: String? = nil
-        var voiceEnabled: Bool? = nil; var desktopActions: Bool? = nil; var commandMeetingLink: Bool? = nil
+        var voiceEnabled: Bool? = nil; var desktopActions: Bool? = nil; var commandMeetingLink: Bool? = nil; var cuaActions: Bool? = nil
         init() {}
         enum CodingKeys: String, CodingKey, CaseIterable {
-            case hiddenDisplays, hotkeyEnabled, globallyHidden, ghostFormat, voiceEnabled, desktopActions, commandMeetingLink
+            case hiddenDisplays, hotkeyEnabled, globallyHidden, ghostFormat, voiceEnabled, desktopActions, commandMeetingLink, cuaActions
         }
         /// decodeIfPresent for every key: missing / null = the default. A key of the wrong type throws (typeMismatch),
         /// which load() turns into all defaults plus a logged, visible error.
@@ -32,6 +32,7 @@ public final class PeakPrefs: @unchecked Sendable {
             voiceEnabled = try c.decodeIfPresent(Bool.self, forKey: .voiceEnabled)
             desktopActions = try c.decodeIfPresent(Bool.self, forKey: .desktopActions)
             commandMeetingLink = try c.decodeIfPresent(Bool.self, forKey: .commandMeetingLink)
+            cuaActions = try c.decodeIfPresent(Bool.self, forKey: .cuaActions)
         }
     }
 
@@ -138,6 +139,12 @@ public final class PeakPrefs: @unchecked Sendable {
     public var desktopActions: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.desktopActions ?? false }
         set { edit { $0.desktopActions = newValue } }
+    }
+    /// Cua (trycua cua-driver) as the backend for the one live desktop action. OFF by default, no UI. It matters only
+    /// inside the live gates (scratch root, desktopActions, FORCEIQ_PEAK_DESKTOP_LIVE=1) and with FORCEIQ_PEAK_CUA_LIVE=1
+    /// (CuaGate). Missing key or unreadable file = off.
+    public var cuaActions: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return doc.cuaActions ?? false }
     }
     /// "Start a meeting with <client>" opens Command's Start sheet by deep link (Command #685) instead of the room page /
     /// schedule. OFF by default, no UI (see CommandMeetingLinkGate; env FORCEIQ_PEAK_COMMAND_MEETING_LINK=1 also turns it on).

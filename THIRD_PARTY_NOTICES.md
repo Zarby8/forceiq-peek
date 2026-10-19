@@ -7,8 +7,10 @@
 | Parakeet TDT 0.6B v3 (NVIDIA), Core ML repack [FluidInference/parakeet-tdt-0.6b-v3-coreml](https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v3-coreml) | Voice: the speech model (downloaded on first enable into `<Peak root>/models`, not bundled) | CC-BY-4.0 | HF commit `7dd20fe6b1797d35f5e3307e8b1732d9a178edfe`; upstream [nvidia/parakeet-tdt-0.6b-v3](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3) @ `541d1f99c6b0c3cd0b11a95167540bb8edefd82b` |
 | Parakeet CTC 110M (NVIDIA), Core ML repack [FluidInference/parakeet-ctc-110m-coreml](https://huggingface.co/FluidInference/parakeet-ctc-110m-coreml) | Voice: keyword spotter for the client-name boost | CC-BY-4.0 | HF commit `accdafd8cf8a2ff1cabe3c11e54416b405d409aa` |
 
+| [trycua/cua](https://github.com/trycua/cua) `cua-driver` (PyPI) | Optional desktop-action backend: one `invoke_menu` through Accessibility, run in Peak's separate venv `~/ForceIQ/.venv-peak-cua` (not bundled, not linked into Peak) | MIT (Copyright 2025 Cua AI, Inc.) | exact `0.36.0`, sha256-pinned in `peak/cua/requirements.lock`; zero Python dependencies |
 Not adopted: DynamicNotchKit (MIT; reference only), twostraws/Inferno (MIT; no shader copied, the glow is Peak's own).
-No code from boring.notch, DynamicNotch or mew-notch (GPL-3) is used. Nothing in Peak is GPL: FluidAudio is Apache-2.0 and
+Cua's `cua-computer-server` / agent stack is not used (it pulls `pynput`, LGPL-3); the `cua-driver` wheel's native
+library embeds only permissively licensed Rust crates (MIT / Apache-2.0 / BSD / Zlib / Unicode). No code from boring.notch, DynamicNotch or mew-notch (GPL-3) is used. Nothing in Peak is GPL: FluidAudio is Apache-2.0 and
 its own third-party notices (fastcluster BSD-2, VBx Apache-2.0, NemoTextProcessing Apache-2.0, TTS front-ends Apache/MIT/BSD;
 UniDic is tri-licensed GPL/LGPL/BSD and taken under BSD, and is used only by FluidAudio's Japanese TTS, which Peak never calls)
 ship in its checkout under `ThirdPartyLicenses/`. No NVIDIA Open Model License weights are used (no Parakeet EOU, Nemotron

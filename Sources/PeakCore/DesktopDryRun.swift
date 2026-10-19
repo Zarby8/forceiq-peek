@@ -143,11 +143,13 @@ public struct DryRunReport: Equatable, Sendable {
     public var totalMs: Int
     public var live = false
     public var pressed: Bool { results.contains { $0.press?.pressed == true } }
+    /// The press went through the Cua backend (cua-driver invoke_menu) rather than Peak's own AXPress.
+    public var viaCua: Bool { results.contains { $0.press?.pressed == true && $0.press?.detail.hasPrefix("cua pressed") == true } }
     public var summary: String {
         let located = results.filter { $0.located != nil }.count
         let head = live
             ? "Live run for \(client): \(located) of \(results.count) step(s) located. "
-                + (pressed ? "Pressed FLOW's Code Window once (AXPress); nothing else was clicked, typed or opened."
+                + (pressed ? "Pressed FLOW's Code Window once (\(viaCua ? "Cua, through Accessibility" : "AXPress")); nothing else was clicked, typed or opened."
                            : "Nothing was pressed, clicked, typed or opened.")
             : "Dry run for \(client): \(located) of \(results.count) step(s) located. Nothing was clicked, typed or opened."
         guard let s = stop else { return head }

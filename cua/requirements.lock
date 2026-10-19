@@ -1,0 +1,7 @@
+cua-driver==0.36.0 \
+    --hash=sha256:763cb8fd7ac4a9d900417cb1a9bfaca947a564ad9f1cb1b1b41d9a21c485fc38 \
+    --hash=sha256:80452c4f7a7547456f95d9e925f8af23d757a4b4e2071928b1d6afe2671c76a8 \
+    --hash=sha256:a6b81e8809838c0dbae91bd9c35d9808f82fe193d5ef347503426c2203b8e35b \
+    --hash=sha256:ba332f072bfdb14e2d0e2f8baaa4dcd2784c9574d5cf1abc094a58a26b5f1881 \
+    --hash=sha256:ca04c7f73e0dba0d0d08db68d3a3f1335ea6b5fc4f47407ddebf5afa4408b067
+    # via -r cua/requirements.in
