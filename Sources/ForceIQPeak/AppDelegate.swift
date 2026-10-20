@@ -833,8 +833,7 @@ enum Screens {
         guard controller.globallyVisible else { return }
         Task { @MainActor in
             var s = await engine.snapshot()
-            await ready.tick()
-            s.ready = ready.feed
+            s.ready = ready.feed                                             // the last good read; a new one lands on the next refresh
             cards.update(s, profile: profile)
             considerAlert(s)
             lastMeeting = s.meeting
@@ -842,6 +841,7 @@ enum Screens {
             _ = briefCache.ingest(s, now: Date())            // last good read per source, for a later brief
             log.log("feed meeting=\(s.meeting != nil ? "yes" : "no") fixes=\(s.fixes.count) approvals=\(s.approvals.count) family=\(s.familyEnabled ? "on" : "off") ghost=\(cards.ghost.rawValue)")
             await nextSession.tick()                                         // at most every 5 min; flag off: never
+            await ready.tick()                                               // at most every 10 min, last: a slow read never delays the above
         }
     }
 
