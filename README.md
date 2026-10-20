@@ -17,6 +17,11 @@ right, left and up and blinks; working scans; typing reads down; the receipt bli
 sleeps (a collapsed idle pill) or Reduce Motion is on, the `TimelineView` is paused, so no frame is scheduled. The launch log
 says `mark=peek-eyes`. `FORCEIQ_PEAK_MARK=bob` brings back the BOB loops below (the assets are still bundled).
 
+**App icon and About art.** `Resources/AppIcon.icns` (the eyes on a black squircle with a green ring and a gold edge), named by
+`CFBundleIconFile` in Info.plist and copied in by `build.sh`. The About panel is the standard one, which shows the app icon, so it
+is the About art too. Regenerate with `python3 peak/scripts/make_icon.py` (Pillow, macOS `iconutil`); the .icns is committed, so a
+build never needs it. Before this the bundle carried no icon at all (Finder and About showed the generic default).
+
 **BOB mark (opt-in via `FORCEIQ_PEAK_MARK=bob`):** BOB Motion **ForceIQ-Peek-BOB-v1, v1.1** (idle re-timed to a seamless 60-frame loop), h264 on black,
 masked to a circle, played with AVPlayerLooper and driven by the pack's MANIFEST.json. See `Resources/ASSETS.md`.
 Its glow breathes as a Core Animation layer animation (`CAGlowView`, curve in `GlowBreath`): the render server runs

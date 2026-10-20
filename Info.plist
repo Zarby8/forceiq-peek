@@ -6,6 +6,8 @@
 	<string>ForceIQ Peek</string>
 	<key>CFBundleName</key>
 	<string>ForceIQ Peek</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleExecutable</key>
 	<string>ForceIQPeak</string>
 	<key>CFBundleIdentifier</key>

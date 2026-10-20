@@ -13,6 +13,8 @@ APPB="build/ForceIQ Peek.app"
 rm -rf "$APPB.new" && mkdir -p "$APPB.new/Contents/MacOS" "$APPB.new/Contents/Resources"
 cp "$BIN/ForceIQPeak" "$APPB.new/Contents/MacOS/ForceIQPeak"
 cp Info.plist "$APPB.new/Contents/Info.plist"
+# The app icon (the eyes mark; scripts/make_icon.py writes it). It is also the About panel art: the standard About panel shows it.
+[ -f Resources/AppIcon.icns ] && cp Resources/AppIcon.icns "$APPB.new/Contents/Resources/AppIcon.icns"
 printf 'APPL????' > "$APPB.new/Contents/PkgInfo"
 # BOB Motion ForceIQ-Peek-BOB-v1 (h264-black, 64 + 128 px, + its state data). See Resources/ASSETS.md for source + MD5s.
 # Missing -> the app shows the labelled vector placeholder.
