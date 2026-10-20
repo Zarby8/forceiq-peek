@@ -221,6 +221,26 @@ Unknown keys are ignored.
   boost runs once at stop against the live roster (spotter rescue OFF). Models (about 560 MB) download once, on first
   enable, into `<Peak root>/models` (pinned HF commits; progress line in the 3PO field and Settings). No NVIDIA Open Model
   License models. Audio stays in memory on this Mac: never written, never uploaded.
+- **Where the words appear (collapsed).** Inline in the menu bar row, at exactly the notch's height: the earliest words end at
+  the notch's left side and the rest continue on its right, newest at the far right with a gold caret; older words scroll off
+  whole (a leading ellipsis). Widths are measured with the real 13 pt font, so wide letters never become "Check th…".
+  Nothing hangs below the notch and nothing touches the green ring (the sheet's own field shows the words when it is open).
+  On a display without a notch (the Studio Displays) the pill widens in place to one line of the newest words. A click on the
+  caption stops dictation. Demo proof: `FORCEIQ_PEAK_DEMO=1 FORCEIQ_PEAK_DEMO_TOUR=voice FORCEIQ_PEAK_VOICE_FEED=<folder of
+  clips named *-notch-*.wav> GOAT_PEAK_ROOT=<scratch root with models/>`; add `FORCEIQ_PEAK_DEMO_FAKE_NOTCH=1` to draw the
+  13" notch layout on a Mac whose built-in display is closed.
+- **Dictate shortcut.** Control-Option-D (changeable in Settings): a press starts, the next press stops. It does nothing until
+  Voice is on. A click on the mic button, `forceiq-peak://voice` and the Raycast command toggle the same way.
+- **If the speech model won't load**, dictation falls back to Apple Speech, ON-DEVICE ONLY (`requiresOnDeviceRecognition`):
+  if this Mac can't recognize on-device, Peek says so and sends audio nowhere. Settings shows why Apple Speech is in use; the
+  name boost is Parakeet-only, so the fallback has no boost. First use asks for Speech Recognition access. Log:
+  `voice fallback=apple-speech reason=<error type>`. Demo-only `FORCEIQ_PEAK_VOICE_FORCE_FALLBACK=1` exercises it.
+- **Measured on the M5 (release build, 11 s dictation, 33 words, spoken clip fed through the same audio path as the mic):**
+  model load 28 s the first time (Core ML compiles for the ANE), 0.4 s after; first confirmed words about 0.8 to 1.0 s after
+  speech starts; final text 126 to 190 ms after stop (decode 40 to 70 ms plus the 85 to 115 ms name boost); about 20 to 35 %
+  of one core while listening. (The 0.5 s in the bake-off was the first unconfirmed partial.) FluidAudio's
+  `SlidingWindowAsrManager` (`.streaming`: 11 s chunks, 1 s hypothesis updates) was tried in the same harness and returned no text
+  for 40 of 40 short utterances, so Peek keeps its own 160 ms sliding re-decode with LocalAgreement-2.
 - **Live words** in the notch / pill (when Peek is collapsed) and in the 3PO field: confirmed words only (the prefix two
   decodes agree on, about 0.5 s in), pure white at full opacity from the first word (never dimmed or gray); until the
   final pass a gold caret (▍) trails the last word, then it goes. 'Listening…' is pure white too. Client names

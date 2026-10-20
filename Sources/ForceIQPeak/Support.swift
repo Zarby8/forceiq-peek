@@ -40,6 +40,11 @@ import PeakCore
 }
 
 // ───────────────────────────── hotkey: KeyboardShortcuts 3.1.0 (MIT); default from the profile (ctrl+opt+G) ─────────────────────────────
+extension KeyboardShortcuts.Name {
+    /// Dictation toggle (a press starts, the next press stops). Default Control-Option-D; does nothing unless Voice is on.
+    static let dictate = KeyboardShortcuts.Name("dictatePeek", initial: .init(.d, modifiers: [.control, .option]))
+}
+
 @MainActor enum PeakHotkeyName {
     static var current = KeyboardShortcuts.Name("togglePeak")
     static func make(_ p: CoachProfile) -> KeyboardShortcuts.Name {

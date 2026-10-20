@@ -226,9 +226,9 @@ struct PeakRootView: View {
 
     var isExpanded: Bool { controller.expanded && controller.activeDisplay == panel.uuid }
     var showChat: Bool { isExpanded && !controller.presenting && controller.tab == .threePO && controller.profile.isEnabled(.threePO) }
-    var progressShowing: Bool { panel.mode == .notch && panel.visible && !isExpanded && !peekShowing && cards.progress.working }
+    var progressShowing: Bool { panel.mode == .notch && panel.visible && !isExpanded && !peekShowing && !captionShowing && cards.progress.working }
     var peekShowing: Bool { !isExpanded && controller.peek != nil && controller.peekDisplay == panel.uuid }
-    var surface: PeakLayout.Surface { isExpanded ? (showChat ? .chat : .home) : (peekShowing ? .peek : .collapsed) }
+    var surface: PeakLayout.Surface { isExpanded ? (showChat ? .chat : .home) : ((peekShowing || captionShowing) ? .peek : .collapsed) }
     var shellRect: CGRect {
         var r = panel.local(panel.layout.hitRect(surface))
         if panel.mode == .notch && isExpanded { r = r.insetBy(dx: -earRadius, dy: 0) }   // ears sit outside the sheet
@@ -238,8 +238,10 @@ struct PeakRootView: View {
     var topRadius: CGFloat { panel.mode == .notch ? earRadius : (isExpanded ? 22 : panel.collapsedSize.height / 2) }
     var bottomRadius: CGFloat { isExpanded ? 24 : (panel.mode == .notch ? 12 : panel.collapsedSize.height / 2) }
     var shape: PeakShellShape { PeakShellShape(rect: shellRect, topRadius: topRadius, bottomRadius: bottomRadius, notch: panel.mode == .notch) }
-    var hoverLift: Bool { HoverLift.applies(mode: panel.mode, hovering: panel.hovering, expanded: isExpanded || peekShowing, reduceMotion: reduceMotion) }
-    var voiceStrip: Bool {
+    var hoverLift: Bool { HoverLift.applies(mode: panel.mode, hovering: panel.hovering, expanded: isExpanded || peekShowing || captionShowing, reduceMotion: reduceMotion) }
+    /// Dictating with the sheet closed: the live words, inline in the menu bar row (the notch's own height, centered on it; on a
+    /// display without a notch the pill widens in place). Nothing hangs below it.
+    var captionShowing: Bool {
         !isExpanded && !controller.presenting && panel.visible && voice.enabled && controller.activeDisplay.map { $0 == panel.uuid } ?? true
             && (voice.phase.isListening || voice.phase == .finishing || voice.handing)
     }
@@ -256,18 +258,11 @@ struct PeakRootView: View {
                     .padding(.leading, r.minX).padding(.top, r.minY)
                     .allowsHitTesting(false)
             }
-            if voiceStrip {                // dictating with Peek collapsed (Raycast / the deep link): the words under the notch
-                let r = panel.local(panel.layout.collapsed)
-                VoiceStrip(voice: voice).fixedSize(horizontal: false, vertical: true).frame(width: 440)
-                    .position(x: r.midX, y: r.maxY + 26)
-                    .transition(reduceMotion ? .identity : .move(edge: .top).combined(with: .sharpen(false)))
-                    .allowsHitTesting(false)
-            }
         }
-        .animation(Motion.quick(reduceMotion), value: voiceStrip)
         .contentShape(shape)
         .onTapGesture {
-            if peekShowing { Haptic.level(); controller.openPeek() }
+            if captionShowing { Haptic.level(); voice.toggle() }                 // a click stops dictation (toggle only)
+            else if peekShowing { Haptic.level(); controller.openPeek() }
             else if !isExpanded { Haptic.level(); controller.activeDisplay = panel.uuid; controller.expand() }
         }
         .scaleEffect(hoverLift ? PeakMotion.hoverScale : 1, anchor: UnitPoint(x: (shellRect.midX) / max(1, panel.layout.canvas.width), y: 0))
@@ -323,6 +318,11 @@ struct PeakRootView: View {
                 let r = panel.local(panel.layout.hitRect(surface))
                 expanded.frame(width: r.width, height: r.height, alignment: .top)
                     .padding(.leading, r.minX).padding(.top, r.minY)
+                    .transition(Motion.sheet(reduceMotion))
+            } else if captionShowing {
+                let p = panel.local(panel.layout.peek)
+                VoiceCaptionInline(voice: voice, notchWidth: panel.notchWidth).frame(width: p.width, height: p.height)
+                    .padding(.leading, p.minX).padding(.top, p.minY)
                     .transition(Motion.sheet(reduceMotion))
             } else if peekShowing, let a = controller.peek {
                 let p = panel.local(panel.layout.peek)
@@ -864,11 +864,15 @@ struct SettingsView: View {
                 section("Voice and shortcut") {
                     Toggle(isOn: Binding(get: { voice.enabled }, set: { setVoice($0) })) { label("Voice (opt-in): talk to 3PO") }
                     note("Press the mic in 3PO (or forceiq-peak://voice) to start, press again to stop. Audio stays on this Mac; the speech model (about 560 MB) downloads once into your Peek folder.")
+                    if voice.enabled, let n = voice.engineNote {
+                        Text(n).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.peakGold).fixedSize(horizontal: false, vertical: true)
+                    }
                     if voice.enabled, let l = voice.phase.line {
                         Text(l).font(.system(size: 11, weight: .semibold)).foregroundStyle({ if case .failed = voice.phase { return Color.peakGold }; return Color.peakGreen }())
                     }
                     Toggle(isOn: Binding(get: { controller.hotkeyEnabled }, set: { controller.setHotkeyEnabled($0) })) { label("Built-in hotkey") }
                     HStack { label("Show / hide shortcut"); HotkeyRecorder() }
+                    HStack { label("Dictate shortcut (press to start, press to stop)"); DictateRecorder() }
                     note("Raycast and anything else on this Mac can also use forceiq-peak:// links. Right-click the PEEK wing for the Peek menu.")
                 }
             }

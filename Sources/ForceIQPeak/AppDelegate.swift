@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import CoreGraphics
+import KeyboardShortcuts
 import PeakCore
 import SwiftUI
 
@@ -35,8 +36,21 @@ enum Screens {
               let str = CFUUIDCreateString(nil, u) as String? else { return "UNKNOWN-\(s.localizedName)" }
         return str.uppercased()
     }
+    /// Demo smoke only (FORCEIQ_PEAK_DEMO=1 + FORCEIQ_PEAK_DEMO_FAKE_NOTCH=1): the main display pretends to be a 13" MacBook Pro's
+    /// 250 x 43 pt notch display, so the notch layout can be drawn and checked on a Mac whose built-in display is closed.
+    static var fakeNotch: Bool {
+        let e = ProcessInfo.processInfo.environment
+        return e["FORCEIQ_PEAK_DEMO"] == "1" && e["FORCEIQ_PEAK_DEMO_FAKE_NOTCH"] == "1"
+    }
     static func descriptor(_ s: NSScreen) -> ScreenDescriptor {
-        ScreenDescriptor(uuid: uuid(s), name: s.localizedName, frame: s.frame, safeAreaTop: s.safeAreaInsets.top,
+        if fakeNotch, s == NSScreen.screens.first {
+            let f = s.frame, w: CGFloat = 250, h: CGFloat = 43
+            let left = CGRect(x: f.minX, y: f.maxY - h, width: (f.width - w) / 2, height: h)
+            let right = CGRect(x: f.midX + w / 2, y: f.maxY - h, width: (f.width - w) / 2, height: h)
+            return ScreenDescriptor(uuid: uuid(s), name: s.localizedName, frame: f, safeAreaTop: h, auxiliaryTopLeft: left,
+                                    auxiliaryTopRight: right, menuBarHeight: s.frame.maxY - s.visibleFrame.maxY)
+        }
+        return ScreenDescriptor(uuid: uuid(s), name: s.localizedName, frame: s.frame, safeAreaTop: s.safeAreaInsets.top,
                          auxiliaryTopLeft: s.auxiliaryTopLeftArea, auxiliaryTopRight: s.auxiliaryTopRightArea,
                          menuBarHeight: s.frame.maxY - s.visibleFrame.maxY)
     }
@@ -266,7 +280,11 @@ enum Screens {
     // ── voice (toggle dictation into 3PO; opt-in) ──
     func setUpVoice(_ p: CoachProfile, root: URL) {
         voice = VoiceController(root: root, logger: log)
-        voice.onListening = { [weak self] on in self?.threePO.micOn = on }       // drives the droid's 'listening'
+        voice.onListening = { [weak self] on in
+            self?.threePO.micOn = on                                              // drives the droid's 'listening'
+            if on { self?.controller.dismissPeek() }                              // the live words take the notch row
+        }
+        KeyboardShortcuts.onKeyUp(for: .dictate) { MainActor.assumeIsolated { [weak self] in self?.voice.toggle() } }   // press starts, press stops
         voice.onFinal = { [weak self] text in
             guard let self else { return }
             if !(self.controller.expanded && self.controller.tab == .threePO) {

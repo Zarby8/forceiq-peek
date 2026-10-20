@@ -24,6 +24,8 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Peek listens only while you have pressed the mic (press again to stop) and turns your words into a 3PO message. Audio stays on this Mac and is never saved or uploaded.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Peek uses Apple's on-device speech recognition only if its own speech model can't load. Audio stays on this Mac and is never saved or uploaded.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

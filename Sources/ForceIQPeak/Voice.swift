@@ -234,6 +234,12 @@ actor PeakDictation {
     /// The final words, pure white, held in the field for a beat before they go to 3PO like a typed message.
     @Published private(set) var handing = false
     let engine = PeakDictation()
+    /// Who is dictating right now: Parakeet, or Apple's on-device Speech after Parakeet failed to load.
+    private(set) var dictation: any DictationEngine
+    private let appleSpeech = AppleSpeechDictation()
+    @Published private(set) var engineKind: VoiceEngineKind = .parakeet
+    /// Plain words saying why Apple Speech is in use (Settings shows it); nil on Parakeet.
+    @Published private(set) var engineNote: String?
     let root: URL
     weak var logger: PeakLogging?
     var roster: [String] = []
@@ -253,7 +259,7 @@ actor PeakDictation {
     private var tStart = 0.0, tStop = 0.0, tFirst: Double?, cpuStart = 0.0
     private(set) var results: [(first: Double?, firstFromOnset: Double?, final: Double, cpu: Double)] = []
 
-    init(root: URL, logger: PeakLogging?) { self.root = root; self.logger = logger }
+    init(root: URL, logger: PeakLogging?) { self.root = root; self.logger = logger; dictation = engine }
 
     nonisolated static let dictionaryURL = URL(fileURLWithPath: "/usr/share/dict/web2")
 
@@ -286,6 +292,9 @@ actor PeakDictation {
         let me = WeakRef(self)
         Task { [engine] in
             do {
+                if ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO"] == "1", ProcessInfo.processInfo.environment["FORCEIQ_PEAK_VOICE_FORCE_FALLBACK"] == "1" {
+                    throw ForcedVoiceFallback()          // demo smoke only: exercise the Apple Speech fallback on real hardware
+                }
                 try await engine.prepare(root: root) { f, what in
                     Task { @MainActor in
                         guard let self = me.value, !present else { return }
@@ -296,15 +305,32 @@ actor PeakDictation {
                 let ms = Int(Date().timeIntervalSince(started) * 1000)
                 await MainActor.run {
                     guard let self = me.value else { return }
+                    self.dictation = self.engine; self.engineKind = .parakeet; self.engineNote = nil
                     self.phase = self.enabled ? .ready : .off
-                    self.logger?.log("voice ready ms=\(ms) models_mb=\(Self.modelsMB(root))")
+                    self.logger?.log("voice ready ms=\(ms) models_mb=\(Self.modelsMB(root)) engine=parakeet")
                 }
             } catch {
                 await MainActor.run {
-                    me.value?.phase = .failed("Voice couldn't get its speech model. Check the network and turn Voice on again.")
                     me.value?.logger?.log("voice prepare failed=\(type(of: error)) detail=\(String(describing: error).prefix(300))")
+                    me.value?.fallBackToAppleSpeech(error)
                 }
             }
+        }
+    }
+
+    /// Parakeet didn't load (download or Core ML load failed): use Apple's ON-DEVICE Speech instead, or say plainly that voice isn't
+    /// available. Never a cloud recognizer (VoiceFallback.decide).
+    private func fallBackToAppleSpeech(_ error: Error) {
+        let d = VoiceFallback.decide(recognizerExists: AppleSpeechDictation.recognizer != nil,
+                                     onDeviceSupported: AppleSpeechDictation.onDeviceSupported, authorized: AppleSpeechDictation.authorized)
+        switch d {
+        case .useAppleSpeech:
+            dictation = appleSpeech; engineKind = .appleSpeech; engineNote = VoiceFallback.notice
+            phase = enabled ? .ready : .off
+            logger?.log("voice fallback=apple-speech reason=\(type(of: error))")
+        case .unavailable(let m):
+            engineNote = nil; phase = .failed(m)
+            logger?.log("voice fallback=refused reason=\(type(of: error))")
         }
     }
 
@@ -318,13 +344,14 @@ actor PeakDictation {
 
     /// One control: a press starts, the next press stops. No hold-to-talk, no wake word, no silence auto-stop.
     func toggle() {
-        if interrupt?() == true { logger?.log("voice toggle interrupted=brief"); return }
-        guard enabled else { logger?.log("voice toggle refused=off"); return }
-        switch phase {
-        case .ready: start()
-        case .listening: stop()
-        case .needsModels, .failed: prepare()
-        default: logger?.log("voice toggle ignored phase=busy")
+        let speaking = interrupt?() == true
+        switch VoiceToggle.action(enabled: enabled, phase: phase, briefSpeaking: speaking) {
+        case .interruptBrief: logger?.log("voice toggle interrupted=brief")
+        case .refuseOff: logger?.log("voice toggle refused=off")
+        case .start: start()
+        case .stop: stop()
+        case .prepare: prepare()
+        case .ignoreBusy: logger?.log("voice toggle ignored phase=busy")
         }
     }
 
@@ -339,17 +366,28 @@ actor PeakDictation {
             default: micDenied(); return
             }
         }
+        if engineKind == .appleSpeech, feed == nil || ProcessInfo.processInfo.environment["FORCEIQ_PEAK_VOICE_FORCE_FALLBACK"] == "1" {
+            switch AppleSpeechDictation.authorized {
+            case true?: break
+            case nil:
+                let me = WeakRef(self)
+                Task { let ok = await AppleSpeechDictation.requestAuthorization(); await MainActor.run { if ok { me.value?.start() } else { me.value?.phase = .failed(VoiceFallback.speechDenied) } } }
+                return
+            case false?: phase = .failed(VoiceFallback.speechDenied); return
+            }
+        }
         hideTask?.cancel()
         line = VoiceLine(); showLine = true
         tStart = now(); tFirst = nil; cpuStart = Self.cpuSeconds()
         let roster = self.roster
         let me = WeakRef(self)
-        Task { [engine] in
-            await engine.begin { u in Task { @MainActor in me.value?.received(u, roster: roster) } }
+        let dictation = self.dictation
+        Task {
+            await dictation.begin { u in Task { @MainActor in me.value?.received(u, roster: roster) } }
         }
         let src: VoiceSource = feed.map { FeedSource(url: $0) } ?? MicSource()
         do {
-            try src.start { [engine] chunk in Task { await engine.append(chunk) } }
+            try src.start { chunk in Task { await dictation.append(chunk) } }
         } catch {
             phase = .failed("Peek couldn't open the microphone."); showLine = false
             logger?.log("voice mic failed"); return
@@ -357,7 +395,7 @@ actor PeakDictation {
         source = src; lastFeed = src as? FeedSource
         phase = .listening
         onListening?(true)
-        logger?.log("voice start source=\(feed == nil ? "mic" : "feed")")
+        logger?.log("voice start source=\(feed == nil ? "mic" : "feed") engine=\(engineKind.rawValue)")
     }
 
     private func micDenied() {
@@ -370,8 +408,9 @@ actor PeakDictation {
         tStop = now()
         phase = .finishing
         onListening?(false)
-        Task { [weak self, engine] in
-            let f = await engine.finish()
+        let dictation = self.dictation
+        Task { [weak self] in
+            let f = await dictation.finish()
             await MainActor.run { [weak self] in self?.finished(f) }
         }
     }
@@ -391,10 +430,10 @@ actor PeakDictation {
         let onset = lastFeed.map { $0.onset } ?? 0
         let first = tFirst.map { $0 * 1000 }
         results.append((first, first.map { $0 - onset * 1000 }, finalMs, cpu))
-        logger?.log(String(format: "voice turn first_confirmed_ms=%@ first_from_onset_ms=%@ final_ms=%.0f decode_ms=%.0f boost_ms=%.0f cpu_pct=%.1f words=%d boosted=%@ guarded=%@",
+        logger?.log(String(format: "voice turn first_confirmed_ms=%@ first_from_onset_ms=%@ final_ms=%.0f decode_ms=%.0f boost_ms=%.0f cpu_pct=%.1f words=%d boosted=%@ guarded=%@ engine=%@",
                            first.map { String(format: "%.0f", $0) } ?? "none", first.map { String(format: "%.0f", $0 - onset * 1000) } ?? "none",
                            finalMs, f.decodeMs, f.boostMs, cpu, f.text.split(separator: " ").count,
-                           f.boosted == nil ? "no" : "yes", (f.boosted != nil && f.boosted != f.text) ? "yes" : "no"))
+                           f.boosted == nil ? "no" : "yes", (f.boosted != nil && f.boosted != f.text) ? "yes" : "no", engineKind.rawValue))
         phase = enabled ? .ready : .off
         let text = f.text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !text.isEmpty {
@@ -464,25 +503,56 @@ struct MicButton: View {
     }
 }
 
-/// Under the collapsed notch / pill while dictating (e.g. started from Raycast): the confirmed words, on black.
-struct VoiceStrip: View {
+/// While dictating with the sheet closed: the live words inline in the menu bar row, at exactly the notch's height. The earliest
+/// words end at the notch's left side and the rest continue on its right (LiveCaption.split); a gold caret trails the last word
+/// until the final pass. On a display without a notch the pill shows one line of the newest words. Pure white on black, a green
+/// dot while listening and gold while finishing.
+struct VoiceCaptionInline: View {
     @ObservedObject var voice: VoiceController
+    let notchWidth: CGFloat
+    var dot: Color { voice.phase.isListening ? Color.peakGreen : Color.peakGold }
+    var words: String { voice.line.confirmed }
+    /// Real text widths (13 pt medium), so wide letters never push a word into an ellipsis.
+    static let font = NSFont.systemFont(ofSize: 13, weight: .medium)
+    static func measure(_ s: String) -> CGFloat { NSAttributedString(string: s, attributes: [.font: font]).size().width }
+    func text(_ s: String) -> some View {
+        Text(s).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.white).lineLimit(1).minimumScaleFactor(0.85)
+    }
+    var caret: some View { Text(VoiceLine.pendingCaret).font(.system(size: 13, weight: .medium)).foregroundStyle(Color.peakGold) }
     var body: some View {
-        HStack(spacing: 8) {
-            Circle().fill(voice.phase.isListening ? Color.peakGreen : Color.peakGold).frame(width: 7, height: 7)
-            if voice.line.isEmpty {
-                Text(voice.phase.isListening ? "Listening" : "…").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white)
+        Group {
+            if notchWidth > 0 {
+                let parts = LiveCaption.split(words, leftWidth: LiveCaption.notchLeftPoints, rightWidth: LiveCaption.notchRightPoints, measure: Self.measure)
+                HStack(spacing: 0) {
+                    HStack(spacing: 8) {
+                        Circle().fill(dot).frame(width: 8, height: 8)
+                        text(words.isEmpty ? (voice.phase.isListening ? "Listening" : "…") : parts.left)
+                        if parts.right.isEmpty && voice.line.pending { caret }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing).padding(.trailing, 14)
+                    Color.clear.frame(width: notchWidth)
+                    HStack(spacing: 4) {
+                        text(parts.right)
+                        if !parts.right.isEmpty && voice.line.pending { caret }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 14)
+                }
             } else {
-                LiveWordsText(line: voice.line, size: 12).lineLimit(2)
+                HStack(spacing: 8) {
+                    Circle().fill(dot).frame(width: 8, height: 8)
+                    text(words.isEmpty ? (voice.phase.isListening ? "Listening" : "…") : LiveCaption.tail(words, maxWidth: LiveCaption.pillPoints, measure: Self.measure))
+                    if !words.isEmpty && voice.line.pending { caret }
+                }
+                .padding(.horizontal, 16)
             }
         }
-        .padding(.horizontal, 12).padding(.vertical, 7)
-        .frame(maxWidth: 440, alignment: .leading)
-        .fixedSize(horizontal: false, vertical: true)
-        .background(RoundedRectangle(cornerRadius: 12).fill(Color.black))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(voice.phase.isListening ? Color.peakGreen : Color.peakGold, lineWidth: 1))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(words.isEmpty ? "Listening" : "Dictating: \(words)")
+        .accessibilityHint("Click to stop")
     }
 }
+
+struct ForcedVoiceFallback: Error {}
 
 /// A weak reference that can cross into a @Sendable progress callback (the object is main-actor isolated).
 final class WeakRef<T: AnyObject>: @unchecked Sendable {

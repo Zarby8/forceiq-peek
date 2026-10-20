@@ -172,7 +172,7 @@ final class MotionPolishGuardTests: XCTestCase {
         let fades = codeLines(mic).filter { $0.contains(".opacity(") }
         XCTAssertEqual(fades.count, 1, "only the listening pulse ring (a shape) fades: \(fades)")
         XCTAssertTrue(fades.allSatisfy { $0.contains("Circle().stroke") || $0.contains("phaseAnimator") }, "the mic glyph is never half-faded")
-        let strip = try body(v, from: "struct VoiceStrip", to: "\n}\n")
+        let strip = try body(v, from: "struct VoiceCaptionInline", to: "\n}\n")
         XCTAssertFalse(strip.contains("opacity"))
         let t = try code("ThreePOViews.swift")
         XCTAssertTrue(t.contains(#"Text("Listening…").font(.system(size: 13, weight: .medium)).foregroundStyle(Color.white)"#), "'Listening…' is pure white")
