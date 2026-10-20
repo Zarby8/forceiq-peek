@@ -387,7 +387,7 @@ struct PeakRootView: View {
             } else {
                 Text("ForceIQ Peek").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
                     .matchedGeometryEffect(id: "title", in: ns)
-                Spacer(minLength: 0)
+                    .frame(maxWidth: .infinity)                                  // centered in the pill, like the countdown
             }
             if badgeCount > 0 {
                 Text("\(badgeCount)").font(.system(size: 11, weight: .heavy)).foregroundStyle(Color.black)

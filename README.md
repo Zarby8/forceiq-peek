@@ -10,7 +10,14 @@ without one (Studio Display). There's one non-activating, borderless `NSPanel` p
 every Space and stationary, and it follows `NSApplication.didChangeScreenParametersNotification`. Pure white on pure
 black, green `#4FFF4F` and gold `#F4C430` accents (ForceIQ Brand 2026; defined once in `Sources/PeakCore/Brand.swift`), no dim gray text.
 
-**Ghost mark:** BOB Motion **ForceIQ-Peek-BOB-v1, v1.1** (idle re-timed to a seamless 60-frame loop), h264 on black,
+**Peek mark (default): the eyes 👀.** Two eyes drawn as vectors in one SwiftUI `Canvas` (`EyesMark.swift`; the pose per state is pure,
+tested code in `PeakCore/EyesPose.swift`). The pupils carry the state: green = fine, gold = something needs you (attention also
+gets a gold ring around the mark, since the glow skips that state; error = startled gold pupils and a gold ring). Idle glances
+right, left and up and blinks; working scans; typing reads down; the receipt blinks and shows a green ring once. While the mark
+sleeps (a collapsed idle pill) or Reduce Motion is on, the `TimelineView` is paused, so no frame is scheduled. The launch log
+says `mark=peek-eyes`. `FORCEIQ_PEAK_MARK=bob` brings back the BOB loops below (the assets are still bundled).
+
+**BOB mark (opt-in via `FORCEIQ_PEAK_MARK=bob`):** BOB Motion **ForceIQ-Peek-BOB-v1, v1.1** (idle re-timed to a seamless 60-frame loop), h264 on black,
 masked to a circle, played with AVPlayerLooper and driven by the pack's MANIFEST.json. See `Resources/ASSETS.md`.
 Its glow breathes as a Core Animation layer animation (`CAGlowView`, curve in `GlowBreath`): the render server runs
 it, so an expanded, idle Peek does no per-frame SwiftUI work.
