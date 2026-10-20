@@ -241,6 +241,8 @@ Unknown keys are ignored.
   of one core while listening. (The 0.5 s in the bake-off was the first unconfirmed partial.) FluidAudio's
   `SlidingWindowAsrManager` (`.streaming`: 11 s chunks, 1 s hypothesis updates) was tried in the same harness and returned no text
   for 40 of 40 short utterances, so Peek keeps its own 160 ms sliding re-decode with LocalAgreement-2.
+- **Sample-WAV smoke:** `peak/scripts/voice_smoke.sh [<Peek.app>] [<models dir>]` feeds a spoken 3 s and an 11 s clip through the mic's audio path on
+  the real Neural Engine and fails unless the long clip gives 28+ words, first confirmed words within 2.0 s and the final text within 500 ms.
 - **Live words** in the notch / pill (when Peek is collapsed) and in the 3PO field: confirmed words only (the prefix two
   decodes agree on, about 0.5 s in), pure white at full opacity from the first word (never dimmed or gray); until the
   final pass a gold caret (▍) trails the last word, then it goes. 'Listening…' is pure white too. Client names
