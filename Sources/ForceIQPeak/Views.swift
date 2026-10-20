@@ -383,8 +383,7 @@ struct PeakRootView: View {
         HStack(spacing: 6) {
             ghost(panel.collapsedSize.height - 10)
             if nextSession.showsPill && !controller.presenting {
-                NextSessionPill(model: nextSession, compact: true)          // names the client; gold on a gap
-                Spacer(minLength: 0)
+                NextSessionPill(model: nextSession, compact: true, fill: true)   // names the client; gold on a gap; fills the pill
             } else {
                 Text("ForceIQ Peek").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
                     .matchedGeometryEffect(id: "title", in: ns)

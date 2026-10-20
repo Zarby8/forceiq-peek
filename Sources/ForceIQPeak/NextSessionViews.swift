@@ -8,6 +8,8 @@ import SwiftUI
 struct NextSessionPill: View {
     @ObservedObject var model: NextSessionModel
     var compact = false
+    /// Studio pill: the gold outline spans the whole width left in the black pill (between the ghost and the count badge).
+    var fill = false
     var accent: Color { Color(hex: NextSessionStyle.outlineHex(gold: model.gold)) }
     var body: some View {
         if model.showsPill {
@@ -16,7 +18,7 @@ struct NextSessionPill: View {
                     .font(.system(size: compact ? 11 : 12, weight: .bold).monospacedDigit())
                     .foregroundStyle(Color(hex: NextSessionStyle.textHex)).lineLimit(1)
                     .padding(.horizontal, compact ? 8 : 12)
-                    .frame(minHeight: compact ? 18 : PeakMotion.minTapTarget)
+                    .frame(maxWidth: fill ? .infinity : nil, minHeight: compact ? 18 : PeakMotion.minTapTarget)
                     .background(
                         Capsule().fill(Color.black)
                             .overlay(Capsule().stroke(accent, lineWidth: model.gold ? 2 : 1))
