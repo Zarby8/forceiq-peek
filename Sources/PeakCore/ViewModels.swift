@@ -343,6 +343,18 @@ public enum DemoData {
 
     /// `quiet`: the everyday desk (no meeting, no fixes, no approvals) so the Ghost is .idle and its ambient glow
     /// runs, as on a real coach's Mac most of the day (FORCEIQ_PEAK_DEMO_FEED=quiet; the CPU check uses it).
+    /// Sample rows for the Running section (demo mode only; sample names).
+    public static func runningFeed() -> RunningFeed {
+        RunningFeed(rows: [
+            RunningRow(id: "demo-up", lane: .upscale, stage: "running", client: "Sample Skater", what: "Demo City Rockets · 4.17", step: "RIFE interpolation",
+                       percent: 24, detail: "18386 / 76559 frames", stepsDone: 11, stepsTotal: 20),
+            RunningRow(id: "demo-pack", lane: .postMeeting, stage: "running", client: "Demo Player", what: "Meeting pack 10.20", step: "Write meeting summary",
+                       stepsDone: 2, stepsTotal: 6),
+            RunningRow(id: "demo-pack2", lane: .postMeeting, stage: "attention", client: "Sample Skater", what: "Meeting pack 10.19", step: "Waiting for Brain",
+                       detail: "Published to the portal; Brain has not acknowledged it yet.", stepsDone: 5, stepsTotal: 6),
+        ])
+    }
+
     public static func snapshot(now: Date = Date(), quiet: Bool = false, meetingInMinutes: Double = 42.3) -> EngineSnapshot {
         var s = EngineSnapshot()
         if quiet { s.familyEnabled = false; return s }

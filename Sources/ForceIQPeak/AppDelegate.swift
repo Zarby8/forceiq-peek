@@ -140,6 +140,9 @@ enum Screens {
     var nextSession: NextSessionModel!
     /// Pack ready / FLOW package ready (read-only, GET /api/peak/ready about every 10 min). On unless settings.json readyAlerts is false.
     var ready: ReadyModel!
+    /// What Command is running now (upscales, meeting packs) for the sheet: read-only, GET /api/peak/running.
+    var running: RunningModel!
+    var wasExpanded = false
     var demoReadyReads = 0
     /// Demo only: what Ask TRON / Copy would have put on the clipboard (the coach's real clipboard is never touched).
     var demoClipboard = ""
@@ -192,6 +195,7 @@ enum Screens {
         nextSession = NextSessionModel(transport: demo ? DemoThreePOTransport(knobs: demoKnobs) : engine,
                                        enabled: NextSessionGate.enabled(setting: prefs.nextSessionPill), roster: p.roster.names, logger: log)
         ready = ReadyModel(transport: engine, enabled: !demo && prefs.readyAlerts, logger: log)
+        running = RunningModel(transport: engine, enabled: !demo, logger: log)
         controller.onPeekAction = { [weak self] a, display in
             guard let self else { return }
             guard let id = a.cardID, let card = self.cards.cards.first(where: { $0.id == id }) else {
@@ -251,7 +255,7 @@ enum Screens {
             MainActor.assumeIsolated { self?.log.log("screens changed"); self?.rebuildPanels() }
         }
         controller.objectWillChange.receive(on: RunLoop.main).sink { [weak self] _ in
-            DispatchQueue.main.async { self?.syncPanels() }
+            DispatchQueue.main.async { self?.syncPanels(); self?.noteExpansion() }
         }.store(in: &bag)
         installMouseMonitors()
         refresh()
@@ -824,6 +828,7 @@ enum Screens {
         gpuLight?.refresh()
         if demo {
             let s = demoSnapshot(); cards.update(s, profile: profile)
+            if ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "running", running.feed == nil { running.setFeed(DemoData.runningFeed()) }
             considerAlert(s)
             gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date()); controller.setCommandLive(s.gpuWindow?.live)
             let quiet = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "quiet"
@@ -844,6 +849,7 @@ enum Screens {
             log.log("feed meeting=\(s.meeting != nil ? "yes" : "no") fixes=\(s.fixes.count) approvals=\(s.approvals.count) family=\(s.familyEnabled ? "on" : "off") ghost=\(cards.ghost.rawValue)")
             await nextSession.tick()                                         // at most every 5 min; flag off: never
             await ready.tick()                                               // at most every 10 min, last: a slow read never delays the above
+            await running.tick(expanded: controller.expanded)                // 15 s with the sheet open, 1 to 2 min closed
         }
     }
 
@@ -856,7 +862,7 @@ enum Screens {
             if let h = hosts[s.uuid] { h.relayout(s, geometry: geometry); continue }
             let entries = profile.isEnabled(.switcher) ? AppSwitcher.entries(profile, WorkspaceLocator()) : []
             let h = PanelHost(screen: s, geometry: geometry) { [unowned self] st in
-                AnyView(PeakRootView(controller: controller, cards: cards, panel: st, threePO: threePO, drops: dropsStore, voice: voice, nextSession: nextSession, light: gpuLight, switcher: entries, mark: mark, glow: glow,
+                AnyView(PeakRootView(controller: controller, cards: cards, panel: st, threePO: threePO, drops: dropsStore, voice: voice, nextSession: nextSession, running: running, light: gpuLight, switcher: entries, mark: mark, glow: glow,
                                      onSwitch: { [weak self] id in self?.controller.handle(.switchApp(id)) },
                                      onDrop: { [weak self] urls in self?.dropped(urls, uuid: s.uuid) ?? false }))
             }
@@ -869,6 +875,15 @@ enum Screens {
         }
         syncPanels()
         statusItem?.menu = makeMenu()
+    }
+
+    /// The sheet just opened: read what is running now instead of waiting out the quiet interval.
+    func noteExpansion() {
+        let now = controller.expanded
+        defer { wasExpanded = now }
+        guard now, !wasExpanded else { return }
+        running.nudge()
+        Task { @MainActor in await running.tick(expanded: true) }
     }
 
     func isExpanded(_ uuid: String) -> Bool { controller.expanded && controller.activeDisplay == uuid }

@@ -215,6 +215,7 @@ struct PeakRootView: View {
     @ObservedObject var drops: DropStore
     @ObservedObject var voice: VoiceController
     @ObservedObject var nextSession: NextSessionModel
+    @ObservedObject var running: RunningModel
     @ObservedObject var light: GPULightModel
     let switcher: [SwitcherEntry]
     let mark: GhostMarkRendering
@@ -443,6 +444,7 @@ struct PeakRootView: View {
                         if nextSession.showsPill {
                             NextSessionPill(model: nextSession).onTapGesture { Haptic.tick(); nextSession.openCard() }
                         }
+                        RunningSection(model: running)
                         CardList(cards: cards)
                     }
                     .transition(.slideUpFull(reduceMotion))
