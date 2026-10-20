@@ -854,12 +854,13 @@ struct SettingsView: View {
                             time({ model.quietStart }, { model.quietStart = $0 }); label("to"); time({ model.quietEnd }, { model.quietEnd = $0 })
                         }
                     }
-                    note("Alerts peek in the notch row: a meeting within 10 minutes, a failed fix, Command sign-in expiring, a new approval, a family delivery, a finished shift download. None of them while you dictate or a session is live.")
+                    Toggle(isOn: $model.readyAlerts) { label("Alert when a pack or FLOW package is ready") }
+                    note("Alerts peek in the notch row: a meeting within 10 minutes, a failed fix, Command sign-in expiring, a new approval, a family delivery, a finished shift download, a pack or FLOW package that is ready. None of them while you dictate or a session is live.")
                 }
                 section("Show") {
                     Toggle(isOn: $model.nextSessionPill) { label("Next session countdown and gaps (needs Command sign-in)") }
                     Toggle(isOn: $model.menuBarItem) { label("PEEK badge in the menu bar") }
-                    if model.restartNeeded { Text("These two take effect when Peek restarts.").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.peakGold) }
+                    if model.restartNeeded { Text("These take effect when Peek restarts.").font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.peakGold) }
                 }
                 section("Voice and shortcut") {
                     Toggle(isOn: Binding(get: { voice.enabled }, set: { setVoice($0) })) { label("Voice (opt-in): talk to 3PO") }

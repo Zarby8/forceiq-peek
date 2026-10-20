@@ -136,6 +136,9 @@ enum Screens {
     var commandMeetingLink = false
     /// The next-session pill + gap warnings (read-only). OFF unless settings.json nextSessionPill is true; no UI toggle.
     var nextSession: NextSessionModel!
+    /// Pack ready / FLOW package ready (read-only, GET /api/peak/ready about every 10 min). On unless settings.json readyAlerts is false.
+    var ready: ReadyModel!
+    var demoReadyReads = 0
     /// Demo only: what Ask TRON / Copy would have put on the clipboard (the coach's real clipboard is never touched).
     var demoClipboard = ""
     var dryRunPanel: DryRunPanel?
@@ -186,6 +189,7 @@ enum Screens {
         cards.settingsNotice = prefs.settingsNotice
         nextSession = NextSessionModel(transport: demo ? DemoThreePOTransport(knobs: demoKnobs) : engine,
                                        enabled: NextSessionGate.enabled(setting: prefs.nextSessionPill), roster: p.roster.names, logger: log)
+        ready = ReadyModel(transport: engine, enabled: !demo && prefs.readyAlerts, logger: log)
         controller.onPeekAction = { [weak self] a, display in
             guard let self else { return }
             guard let id = a.cardID, let card = self.cards.cards.first(where: { $0.id == id }) else {
@@ -250,6 +254,9 @@ enum Screens {
         installMouseMonitors()
         refresh()
         poll = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in MainActor.assumeIsolated { self?.refresh() } }   // also re-judges the 5090 light
+        if demo, ["pack", "flow"].contains(ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] ?? "") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in MainActor.assumeIsolated { self?.refresh() } }      // the second read
+        }
         let queued = pendingURLs; pendingURLs = []
         for u in queued { route(u) }
         if demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_TOUR"] == "1" { tour() }
@@ -768,6 +775,14 @@ enum Screens {
         s.takenAt = now; s.liveAt = now; s.approvalsAt = now
         if feed == "download" { s.downloadsRunning = 1; s.downloadPercents = [38] }              // the progress line, determinate
         if feed == "working" { s.fixesRunning = 1 }                                              // the progress line, dashed
+        if feed == "pack" || feed == "flow" {                                                    // the first read is the baseline, the second has one new item
+            let fresh = demoReadyReads > 0; demoReadyReads += 1
+            var r = ReadyFeed(packsKnown: true, packsChecked: ["Sample Skater", "Demo Player"], packs: [ReadyItem(id: "pack:sample:old", client: "Sample Skater")],
+                              flowKnown: true, flow: [ReadyItem(id: "flow:sample:old", client: "Demo Player")])
+            if fresh && feed == "pack" { r.packs.append(ReadyItem(id: "pack:sample:new", client: "Sample Skater")) }
+            if fresh && feed == "flow" { r.flow.append(ReadyItem(id: "flow:sample:new", client: "Demo Player")) }
+            s.ready = r
+        }
         let m = s.meeting
         s.today = m.map { [SessionRow(client: $0.client, scheduledAt: $0.scheduledAt, durationMinutes: $0.durationMinutes)] } ?? []
         s.gpuWindow = GPUWindow(spans: m.map { [GPUSpan(start: $0.scheduledAt, end: $0.scheduledAt.addingTimeInterval(Double($0.durationMinutes) * 60), source: "command")] } ?? [], live: feed == "live", calendarAt: now)
@@ -817,7 +832,9 @@ enum Screens {
         }
         guard controller.globallyVisible else { return }
         Task { @MainActor in
-            let s = await engine.snapshot()
+            var s = await engine.snapshot()
+            await ready.tick()
+            s.ready = ready.feed
             cards.update(s, profile: profile)
             considerAlert(s)
             lastMeeting = s.meeting

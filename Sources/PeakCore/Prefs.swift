@@ -7,7 +7,7 @@ import Foundation
 /// that are present are kept, so a partial file like {"commandMeetingLink": true} works. Defaults:
 ///   hiddenDisplays [] (shown on every display) · globallyHidden false · hotkeyEnabled unset (the profile's hotkey.enabled)
 ///   ghostFormat unset (h264-black) · voiceEnabled unset (the profile's modules.voice) · desktopActions false
-///   commandMeetingLink false · nextSessionPill false · cuaActions false
+///   commandMeetingLink false · nextSessionPill false · cuaActions false · readyAlerts true (peek when a pack or FLOW package is ready)
 ///   presenting false (hide every client detail on a shared screen) · menuBarItem false (the wing's right-click is the menu) · autoPresenting true (present while Command is live)
 ///   quietHoursStart / quietHoursEnd unset ("HH:mm" local; both set = no peeks in that window, wraps midnight) · dndUntil unset
 /// No file is normal (a fresh Mac): silent defaults. A file that exists but can't be used (unreadable, empty, not valid
@@ -19,12 +19,12 @@ public final class PeakPrefs: @unchecked Sendable {
     struct Doc: Codable {
         var hiddenDisplays: [String] = []; var hotkeyEnabled: Bool? = nil; var globallyHidden = false; var ghostFormat: String? = nil
         var voiceEnabled: Bool? = nil; var desktopActions: Bool? = nil; var commandMeetingLink: Bool? = nil
-        var nextSessionPill: Bool? = nil; var cuaActions: Bool? = nil
+        var nextSessionPill: Bool? = nil; var cuaActions: Bool? = nil; var readyAlerts: Bool? = nil
         var quietHoursStart: String? = nil; var quietHoursEnd: String? = nil; var dndUntil: Double? = nil; var presenting: Bool? = nil; var menuBarItem: Bool? = nil; var autoPresenting: Bool? = nil
         init() {}
         enum CodingKeys: String, CodingKey, CaseIterable {
             case hiddenDisplays, hotkeyEnabled, globallyHidden, ghostFormat, voiceEnabled, desktopActions, commandMeetingLink
-            case nextSessionPill, cuaActions, quietHoursStart, quietHoursEnd, dndUntil, presenting, menuBarItem, autoPresenting
+            case nextSessionPill, cuaActions, readyAlerts, quietHoursStart, quietHoursEnd, dndUntil, presenting, menuBarItem, autoPresenting
         }
         /// decodeIfPresent for every key: missing / null = the default. A key of the wrong type throws (typeMismatch),
         /// which load() turns into all defaults plus a logged, visible error.
@@ -39,6 +39,7 @@ public final class PeakPrefs: @unchecked Sendable {
             commandMeetingLink = try c.decodeIfPresent(Bool.self, forKey: .commandMeetingLink)
             nextSessionPill = try c.decodeIfPresent(Bool.self, forKey: .nextSessionPill)
             cuaActions = try c.decodeIfPresent(Bool.self, forKey: .cuaActions)
+            readyAlerts = try c.decodeIfPresent(Bool.self, forKey: .readyAlerts)
             quietHoursStart = try Doc.clock(c, .quietHoursStart)
             quietHoursEnd = try Doc.clock(c, .quietHoursEnd)
             dndUntil = try c.decodeIfPresent(Double.self, forKey: .dndUntil)
@@ -176,6 +177,12 @@ public final class PeakPrefs: @unchecked Sendable {
     public var nextSessionPill: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.nextSessionPill ?? false }
         set { edit { $0.nextSessionPill = newValue } }
+    }
+    /// Peek when a meeting pack or a FLOW package becomes ready (GET /api/peak/ready, read-only). ON by default; an unreadable
+    /// file also reads as on (it is a notice, not a privacy switch). Off: Peek never asks the engine for the feed.
+    public var readyAlerts: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return doc.readyAlerts ?? true }
+        set { edit { $0.readyAlerts = newValue } }
     }
     /// Presenting mode (Presenting.swift). Persisted so a relaunch never un-hides a shared screen. An unreadable file fails
     /// closed the other way for a privacy switch: ON (nothing client-private shows until the coach turns it off in the menu).

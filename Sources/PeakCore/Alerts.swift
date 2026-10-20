@@ -10,9 +10,10 @@ import Foundation
 
 public enum PeakAlertKind: String, Sendable {
     case meetingSoon = "meeting-soon", fixFailed = "fix-failed", signInExpired = "sign-in-expired", approval, family, downloadDone = "download-done"
+    case flowReady = "flow-ready", packReady = "pack-ready"
     /// The dot's brand color: green = good news or a countdown, gold = something needs you.
     public var dotHex: UInt32 {
-        switch self { case .meetingSoon, .downloadDone: return Brand.greenHex; default: return Brand.goldHex }
+        switch self { case .meetingSoon, .downloadDone, .flowReady, .packReady: return Brand.greenHex; default: return Brand.goldHex }
     }
     /// The client-free wording (Presenting, and the default when an alert doesn't give its own).
     var defaultPlainLine: String {
@@ -20,11 +21,12 @@ public enum PeakAlertKind: String, Sendable {
         case .meetingSoon: return "A session is coming up"; case .fixFailed: return "A fix failed"
         case .signInExpired: return "Command sign-in expired"; case .approval: return "An item needs your OK"
         case .family: return "A family delivery needs you"; case .downloadDone: return "A download finished"
+        case .flowReady: return "A FLOW package is ready"; case .packReady: return "A pack is ready"
         }
     }
     /// Lower = more urgent: when several are waiting, the most urgent peeks first.
     var priority: Int {
-        switch self { case .meetingSoon: return 0; case .fixFailed: return 1; case .signInExpired: return 2; case .approval: return 3; case .family: return 4; case .downloadDone: return 5 }
+        switch self { case .meetingSoon: return 0; case .fixFailed: return 1; case .signInExpired: return 2; case .approval: return 3; case .family: return 4; case .downloadDone: return 5; case .flowReady: return 6; case .packReady: return 7 }
     }
 }
 
@@ -49,6 +51,8 @@ public struct PeakAlert: Equatable, Sendable, Identifiable {
     /// The card this alert is about (its one-tap action works on it) and what the button does.
     public let cardID: String?
     public let action: PeakAlertAction
+    /// The ids a coalesced alert stands for (many packs published at once peek once); all of them count as shown.
+    public let covers: [String]
     /// The inline peek's two halves: the client on the left of the notch, what happened on the right. With no client (presenting)
     /// the plain line splits after its first two words ("A session" | "in 9 min").
     public var lead: String { client.isEmpty ? PeakAlert.words(line).lead : client }
@@ -61,10 +65,10 @@ public struct PeakAlert: Equatable, Sendable, Identifiable {
         return (w.prefix(2).joined(separator: " "), w.dropFirst(2).joined(separator: " "))
     }
     public init(id: String, kind: PeakAlertKind, client: String, line: String, holdSeconds: Double, plainLine: String? = nil,
-                cardID: String? = nil, action: PeakAlertAction = .none) {
+                cardID: String? = nil, action: PeakAlertAction = .none, covers: [String] = []) {
         self.id = id; self.kind = kind; self.client = client; self.line = line; self.holdSeconds = holdSeconds
         self.plainLine = plainLine ?? kind.defaultPlainLine
-        self.cardID = cardID; self.action = cardID == nil ? .none : action
+        self.cardID = cardID; self.action = cardID == nil ? .none : action; self.covers = covers
     }
 }
 
@@ -121,8 +125,23 @@ public struct AlertPolicy: Sendable {
     private var primedSources: Set<String> = []
     private var signInWasExpired = false
     private var signInPending = false
+    private var primedPackClients: Set<String> = []
+    private var flowPrimed = false
     static let signInID = "signin:pending"
     public init() {}
+
+    /// One alert for everything new in a ready source: a single item names its client, several from one client count them, several
+    /// clients name the newest and say how many more. Many packs published at once peek once, not one per cooldown.
+    static func readyAlert(_ news: [ReadyItem], kind: PeakAlertKind, noun: String, plural: String) -> PeakAlert? {
+        guard let first = news.first else { return nil }
+        let clients = Array(Set(news.map(\.client))).sorted()
+        let line: String, plain: String
+        if news.count == 1 { line = "\(first.client): \(noun) ready"; plain = "A \(noun) is ready" }
+        else if clients.count == 1 { line = "\(first.client): \(news.count) \(plural) ready"; plain = "\(news.count) \(plural) are ready" }
+        else { line = "\(first.client) +\(clients.count - 1) more: \(plural) ready"; plain = "\(news.count) \(plural) are ready" }
+        return PeakAlert(id: news.count == 1 ? first.id : "ready:\(kind.rawValue):\(news.map(\.id).sorted().joined(separator: "|"))",
+                         kind: kind, client: first.client, line: line, holdSeconds: infoHold, plainLine: plain, covers: news.map(\.id))
+    }
 
     /// The first reason an alert may not peek right now, or nil. Order = which reason is reported when several apply.
     public static func suppression(_ ctx: AlertContext, snapshot s: EngineSnapshot, lastShownAt: Date?) -> AlertSuppression? {
@@ -196,11 +215,29 @@ public struct AlertPolicy: Sendable {
             }
             primedSources.insert("downloads")
         }
+        if let r = s.ready {
+            if r.packsKnown {
+                var news: [ReadyItem] = []
+                for i in r.packs where isMyClient(i.client) && !shown.contains(i.id) {
+                    if primedPackClients.contains(i.client) { news.append(i) } else { shown.insert(i.id) }      // a client's first good read is its baseline
+                }
+                primedPackClients.formUnion(r.packsChecked)
+                if let a = Self.readyAlert(news, kind: .packReady, noun: "pack", plural: "packs") { fresh.append(a) }
+            }
+            if r.flowKnown {
+                var news: [ReadyItem] = []
+                for i in r.flow where isMyClient(i.client) && !shown.contains(i.id) {
+                    if flowPrimed { news.append(i) } else { shown.insert(i.id) }
+                }
+                flowPrimed = true
+                if let a = Self.readyAlert(news, kind: .flowReady, noun: "FLOW package", plural: "FLOW packages") { fresh.append(a) }
+            }
+        }
         fresh.sort { $0.kind.priority < $1.kind.priority }
         guard let a = fresh.first else { lastSuppression = nil; return nil }
         if let why = Self.suppression(ctx, snapshot: s, lastShownAt: lastShownAt) { lastSuppression = why; return nil }
         lastSuppression = nil
-        if a.id == Self.signInID { signInPending = false } else { shown.insert(a.id) }
+        if a.id == Self.signInID { signInPending = false } else { shown.insert(a.id); a.covers.forEach { shown.insert($0) } }
         lastShownAt = ctx.now
         return a
     }

@@ -121,5 +121,6 @@ public struct EngineSnapshot: Equatable, Sendable {
     public var liveAt: Date? = nil                     // /api/live doc's own write time
     public var approvalsAt: Date? = nil                // /api/approvals listing time
     public var takenAt: Date? = nil                    // when Peek made this read
+    public var ready: ReadyFeed? = nil                 // GOAT's ready feed (new packs / FLOW packages); nil = not read (flag off / old engine)
     public init() {}
 }

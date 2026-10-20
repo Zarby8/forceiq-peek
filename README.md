@@ -86,6 +86,7 @@ Command". Peek uploads nothing, and client video stays local.
 | `GET /api/peak/next-meeting` | **new**, this Mac only, read-only: the next Command booking (engine/peakmeeting.py → panels.command_get), plus `today` (today's named sessions) and `gpu_window` (meeting times only, for the 5090 light) |
 | `GET /api/peak/client-directory` | **new**, this Mac only, read-only, asked only with `commandMeetingLink` on: this coach's active Command clients `[{id, display_name}]` (engine/peakdirectory.py → panels.command_get → Command `GET /clients/directory`); ids re-validated as UUIDs; nothing persisted or logged but counts |
 | `GET /api/peak/next-session` | **new**, this Mac only (403 for phones), read-only, asked only with `nextSessionPill` on, at most every 5 min: this coach's next session and gap checks (engine/peaknextsession.py → panels.command_get → Command `GET /schedule/bookings?upcoming_only=true&recent_hours=12` and `GET /invoices/`; Ghost `GET /v1/portal/{id}/meeting-bundles` and `GET /v1/ghost/client/{id}/games` for "since last met"); this coach's roster only; nothing persisted, logs are counts and states only |
+| `GET /api/peak/ready` | **new**, this Mac only (403 for phones), read-only, asked only with `readyAlerts` on (the default), at most every 10 min: the meeting packs GHOST has published and the FLOW packages built for this coach's roster (engine/peakready.py; one GHOST meeting-bundles read per roster client under a 25 s budget; nothing written, no file fetched) |
 | `GET /api/live` | existing: fixes and download counts |
 | `GET /api/approvals`, `POST /api/approvals/<id>/approve\|ask\|prompt` | existing (approve without confirm only previews strong gates; Peek never sends confirm) |
 | `GET /api/family-delivery-alerts` | existing (flag off → enabled=false, no Command call) |
@@ -144,9 +145,10 @@ view is white text on black with gold section titles.
 Collapsed Peek is the notch plus its green status wing. An urgent alert widens the collapsed shape INLINE in the menu bar row (notch height, ~145 pt each side of the notch, the way Boring Notch's
 sneak peek works) for 6 s (8 s for a failed fix): the client on the left of the notch, what happened on the right, then it retracts. What peeks: a meeting starting within 10 minutes; a fix that fails after Peek is up; Command's sign-in expiring
 ("Command sign-in | expired"); a new approval waiting ("<client> | needs your OK"); a new family-delivery alert; a shift
-download finishing for one of the coach's clients ("<client> | download finished"; shift downloads only, never a provider grab).
+download finishing for one of the coach's clients ("<client> | download finished"; shift downloads only, never a provider grab); a meeting
+pack GHOST has just published ("<client> | pack ready"); a FLOW package just built ("<client> | FLOW package ready").
 Everything except the meeting is news only: what was already there when Peek first read that source is the baseline and never
-peeks. When several wait, the most urgent goes first (meeting, fix, sign-in, approval, family, download), one a minute. Each line names its client (Command's sign-in names Command); the dot is green for a meeting or a finished
+peeks. When several wait, the most urgent goes first (meeting, fix, sign-in, approval, family, download, FLOW package, pack), one a minute. Each line names its client (Command's sign-in names Command); the dot is green for a meeting or a finished
 download and gold for anything that needs you; text is pure white. A tap opens the sheet (a meeting alert lands on the next-session card when the pill is
 on); the pointer resting on it holds it 3 s at a time. Nothing peeks while Peek is open, while dictating, during a live
 session, in quiet hours, under Do not disturb (menu bar: 1 hour / until tomorrow morning / off), or within a minute of the
@@ -155,6 +157,16 @@ pure and tested; logs carry the kind or the reason, never a client. Pushing the 
 of the notch shape also opens Peek (that strip never takes a click, so the menu bar stays usable). Only the Studio Display
 pill lifts on hover; the notch never scales or brightens, so nothing paints outside it. Demo: `FORCEIQ_PEAK_DEMO=1
 FORCEIQ_PEAK_DEMO_FEED=soon GOAT_PEAK_ROOT=<scratch root>` puts the sample meeting 9 min out.
+
+**Pack ready / FLOW package ready.** *Pack ready*: a GHOST meeting bundle for one of the coach's clients whose every asset is
+available. *FLOW package ready*: a package in FLOW's project folder for one of the coach's clients whose metadata reads and whose
+bundled media is on disk at the size the metadata records (the copy finished). It does NOT run the code-window check (that
+check rewrites shared state files, so it stays the on-demand FLOW card): a package that later fails the check still peeked as
+built. Both fire on the transition to ready, never on existence: each client is baselined on its first successful read (a read
+that failed first and recovers later never turns that client's packs into news) and FLOW's folder on its first successful
+listing; an unreadable or missing folder is "unknown", never "nothing there". Many published at once peek once, counted
+("<client> | 3 packs ready", "<client> +2 more | packs ready"). Presenting says only "A pack is ready" / "A FLOW package is
+ready". Off with `readyAlerts: false` (Settings). Demo: `FORCEIQ_PEAK_DEMO_FEED=pack` or `flow` (the second read has one new item).
 
 **Progress line.** While GOAT is working (a fix running, a shift download running; nothing else, per the Live Activity rule)
 a 2 pt gold line hangs just under the notch and its wing (the notch itself has no pixels). It is a gold fill over a faint track when every
@@ -193,6 +205,7 @@ Unknown keys are ignored.
 | `cuaActions` | true/false | `false` (no UI; the Cua backend, only inside the three live gates plus `FORCEIQ_PEAK_CUA_LIVE=1`) |
 | `commandMeetingLink` | true/false | `false` (no UI) |
 | `nextSessionPill` | true/false | `false` (no UI) |
+| `readyAlerts` | true/false | `true` (peek when a pack or FLOW package is ready; Settings has the toggle) |
 | `quietHoursStart`, `quietHoursEnd` | `"HH:mm"` (24 h, local) | unset (no quiet window; both keys needed; start later than end wraps midnight; a bad time is an invalid key) |
 | `dndUntil` | seconds since 1970 | unset (the menu's Do not disturb writes it) |
 | `autoPresenting` | true/false | `true` (present while Command is live; an unreadable file leaves it on) |

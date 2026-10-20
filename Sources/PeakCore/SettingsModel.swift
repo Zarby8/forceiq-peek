@@ -11,6 +11,7 @@ import Combine
 
     @Published public var autoPresenting: Bool { didSet { if autoPresenting != oldValue { prefs.autoPresenting = autoPresenting; controller.reevaluatePresenting() } } }
     @Published public var nextSessionPill: Bool { didSet { if nextSessionPill != oldValue { prefs.nextSessionPill = nextSessionPill; restartNeeded = true } } }
+    @Published public var readyAlerts: Bool { didSet { if readyAlerts != oldValue { prefs.readyAlerts = readyAlerts; restartNeeded = true } } }
     @Published public var menuBarItem: Bool { didSet { if menuBarItem != oldValue { prefs.menuBarItem = menuBarItem; restartNeeded = true } } }
     @Published public var quietEnabled: Bool { didSet { if quietEnabled != oldValue { writeQuiet() } } }
     /// Minutes after local midnight.
@@ -24,6 +25,7 @@ import Combine
         self.prefs = prefs; self.controller = controller
         autoPresenting = prefs.autoPresenting
         nextSessionPill = prefs.nextSessionPill
+        readyAlerts = prefs.readyAlerts
         menuBarItem = prefs.menuBarItem
         let q = prefs.quietHours
         quietEnabled = q != nil
