@@ -116,18 +116,63 @@ import XCTest
 
     // ── the view contract (source scans) ──
     func source(_ name: String) throws -> String { try XCTUnwrap(appSourceFiles().first { $0.name == name }).text }
+    func body(_ s: String, from a: String, to b: String) throws -> String {
+        let r0 = try XCTUnwrap(s.range(of: a), a), r1 = try XCTUnwrap(s.range(of: b, range: r0.upperBound..<s.endIndex), b)
+        return String(s[r0.lowerBound..<r1.lowerBound])
+    }
     func testTheSectionLivesOnTheHomeViewWhichPresentingReplaces() throws {
         let v = try source("Views.swift")
         let presenting = try XCTUnwrap(v.range(of: "if controller.presenting {"))
-        let section = try XCTUnwrap(v.range(of: "RunningSection(model: running)"))
-        let list = try XCTUnwrap(v.range(of: "CardList(cards: cards)"))
-        XCTAssertLessThan(presenting.lowerBound, section.lowerBound, "the presenting notice is chosen before the home view")
-        XCTAssertLessThan(section.lowerBound, list.lowerBound, "above the cards")
-        XCTAssertEqual(v.components(separatedBy: "RunningSection(").count - 1, 1)
+        let home = try XCTUnwrap(v.range(of: "PeekHomeScroll(nextSession: nextSession, running: running, cards: cards)"))
+        XCTAssertLessThan(presenting.lowerBound, home.lowerBound, "the presenting notice is chosen before the home view")
+        XCTAssertEqual(v.components(separatedBy: "PeekHomeScroll(").count - 1, 1)
+        let list = try source("RunningViews.swift")
+        let section = try XCTUnwrap(list.range(of: "RunningSection(model: running)"))
+        let cards = try XCTUnwrap(list.range(of: "CardList(cards: cards)"))
+        XCTAssertLessThan(section.lowerBound, cards.lowerBound, "running cards sit above the waiting cards")
     }
     func testTheRowsUseOnlyWhiteGoldAndGreenAndNameNothingAboutTheGPUBox() throws {
         let code = codeLines(try source("RunningViews.swift")).joined(separator: "\n")
         for banned in ["opacity(", "gray", "Gray", "secondary", "5090", "ssh", "watchdog", "nvidia"] { XCTAssertFalse(code.contains(banned), banned) }
         XCTAssertTrue(code.contains("foregroundStyle(Color.white)") && code.contains(".peakGold") && code.contains(".peakGreen"))
+    }
+
+    // ── overflow scrolling (the expanded running page Chris could not reach the bottom of) ──
+    func testClippedRunningPageIsTallerThanTheExpandedViewport() {
+        let page = PeekHomeOverflow.clippedRunningPage()
+        XCTAssertEqual(page.feed.rows.count, 3)
+        XCTAssertEqual(page.waitingRows, 2)
+        XCTAssertTrue(page.showsPill)
+        XCTAssertEqual(RunningText.title(page.feed.rows[0]), "Sample Skater · Demo City Rockets · 10.30")
+        XCTAssertEqual(RunningText.title(page.feed.rows[1]), "Sample Skater")
+        XCTAssertEqual(RunningText.title(page.feed.rows[2]), "Upscale")
+        XCTAssertEqual(RunningText.status(page.feed.rows[0]), "RIFE interpolation")
+        XCTAssertEqual(RunningText.status(page.feed.rows[2]), "Queued · Waiting for the GPU")
+        let m = PeekHomeOverflow.measure(runningRows: page.feed.rows.count, waitingRows: page.waitingRows, showsPill: page.showsPill)
+        XCTAssertGreaterThan(m.contentHeight, m.viewportHeight)
+        XCTAssertTrue(m.overflows)
+        XCTAssertTrue(m.scrollingEnabled)
+        XCTAssertTrue(m.scrollbarAvailable)
+        XCTAssertEqual(m.viewportHeight, PeekHomeOverflow.viewportHeight)
+        XCTAssertLessThanOrEqual(PeekHomeOverflow.viewportHeight, Double(PeakGeometry().expandedSize.height))
+    }
+    func testAShortListDoesNotNeedToScroll() {
+        let m = PeekHomeOverflow.measure(runningRows: 1, waitingRows: 0, showsPill: false)
+        XCTAssertLessThanOrEqual(m.contentHeight, m.viewportHeight)
+        XCTAssertFalse(m.overflows)
+        XCTAssertFalse(m.scrollingEnabled)
+    }
+    func testTheHomeListIsAScrollViewWithAVisibleScrollbar() throws {
+        let home = try body(try source("RunningViews.swift"), from: "struct PeekHomeScroll", to: "\nstruct RunningSection")
+        XCTAssertTrue(home.contains("ScrollView(.vertical, showsIndicators: true)"), "vertical ScrollView; macOS scrollbar on")
+        XCTAssertTrue(home.contains(".scrollIndicators(.visible)"), "scrollbar stays visible")
+        XCTAssertFalse(home.contains(".scrollIndicators(.never)"), "a hidden indicator is not a visible scrollbar")
+        XCTAssertTrue(home.contains("RunningSection(model: running)"))
+        XCTAssertTrue(home.contains("CardList(cards: cards)"))
+        let cards = try body(try source("Views.swift"), from: "struct CardList", to: "\nstruct CardRow")
+        XCTAssertFalse(cards.contains("ScrollView"), "waiting cards live in PeekHomeScroll; a nested ScrollView would clip again")
+        XCTAssertFalse(cards.contains(".scrollIndicators(.never)"))
+        let v = try source("Views.swift")
+        XCTAssertTrue(v.contains("PeekHomeScroll(nextSession: nextSession, running: running, cards: cards)"))
     }
 }

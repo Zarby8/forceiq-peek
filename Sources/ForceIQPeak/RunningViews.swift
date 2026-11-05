@@ -1,6 +1,27 @@
 import PeakCore
 import SwiftUI
 
+/// Expanded Peek home list: next-session pill, RUNNING cards, and the waiting cards. One vertical ScrollView so a stack
+/// taller than the leftover sheet stays reachable (trackpad, mouse wheel, visible scrollbar). Header, GPU light and
+/// switcher stay pinned. Peek never changes pipeline / RIFE / queue / 5090-hold state here; it only shows Command's rows.
+struct PeekHomeScroll: View {
+    @ObservedObject var nextSession: NextSessionModel
+    @ObservedObject var running: RunningModel
+    @ObservedObject var cards: CardStackViewModel
+    var body: some View {
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 8) {
+                if nextSession.showsPill {
+                    NextSessionPill(model: nextSession).onTapGesture { Haptic.tick(); nextSession.openCard() }
+                }
+                RunningSection(model: running)
+                CardList(cards: cards)
+            }
+        }
+        .scrollIndicators(.visible)
+    }
+}
+
 /// "Running": the upscales and meeting packs Command is working on right now, as Command reports them. Read-only rows, gold and green
 /// on black with pure white text. Hidden while presenting (the whole home view is replaced by the presenting notice then).
 struct RunningSection: View {

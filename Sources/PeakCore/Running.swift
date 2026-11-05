@@ -138,3 +138,56 @@ public enum RunningText {
         return "running fetch code=\(code) upscale=\(f.rows.filter { $0.lane == .upscale }.count) packs=\(f.rows.filter { $0.lane == .postMeeting }.count)"
     }
 }
+
+/// How the expanded Peek home list (RUNNING cards + waiting cards) sizes against the leftover sheet.
+/// Pinned chrome (title row, 5090 light, switcher) does not scroll; this is the viewport the list must scroll inside.
+/// Minimum row heights are conservative: if this overflows, the real sheet does too.
+public enum PeekHomeOverflow {
+    /// Leftover height on the 360 pt expanded sheet in pill mode (the larger leftover). Notch mode is tighter.
+    public static let viewportHeight: Double = 214
+    public static let stackSpacing: Double = 8
+    public static let runningHeaderHeight: Double = 17
+    public static let runningRowGap: Double = 6
+    /// RunningRowView: padding plus title / status — a short row is still at least this tall.
+    public static let runningRowMinHeight: Double = 56
+    public static let waitingRowMinHeight: Double = 46
+    public static let pillMinHeight: Double = 28
+
+    public struct Measure: Equatable, Sendable {
+        public var contentHeight: Double
+        public var viewportHeight: Double
+        public var overflows: Bool { contentHeight > viewportHeight }
+        public var scrollingEnabled: Bool { overflows }
+        public var scrollbarAvailable: Bool { overflows }
+    }
+
+    public static func measure(runningRows: Int, waitingRows: Int, showsPill: Bool) -> Measure {
+        var h = 0.0
+        var blocks = 0
+        if showsPill { h += pillMinHeight; blocks += 1 }
+        if runningRows > 0 {
+            h += runningHeaderHeight + Double(runningRows) * runningRowMinHeight + Double(max(0, runningRows - 1)) * runningRowGap
+            blocks += 1
+        }
+        if waitingRows > 0 {
+            h += Double(waitingRows) * waitingRowMinHeight + Double(max(0, waitingRows - 1)) * stackSpacing
+            blocks += 1
+        }
+        if blocks > 1 { h += Double(blocks - 1) * stackSpacing }
+        return Measure(contentHeight: h, viewportHeight: viewportHeight)
+    }
+
+    /// The clipped layout on the expanded running page: gold next-session pill, three RUNNING cards, and a waiting list
+    /// sitting below the fold. Sample names only. The third row has no client because Command sent none (title falls back
+    /// to "Upscale"); the first two name the client.
+    public static func clippedRunningPage() -> (feed: RunningFeed, waitingRows: Int, showsPill: Bool) {
+        let feed = RunningFeed(known: true, rows: [
+            RunningRow(id: "u1", lane: .upscale, stage: "running", client: "Sample Skater", what: "Demo City Rockets · 10.30",
+                       step: "RIFE interpolation", percent: 50, detail: "26063 / 52078 frames", stepsDone: 11, stepsTotal: 25),
+            RunningRow(id: "u2", lane: .upscale, stage: "running", client: "Sample Skater",
+                       step: "Interpolating (RIFE 2x, 60fps)"),
+            RunningRow(id: "u3", lane: .upscale, stage: "queued", step: "Waiting for the GPU"),
+        ])
+        return (feed, 2, true)
+    }
+}

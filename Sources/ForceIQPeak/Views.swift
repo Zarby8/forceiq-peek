@@ -440,14 +440,8 @@ struct PeakRootView: View {
                     DescriptionView(card: card, cards: cards)
                         .transition(reduceMotion ? .identity : .asymmetric(insertion: .move(edge: .trailing), removal: .identity))
                 } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        if nextSession.showsPill {
-                            NextSessionPill(model: nextSession).onTapGesture { Haptic.tick(); nextSession.openCard() }
-                        }
-                        RunningSection(model: running)
-                        CardList(cards: cards)
-                    }
-                    .transition(.slideUpFull(reduceMotion))
+                    PeekHomeScroll(nextSession: nextSession, running: running, cards: cards)
+                        .transition(.slideUpFull(reduceMotion))
                 }
             }
             .frame(maxHeight: .infinity, alignment: .top)
@@ -632,39 +626,36 @@ struct CardList: View {
     @ObservedObject var cards: CardStackViewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
-                if !cards.configured {
-                    Text("No coach profile on this Mac yet (overlay peak section). Peek shows nothing until it has one.")
-                        .font(.system(size: 13)).foregroundStyle(Color.peakGold)
-                } else {
-                    HomeStatusRows(signIn: cards.signIn, empty: cards.cards.isEmpty, settingsNotice: cards.settingsNotice)
-                }
-                // Each card rises in, staggered; approvals pop; a card that leaves collapses its height (StaggeredEntry,
-                // .cardCollapse). Nothing here runs a card: a tap only opens its description.
-                ForEach(Array(cards.cards.enumerated()), id: \.element.id) { i, c in
-                    CardRow(card: c).onTapGesture { Haptic.tick(); cards.tap(c) }
-                        .modifier(StaggeredEntry(index: i, pop: c.kind == .approval, reduceMotion: reduceMotion))
-                        .transition(.cardCollapse(reduceMotion))
-                }
-                if cards.pipelineHidden > 0 {
-                    HStack {
-                        Text("Pipeline progress lives in Command.").font(.system(size: 12)).foregroundStyle(Color.white)
-                        Spacer()
-                        PeakButton(title: "Open in Command", color: .peakGreen) { _ = AppLauncher.openCommand() }
-                    }
-                }
-                if cards.unnamed > 0 {
-                    HStack {
-                        Text("\(cards.unnamed) more in GOAT (no client named).").font(.system(size: 12)).foregroundStyle(Color.white)
-                        Spacer()
-                        PeakButton(title: "Open in GOAT", color: .peakGold) { _ = AppLauncher.activateGOAT() }
-                    }
+        VStack(alignment: .leading, spacing: 8) {
+            if !cards.configured {
+                Text("No coach profile on this Mac yet (overlay peak section). Peek shows nothing until it has one.")
+                    .font(.system(size: 13)).foregroundStyle(Color.peakGold)
+            } else {
+                HomeStatusRows(signIn: cards.signIn, empty: cards.cards.isEmpty, settingsNotice: cards.settingsNotice)
+            }
+            // Each card rises in, staggered; approvals pop; a card that leaves collapses its height (StaggeredEntry,
+            // .cardCollapse). Nothing here runs a card: a tap only opens its description.
+            ForEach(Array(cards.cards.enumerated()), id: \.element.id) { i, c in
+                CardRow(card: c).onTapGesture { Haptic.tick(); cards.tap(c) }
+                    .modifier(StaggeredEntry(index: i, pop: c.kind == .approval, reduceMotion: reduceMotion))
+                    .transition(.cardCollapse(reduceMotion))
+            }
+            if cards.pipelineHidden > 0 {
+                HStack {
+                    Text("Pipeline progress lives in Command.").font(.system(size: 12)).foregroundStyle(Color.white)
+                    Spacer()
+                    PeakButton(title: "Open in Command", color: .peakGreen) { _ = AppLauncher.openCommand() }
                 }
             }
-            .animation(Motion.collapse(reduceMotion), value: cards.cards.map(\.id))
+            if cards.unnamed > 0 {
+                HStack {
+                    Text("\(cards.unnamed) more in GOAT (no client named).").font(.system(size: 12)).foregroundStyle(Color.white)
+                    Spacer()
+                    PeakButton(title: "Open in GOAT", color: .peakGold) { _ = AppLauncher.activateGOAT() }
+                }
+            }
         }
-        .scrollIndicators(.never)
+        .animation(Motion.collapse(reduceMotion), value: cards.cards.map(\.id))
     }
 }
 
