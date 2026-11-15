@@ -793,8 +793,8 @@ struct SwitcherTile: View {
             .overlay { if let o = style.outlineHex { RoundedRectangle(cornerRadius: 9).stroke(Color(hex: o), lineWidth: 1.5) } }
             .saturation(style.saturation).opacity(style.opacity)           // full color, full opacity, installed or not
             .scaleEffect(hover && style.tappable ? 1.12 : 1)
-            Text(entry.app.name).font(.system(size: 10, weight: .bold)).foregroundStyle(Color(hex: style.labelHex))
-            if let note = style.note { Text(note).font(.system(size: 9, weight: .semibold)).foregroundStyle(Color(hex: style.noteHex)) }
+            Text(entry.app.name).font(.system(size: 12, weight: .bold)).foregroundStyle(Color(hex: style.labelHex))
+            if let note = style.note { Text(note).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color(hex: style.noteHex)) }
         }
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
