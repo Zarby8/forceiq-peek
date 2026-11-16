@@ -1,0 +1,43 @@
+name: Verify Peek
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: SwiftPM build, test, and package
+    # Self-hosted forceiq-M5 only; never fork PRs.
+    if: github.event_name != pull_request || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macOS]
+    timeout-minutes: 60
+    env:
+      AGENT_TOOLSDIRECTORY: /Users/christopherzarb/actions-toolcache
+      RUNNER_TOOL_CACHE: /Users/christopherzarb/actions-toolcache
+
+    steps:
+      - name: Checkout Peek
+        timeout-minutes: 15
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Build (release)
+        timeout-minutes: 20
+        run: swift build -c release
+
+      - name: Test
+        timeout-minutes: 20
+        run: swift test
+
+      - name: Package the app
+        timeout-minutes: 20
+        run: ./build.sh
