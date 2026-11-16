@@ -4,7 +4,7 @@ import Foundation
 /// and the app switcher. The rest are declared so they slot in later; each is on/off per coach profile.
 public enum PeakModuleID: String, Sendable, CaseIterable {
     case meetings, approvals, switcher, family
-    case drops, threePO = "3po", voice, machineGlance = "machine_glance", spend
+    case drops, threePO = "3po", voice, machineGlance = "machine_glance", spend, agents
     public static let shipped: [PeakModuleID] = [.meetings, .approvals, .family, .switcher, .threePO, .spend, .drops]
 }
 
@@ -67,8 +67,16 @@ public struct ThreePOModule: PeakModule {
     public func handles(_ a: PeakURLAction) -> Bool { if case .threePOModel = a { return true }; return false }
 }
 
+/// The Claude watcher: no cards (its surface is the pill dot, the CLAUDE section and the approval
+/// card, all fed by peek.sock — see AgentWatch.swift). Registered so the profile flag has an owner.
+public struct AgentsModule: PeakModule {
+    public let id = PeakModuleID.agents
+    public init() {}
+    public func cards(_ s: EngineSnapshot, _ p: CoachProfile) -> ModuleOutput { ModuleOutput() }
+}
+
 public enum ModuleRegistry {
-    public static let all: [any PeakModule] = [MeetingsModule(), ApprovalsModule(), FamilyModule(), SwitcherModule(), ThreePOModule()]
+    public static let all: [any PeakModule] = [MeetingsModule(), ApprovalsModule(), FamilyModule(), SwitcherModule(), ThreePOModule(), AgentsModule()]
 
     /// Enabled modules' cards, then the coach filter: a card whose client isn't on this coach's roster is never shown
     /// (it's counted as "more in GOAT" so nothing vanishes silently).

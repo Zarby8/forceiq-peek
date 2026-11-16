@@ -107,9 +107,11 @@ struct NotchWingLive: View {
     @ObservedObject var controller: PeakController
     @ObservedObject var nextSession: NextSessionModel
     @ObservedObject var light: GPULightModel
+    @ObservedObject var agents: AgentWatchModel
     func spec(_ now: Date) -> WingSpec {
         WingStatus.spec(presenting: controller.presenting, session: nextSession.session,
-                        gaps: nextSession.warnings.filter { $0.state == .present }.count, light: light.shown, now: now)
+                        gaps: nextSession.warnings.filter { $0.state == .present }.count, light: light.shown, now: now,
+                        agents: agents.summary)
     }
     var ticking: Bool { nextSession.session.map { WingStatus.countdown(to: $0.scheduledAt, now: Date()) != nil } ?? false }
     var body: some View {
@@ -130,7 +132,7 @@ struct NotchWing: View {
             if !spec.dots.isEmpty {
                 VStack(spacing: 4) {
                     ForEach(Array(spec.dots.enumerated()), id: \.offset) { _, hex in
-                        Circle().fill(hex == Brand.redHex ? Color.peakRed : Color.peakGold).frame(width: 7, height: 7)
+                        Circle().fill(hex == Brand.redHex ? Color.peakRed : (hex == Brand.greenHex ? Color.peakGreen : (hex == Brand.whiteHex ? Color.white : Color.peakGold))).frame(width: 7, height: 7)
                     }
                 }
             }
@@ -218,6 +220,7 @@ struct PeakRootView: View {
     @ObservedObject var running: RunningModel
     @ObservedObject var light: GPULightModel
     @ObservedObject var checklist: MeetingChecklistModel
+    @ObservedObject var agents: AgentWatchModel
     let switcher: [SwitcherEntry]
     let mark: GhostMarkRendering
     let glow: GhostGlowRendering
@@ -373,7 +376,7 @@ struct PeakRootView: View {
             // "PRESENTING" while presenting), in the menu bar row, merged with the notch.
             ZStack(alignment: .topLeading) {
                 Color.clear.frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
-                NotchWingLive(controller: controller, nextSession: nextSession, light: light)
+                NotchWingLive(controller: controller, nextSession: nextSession, light: light, agents: agents)
                     .frame(width: panel.layout.wing.width, height: panel.layout.wing.height)     // the wing is the leftmost part
             }
         } else {
@@ -384,6 +387,9 @@ struct PeakRootView: View {
     var collapsedPill: some View {
         HStack(spacing: 6) {
             ghost(panel.collapsedSize.height - 10)
+            if agents.summary.count > 0 {
+                AgentsPillBadge(summary: agents.summary)     // Claude watcher: one dot + count, nothing else (spec §5)
+            }
             if checklist.isLive() {
                 ChecklistPillLine(model: checklist)
             } else if nextSession.showsPill && !controller.presenting {
@@ -447,7 +453,7 @@ struct PeakRootView: View {
                     DescriptionView(card: card, cards: cards)
                         .transition(reduceMotion ? .identity : .asymmetric(insertion: .move(edge: .trailing), removal: .identity))
                 } else {
-                    PeekHomeScroll(nextSession: nextSession, running: running, cards: cards, checklist: checklist)
+                    PeekHomeScroll(nextSession: nextSession, running: running, cards: cards, checklist: checklist, agents: agents)
                         .transition(.slideUpFull(reduceMotion))
                 }
             }

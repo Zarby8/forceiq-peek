@@ -24,6 +24,9 @@ printf 'APPL????' > "$APPB.new/Contents/PkgInfo"
 [ -d Resources/threepo ] && cp -R Resources/threepo "$APPB.new/Contents/Resources/threepo"
 # Cua child (desktop actions, Cua backend; gated off by default): the runner Peek spawns with ~/ForceIQ/.venv-peak-cua.
 mkdir -p "$APPB.new/Contents/Resources/cua" && cp cua/peak_cua_runner.py "$APPB.new/Contents/Resources/cua/peak_cua_runner.py"
+# The Claude watcher relay (spec §3): the app installs it into ~/Library/Application Support/ForceIQPeek/
+# and merges its hooks into ~/.claude/settings.json while the agents module is on.
+mkdir -p "$APPB.new/Contents/Resources/relay" && cp relay/peek-hook relay/peek-hook.py "$APPB.new/Contents/Resources/relay/"
 # KeyboardShortcuts' localized strings (SwiftPM resource bundle).
 for b in "$BIN"/*.bundle; do [ -d "$b" ] && cp -R "$b" "$APPB.new/Contents/Resources/"; done
 # Metal glow: compiled only when this Mac's Xcode has the Metal toolchain; otherwise the native SwiftUI glow is used.

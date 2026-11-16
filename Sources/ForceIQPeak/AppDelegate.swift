@@ -140,6 +140,10 @@ enum Screens {
     var nextSession: NextSessionModel!
     /// The live meeting checklist + ten-minute nudge (local state only, no client name anywhere).
     var checklist: MeetingChecklistModel!
+    /// The Claude watcher (agents module): the session registry + held approvals, fed by peek.sock.
+    var agents: AgentWatchModel!
+    var agentServer: AgentSocketServer?
+    var agentsOn = false
     /// Pack ready / FLOW package ready (read-only, GET /api/peak/ready about every 10 min). On unless settings.json readyAlerts is false.
     var ready: ReadyModel!
     /// What Command is running now (upscales, meeting packs) for the sheet: read-only, GET /api/peak/running.
@@ -199,6 +203,7 @@ enum Screens {
         ready = ReadyModel(transport: engine, enabled: !demo && prefs.readyAlerts, logger: log)
         running = RunningModel(transport: engine, enabled: !demo, logger: log)
         checklist = MeetingChecklistModel()
+        setUpAgents(p)
         controller.onPeekAction = { [weak self] a, display in
             guard let self else { return }
             guard let id = a.cardID, let card = self.cards.cards.first(where: { $0.id == id }) else {
@@ -829,6 +834,7 @@ enum Screens {
 
     func refresh() {
         gpuLight?.refresh()
+        agents?.tick()
         if demo {
             let s = demoSnapshot(); cards.update(s, profile: profile)
             if ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "running", running.feed == nil { running.setFeed(DemoData.runningFeed()) }
@@ -858,6 +864,42 @@ enum Screens {
         }
     }
 
+    /// The Claude watcher, when the agents module is on (the profile flag, or the settings.json
+    /// agentsWatcher switch): install the relay + hooks, listen on peek.sock, expand once for a
+    /// held approval, and keep the state snapshot fresh. Off: Peek's hooks are removed if present.
+    func setUpAgents(_ p: CoachProfile) {
+        agents = AgentWatchModel(logger: log)
+        agentsOn = !demo && (p.isEnabled(.agents) || prefs.agentsWatcher)
+        guard agentsOn else { AgentRelayInstaller.reconcile(enabled: false, logger: log); return }
+        AgentRelayInstaller.reconcile(enabled: true, logger: log)
+        agents.isPresenting = { [weak self] in self?.controller.presenting ?? false }
+        agents.onHeldRequest = { [weak self] _ in self?.considerAgentApproval() }
+        agentServer = AgentSocketServer(model: agents, path: AgentRelayInstaller.socketURL.path,
+                                        log: { [weak self] line in Task { @MainActor in self?.log.log(line) } })
+        agentServer?.start()
+        controller.$presenting.sink { [weak self] on in if on { self?.agents.cancelAllHeld() } }.store(in: &bag)
+        agents.$sessions.sink { [weak self] _ in self?.writeAgentState() }.store(in: &bag)
+        agents.$pending.sink { [weak self] _ in self?.writeAgentState() }.store(in: &bag)
+        log.log("agents watcher=on")
+    }
+
+    /// A held Claude approval landed: expand the notch once (Peek hidden stays hidden — the guard
+    /// is on globallyVisible), home tab, the approval card on top. The request is blocked on the
+    /// coach and expires; everything else waits for a hover (spec §3.1/§5).
+    func considerAgentApproval() {
+        guard controller.globallyVisible, !controller.presenting else { return }
+        if let d = peekDisplayID() { controller.activeDisplay = d }
+        controller.tab = .home
+        controller.expand()
+        log.log("agents approval=expand")
+    }
+
+    /// The watcher's state snapshot (what the sheet shows, nothing more) for debugging / proof.
+    func writeAgentState() {
+        guard agentsOn else { return }
+        AgentRelayInstaller.writeState(sessions: agents.sessions, pending: agents.pending)
+    }
+
     /// The live checklist + ten-minute nudge, from the gpu_window spans (no client name anywhere).
     /// One refresh-tick call; expands the notch once when the nudge is due and Peek is visible.
     /// Peek hidden stays hidden — expand() would un-hide it, so the guard is on globallyVisible.
@@ -880,7 +922,7 @@ enum Screens {
             if let h = hosts[s.uuid] { h.relayout(s, geometry: geometry); continue }
             let entries = profile.isEnabled(.switcher) ? AppSwitcher.entries(profile, WorkspaceLocator()) : []
             let h = PanelHost(screen: s, geometry: geometry) { [unowned self] st in
-                AnyView(PeakRootView(controller: controller, cards: cards, panel: st, threePO: threePO, drops: dropsStore, voice: voice, nextSession: nextSession, running: running, light: gpuLight, checklist: checklist, switcher: entries, mark: mark, glow: glow,
+                AnyView(PeakRootView(controller: controller, cards: cards, panel: st, threePO: threePO, drops: dropsStore, voice: voice, nextSession: nextSession, running: running, light: gpuLight, checklist: checklist, agents: agents, switcher: entries, mark: mark, glow: glow,
                                      onSwitch: { [weak self] id in self?.controller.handle(.switchApp(id)) },
                                      onDrop: { [weak self] urls in self?.dropped(urls, uuid: s.uuid) ?? false }))
             }
