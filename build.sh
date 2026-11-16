@@ -19,6 +19,7 @@ printf 'APPL????' > "$APPB.new/Contents/PkgInfo"
 # BOB Motion ForceIQ-Peek-BOB-v1 (h264-black, 64 + 128 px, + its state data). See Resources/ASSETS.md for source + MD5s.
 # Missing -> the app shows the labelled vector placeholder.
 [ -d Resources/bob ] && cp -R Resources/bob "$APPB.new/Contents/Resources/bob"
+[ -d Resources/ghost ] && cp -R Resources/ghost "$APPB.new/Contents/Resources/ghost"
 # BOB Motion ForceIQ-Peek-3PO-v1 (3PO chat droid): MANIFEST.json, rig/3po.usdz (live RealityKit rig), hevc_alpha 64 px
 # loops + transitions, the neutral still. See Resources/ASSETS.md. Missing -> rendered loops -> the static droid mark.
 [ -d Resources/threepo ] && cp -R Resources/threepo "$APPB.new/Contents/Resources/threepo"

@@ -96,9 +96,12 @@ enum Screens {
     let engine = EngineClient()
     let demo = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO"] == "1"
     let geometry: PeakGeometryProviding = PeakGeometry()
-    /// The eyes (👀) by default; FORCEIQ_PEAK_MARK=bob brings back the BOB Motion loops.
+    /// The eyes (👀) by default; FORCEIQ_PEAK_MARK=bob brings back the BOB Motion loops,
+    /// FORCEIQ_PEAK_MARK=ghost selects the GHOST character pack (Resources/ghost).
     static let bobMark = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_MARK"] == "bob"
-    let mark: GhostMarkRendering = AppDelegate.bobMark ? VideoGhostMarkRenderer() : EyesMarkRenderer()
+    static let ghostMark = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_MARK"] == "ghost"
+    static let videoMark = bobMark || ghostMark
+    let mark: GhostMarkRendering = AppDelegate.videoMark ? VideoGhostMarkRenderer() : EyesMarkRenderer()
     lazy var glow: GhostGlowRendering = ShaderGlowRenderer.available ? ShaderGlowRenderer() : NativeGlowRenderer()
     var profile = CoachProfile.none
     var prefs: PeakPrefs!
@@ -250,7 +253,7 @@ enum Screens {
         cards.gpuHold = gpuHold
         setUpVoice(p, root: root)
         if p.isEnabled(.threePO) { Task { await threePO.loadModels(); await threePO.refreshSpend() } }
-        log.log("launch profile=\(source) configured=\(p.configured ? "yes" : "no") modules=\(PeakModuleID.allCases.filter { p.isEnabled($0) }.map(\.rawValue).joined(separator: ",")) demo=\(demo ? "on" : "off") glow=\(ShaderGlowRenderer.available ? "metal" : "native") mark=\(AppDelegate.bobMark ? (GhostAssets.pack.map { $0.pack.replacingOccurrences(of: " ", with: "_") } ?? "placeholder") : "peek-eyes") format=\(GhostAssets.format.rawValue)")
+        log.log("launch profile=\(source) configured=\(p.configured ? "yes" : "no") modules=\(PeakModuleID.allCases.filter { p.isEnabled($0) }.map(\.rawValue).joined(separator: ",")) demo=\(demo ? "on" : "off") glow=\(ShaderGlowRenderer.available ? "metal" : "native") mark=\(AppDelegate.videoMark ? (GhostAssets.pack.map { $0.pack.replacingOccurrences(of: " ", with: "_") } ?? "placeholder") : "peek-eyes") format=\(GhostAssets.format.rawValue)")
         controller.onSwitchApp = { [weak self] id in
             let ok = AppLauncher.activate(id)
             self?.log.log("switch \(ok ? "ok" : "refused")")

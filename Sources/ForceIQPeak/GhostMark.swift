@@ -24,6 +24,9 @@ import SwiftUI
             let u = URL(fileURLWithPath: (d as NSString).expandingTildeInPath)
             if FileManager.default.fileExists(atPath: u.appendingPathComponent("MANIFEST.json").path) { return u }
         }
+        if ProcessInfo.processInfo.environment["FORCEIQ_PEAK_MARK"] == "ghost",
+           let u = Bundle.main.resourceURL?.appendingPathComponent("ghost"),
+           FileManager.default.fileExists(atPath: u.appendingPathComponent("MANIFEST.json").path) { return u }
         if let u = Bundle.main.resourceURL?.appendingPathComponent("bob"),
            FileManager.default.fileExists(atPath: u.appendingPathComponent("MANIFEST.json").path) { return u }
         return nil
