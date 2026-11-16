@@ -1,0 +1,279 @@
+{
+  "name": "ForceIQ Peak GHOST pack",
+  "pack": "ForceIQ-Peek-GHOST-v1",
+  "version": "1.0",
+  "app": "ForceIQ Peak",
+  "surface": "ForceIQ Peak",
+  "built": "2026-11-16 (America/Detroit)",
+  "brand_signoff": "Character approved by Chris 2026-11-16 as-is (pose sheet + motion test).",
+  "consumer": "GOAT macOS SwiftUI app \u2014 ForceIQ Peak surface, FORCEIQ_PEAK_MARK=ghost",
+  "file_prefix": "peak-ghost-",
+  "lineage": {
+    "source": "~/workspace/peek-avatar motion test (1152x768, 24 fps, 10 s, 2x3 pose grid)",
+    "method": "each grid cell centre-cropped 256x256, scaled to 128/64; loops are ping-pong (BOB pack precedent), one-shots play forward",
+    "cells": {
+      "idle": "top-left",
+      "working": "top-right",
+      "waiting": "mid-left",
+      "done": "mid-right",
+      "failed": "bottom-left",
+      "sleeping": "bottom-right"
+    }
+  },
+  "peak_state_map": {
+    "idle": {
+      "asset": "idle",
+      "meaning": "resting"
+    },
+    "attention": {
+      "asset": "waiting",
+      "meaning": "something needs Chris"
+    },
+    "working": {
+      "asset": "working",
+      "meaning": "Peek is working"
+    },
+    "typing": {
+      "asset": "working",
+      "meaning": "streaming a reply (the working loop; the pack has no typing pose)"
+    },
+    "receipt": {
+      "asset": "done",
+      "meaning": "answer delivered"
+    },
+    "error": {
+      "asset": "failed",
+      "meaning": "REAL failures only"
+    }
+  },
+  "states": {
+    "idle": {
+      "frames": 118,
+      "fps": 24,
+      "duration_s": 4.9167,
+      "loop": {
+        "mode": "loop",
+        "loop_frames": [
+          0,
+          117
+        ],
+        "seamless": true,
+        "method": "ping-pong of motion-test frames 24..83..25"
+      }
+    },
+    "working": {
+      "frames": 118,
+      "fps": 24,
+      "duration_s": 4.9167,
+      "loop": {
+        "mode": "loop",
+        "loop_frames": [
+          0,
+          117
+        ],
+        "seamless": true,
+        "method": "ping-pong of motion-test frames 24..83..25"
+      }
+    },
+    "waiting": {
+      "frames": 118,
+      "fps": 24,
+      "duration_s": 4.9167,
+      "loop": {
+        "mode": "loop",
+        "loop_frames": [
+          0,
+          117
+        ],
+        "seamless": true,
+        "method": "ping-pong of motion-test frames 24..83..25"
+      }
+    },
+    "done": {
+      "frames": 60,
+      "fps": 24,
+      "duration_s": 2.5,
+      "loop": {
+        "mode": "one_shot",
+        "frames": [
+          0,
+          59
+        ],
+        "then": "idle"
+      }
+    },
+    "failed": {
+      "frames": 60,
+      "fps": 24,
+      "duration_s": 2.5,
+      "loop": {
+        "mode": "one_shot_hold",
+        "frames": [
+          0,
+          59
+        ],
+        "hold_frame": 59
+      }
+    },
+    "sleeping": {
+      "frames": 118,
+      "fps": 24,
+      "duration_s": 4.9167,
+      "loop": {
+        "mode": "loop",
+        "loop_frames": [
+          0,
+          117
+        ],
+        "seamless": true,
+        "method": "ping-pong of motion-test frames 24..83..25"
+      }
+    }
+  },
+  "files": {
+    "h264-black/peak-ghost-idle-128.mp4": {
+      "md5": "32c82d15f18047d9e2d2fd9e46027774",
+      "bytes": 65380,
+      "px": [
+        128,
+        128
+      ],
+      "codec": "h264",
+      "frames": 118,
+      "fps": 24,
+      "state": "idle"
+    },
+    "h264-black/peak-ghost-idle-64.mp4": {
+      "md5": "d8e2379545acbf6b2c7cb9fc6ff8008c",
+      "bytes": 30567,
+      "px": [
+        64,
+        64
+      ],
+      "codec": "h264",
+      "frames": 118,
+      "fps": 24,
+      "state": "idle"
+    },
+    "h264-black/peak-ghost-working-128.mp4": {
+      "md5": "510b7f64489d2aaff2693ed6cabd2e2e",
+      "bytes": 47445,
+      "px": [
+        128,
+        128
+      ],
+      "codec": "h264",
+      "frames": 118,
+      "fps": 24,
+      "state": "working"
+    },
+    "h264-black/peak-ghost-working-64.mp4": {
+      "md5": "34b5bcb7101c440fd59717007cf9c771",
+      "bytes": 25750,
+      "px": [
+        64,
+        64
+      ],
+      "codec": "h264",
+      "frames": 118,
+      "fps": 24,
+      "state": "working"
+    },
+    "h264-black/peak-ghost-waiting-128.mp4": {
+      "md5": "a98b665c5b03bfded3b107a13b624598",
+      "bytes": 74883,
+      "px": [
+        128,
+        128
+      ],
+      "codec": "h264",
+      "frames": 118,
+      "fps": 24,
+      "state": "waiting"
+    },
+    "h264-black/peak-ghost-waiting-64.mp4": {
+      "md5": "2f61bb1b2ee14fc2abbe602411c1ee07",
+      "bytes": 38336,
+      "px": [
+        64,
+        64
+      ],
+      "codec": "h264",
+      "frames": 118,
+      "fps": 24,
+      "state": "waiting"
+    },
+    "h264-black/peak-ghost-done-128.mp4": {
+      "md5": "1e3408e3a4747bfa5d68336bf6d2c037",
+      "bytes": 30303,
+      "px": [
+        128,
+        128
+      ],
+      "codec": "h264",
+      "frames": 60,
+      "fps": 24,
+      "state": "done"
+    },
+    "h264-black/peak-ghost-done-64.mp4": {
+      "md5": "76f2b79b92c32284ef4099966ca9d33c",
+      "bytes": 15155,
+      "px": [
+        64,
+        64
+      ],
+      "codec": "h264",
+      "frames": 60,
+      "fps": 24,
+      "state": "done"
+    },
+    "h264-black/peak-ghost-failed-128.mp4": {
+      "md5": "067c1808c66dbc7981c1c00c3042d3dc",
+      "bytes": 34802,
+      "px": [
+        128,
+        128
+      ],
+      "codec": "h264",
+      "frames": 60,
+      "fps": 24,
+      "state": "failed"
+    },
+    "h264-black/peak-ghost-failed-64.mp4": {
+      "md5": "8af35b11e9f069eb043d3260a0af1170",
+      "bytes": 18708,
+      "px": [
+        64,
+        64
+      ],
+      "codec": "h264",
+      "frames": 60,
+      "fps": 24,
+      "state": "failed"
+    },
+    "h264-black/peak-ghost-sleeping-128.mp4": {
+      "md5": "3294c9119d7a22826bb193a9c69a693d",
+      "bytes": 47425,
+      "px": [
+        128,
+        128
+      ],
+      "codec": "h264",
+      "frames": 118,
+      "fps": 24,
+      "state": "sleeping"
+    },
+    "h264-black/peak-ghost-sleeping-64.mp4": {
+      "md5": "a469779701163c404aec932f4f279716",
+      "bytes": 24551,
+      "px": [
+        64,
+        64
+      ],
+      "codec": "h264",
+      "frames": 118,
+      "fps": 24,
+      "state": "sleeping"
+    }
+  }
+}

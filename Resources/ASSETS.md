@@ -43,3 +43,18 @@ PNG zips and the other sprites stay in the pack.
 Order (`AvatarTier`): rig → rendered loops → the static vector droid mark (`DroidMark`). `FORCEIQ_PEAK_3PO_RIG=0`
 skips the rig; `FORCEIQ_PEAK_3PO_RIG=<file.usdz>` loads another rig; `FORCEIQ_PEAK_3PO_DIR=<pack root>` points at an
 unpacked pack. A missing or broken usdz falls back to the loops (tested); no complete loop set falls back to the mark.
+
+# GHOST avatar pack
+
+**ForceIQ-Peek-GHOST-v1, version 1.0** — Chris's ghost-on-the-gold-ring character (pose sheet + motion test
+approved as-is 2026-11-16), selectable with `FORCEIQ_PEAK_MARK=ghost`; the eyes and BOB stay the defaults.
+Bundled: `ghost/MANIFEST.json` + `ghost/h264-black/peak-ghost-<asset>-{64,128}.mp4` for six assets
+(idle, working, waiting, done, failed, sleeping), 12 files, ~470 KB; every MD5 is checked by
+`GhostAvatarPackTests`. The pack declares its own `file_prefix` (`peak-ghost-`) in the manifest;
+a manifest without one keeps the BOB default.
+
+Source: the 1152x768 / 24 fps / 10 s motion-test grid (2 cols x 3 rows). Each cell was centre-cropped
+256x256 and scaled; loops are ping-pong (the BOB idle precedent: frames 24..83..25 of the cell, 118 frames),
+one-shots play forward (60 frames). State map: idle->idle (fierce), working->working, attention->waiting,
+receipt->done (one-shot, then idle), error->failed (one-shot, hold last frame). typing has no pose in the
+grid and rides the working loop; sleeping ships in the pack but no GhostState maps to it yet.
