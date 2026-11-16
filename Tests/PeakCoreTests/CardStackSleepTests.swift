@@ -68,6 +68,16 @@ import XCTest
         XCTAssertEqual(vm.ghost, .idle, "a live meeting is activity: no sleeping through it")
     }
 
+    func testADistantMeetingDoesNotPreventSleep() {
+        var s = EngineSnapshot()
+        s.meeting = MeetingRow(client: "Sample Skater", scheduledAt: now.addingTimeInterval(3 * 3600),
+                               durationMinutes: 60, joinURL: nil, openURL: "x")
+        let vm = makeVM()
+        vm.update(s, profile: CoachProfile.none)
+        for _ in 1...10 { tick(vm, s) }
+        XCTAssertEqual(vm.ghost, .sleeping, "the snapshot's meeting is the NEXT one: hours away is not activity")
+    }
+
     func testWatcherActivityPreventsSleepAndTheClockRunsFromTheLastActiveTick() {
         let vm = makeVM()
         var agentsBusy = true

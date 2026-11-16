@@ -250,7 +250,14 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         baseGhost = GhostState.from(s)
         progress = LiveProgress(s)
         let now = clock()
-        let active = baseGhost != .idle || s.meeting != nil || ghost == .typing || ghost == .receipt || agentsActive()
+        // A meeting counts only while it is live: from 10 min before its start (Peek's own urgency
+        // window) through its scheduled end. The snapshot's meeting is the NEXT one — a meeting hours
+        // away must not keep the mark awake all day.
+        let meetingLive = s.meeting.map {
+            now >= $0.scheduledAt.addingTimeInterval(-10 * 60)
+                && now <= $0.scheduledAt.addingTimeInterval(Double($0.durationMinutes) * 60)
+        } ?? false
+        let active = baseGhost != .idle || meetingLive || ghost == .typing || ghost == .receipt || agentsActive()
         if active || lastActivityAt == nil { lastActivityAt = now }
         if ghost != .typing && ghost != .receipt {
             ghost = (!active && now.timeIntervalSince(lastActivityAt ?? now) >= Self.sleepAfter) ? .sleeping : baseGhost
