@@ -31,7 +31,8 @@
       "3po": true,
       "voice": false,
       "machine_glance": false,
-      "spend": true
+      "spend": true,
+      "agents": false
     },
     "apps": [
       {

@@ -34,7 +34,7 @@ public enum WingStatus {
         return nil
     }
 
-    public static func spec(presenting: Bool, session: NextSession?, gaps: Int, light: GPULightState, now: Date) -> WingSpec {
+    public static func spec(presenting: Bool, session: NextSession?, gaps: Int, light: GPULightState, now: Date, agents: AgentPillSummary = .none) -> WingSpec {
         if presenting {
             let b = StatusBadge.spec(presenting: true)
             return WingSpec(text: b.wingText, textHex: b.textHex, dots: [], accessibilityLabel: b.accessibilityLabel)
@@ -42,6 +42,7 @@ public enum WingStatus {
         var dots: [UInt32] = []
         if light.holdsGPU { dots.append(Brand.redHex) }
         if gaps > 0 { dots.append(Brand.goldHex) }
+        if let hex = agents.dotHex { dots.append(hex) }        // Claude watcher: gold working, green waiting, white done, red failed
         var text = StatusBadge.spec(presenting: false).wingText
         var label = ["ForceIQ Peek"]
         if let s = session, let c = countdown(to: s.scheduledAt, now: now) {
@@ -50,6 +51,7 @@ public enum WingStatus {
         }
         if light.holdsGPU { label.append("5090 held") }
         if gaps > 0 { label.append(gaps == 1 ? "1 gap needs you" : "\(gaps) gaps need you") }
+        if agents.count > 0 { label.append(agents.accessibilityLabel) }
         return WingSpec(text: text, textHex: Brand.greenHex, dots: dots, accessibilityLabel: label.joined(separator: ", "))
     }
 }

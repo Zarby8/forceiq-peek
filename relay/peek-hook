@@ -1,0 +1,8 @@
+#!/bin/sh
+# Peek's Claude Code hook entry point (the command registered in ~/.claude/settings.json).
+# Runs the Python relay and ALWAYS exits 0: a Peek problem must never break, block or
+# error a Claude Code session. Stdout passes through untouched — on a held event the
+# relay's hookSpecificOutput line is how a notch decision reaches Claude Code.
+DIR="$(cd "$(dirname "$0")" && pwd)"
+/usr/bin/python3 "$DIR/peek-hook.py" "$@" 2>/dev/null
+exit 0
