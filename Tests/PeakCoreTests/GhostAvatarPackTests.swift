@@ -18,8 +18,9 @@ final class GhostAvatarPackTests: XCTestCase {
         XCTAssertEqual(pack.file(for: .attention, px: 128, format: .h264Black), "h264-black/peak-ghost-waiting-128.mp4")
     }
 
-    /// The six approved poses mapped onto Peek's six mark states. typing has no pose of its own in the
-    /// grid, so it rides the working loop; sleeping is in the pack but no GhostState maps to it yet.
+    /// The six approved poses mapped onto Peek's mark states. typing has no pose of its own in the
+    /// grid, so it rides the working loop; sleeping is the crescent pose (bottom-right cell), reached
+    /// from the card model's inactivity overlay (GhostState.sleeping).
     func testStateMappingMatchesTheApprovedPoses() {
         XCTAssertEqual(pack.stateMap["idle"], "idle")          // fierce idle
         XCTAssertEqual(pack.stateMap["working"], "working")    // green dots trailing
@@ -27,11 +28,11 @@ final class GhostAvatarPackTests: XCTestCase {
         XCTAssertEqual(pack.stateMap["typing"], "working")     // streaming a reply: the working loop
         XCTAssertEqual(pack.stateMap["receipt"], "done")       // happy, sparkles
         XCTAssertEqual(pack.stateMap["error"], "failed")       // startled
-        XCTAssertFalse(pack.stateMap.values.contains("sleeping"))
+        XCTAssertEqual(pack.stateMap["sleeping"], "sleeping")  // gold crescent
     }
 
     func testPlaybackComesFromTheManifest() {
-        for s in [GhostState.idle, .working, .attention, .typing] {
+        for s in [GhostState.idle, .working, .attention, .typing, .sleeping] {
             let pb = pack.playback(for: s)!
             XCTAssertEqual(pb.mode, .loop, s.rawValue)
             XCTAssertEqual(pb.frames, 118, s.rawValue)         // 60 forward + 58 ping-pong return
@@ -54,7 +55,7 @@ final class GhostAvatarPackTests: XCTestCase {
                 XCTAssertEqual(md5Hex(data), pack.md5[rel], rel)
             }
         }
-        // The sleeping pose ships too (unmapped): present, both sizes, MD5-verified like the rest.
+        // The sleeping pose is one of the mapped states above; check its files explicitly too.
         for px in pack.sizes {
             let rel = "h264-black/peak-ghost-sleeping-\(px).mp4"
             let data = try Data(contentsOf: ghost.appendingPathComponent(rel))

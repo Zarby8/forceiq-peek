@@ -36,6 +36,7 @@ public struct EyesPose: Equatable, Sendable {
         case .attention: return EyesPose(scale: 1.08, pupilHex: Brand.goldHex, halo: true)
         case .receipt: return EyesPose(scale: 1.08, ring: true)
         case .error: return EyesPose(scale: 1.1, pupil: 0.55, pupilHex: Brand.goldHex, ring: true)
+        case .sleeping: return EyesPose(open: 0.1)                                        // lids shut
         }
     }
 
@@ -61,6 +62,8 @@ public struct EyesPose: Equatable, Sendable {
         case .error:                                                                      // startled: shake, then hold wide
             return EyesPose(lookX: t < 0.8 ? 0.35 * sin(2 * .pi * t / 0.22) : 0, scale: 1.1, pupil: 0.55,
                             pupilHex: Brand.goldHex, ring: true)
+        case .sleeping:                                                                   // asleep: lids shut, one slow breath
+            return EyesPose(open: 0.1, scale: 1.02 + 0.01 * sin(2 * .pi * t / 4))
         }
     }
 

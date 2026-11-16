@@ -44,6 +44,10 @@
     "error": {
       "asset": "failed",
       "meaning": "REAL failures only"
+    },
+    "sleeping": {
+      "asset": "sleeping",
+      "meaning": "asleep after 10 min of complete inactivity; any activity wakes the mark"
     }
   },
   "states": {

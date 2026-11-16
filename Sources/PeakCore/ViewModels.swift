@@ -218,6 +218,17 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     /// "Settings file couldn't be read: using defaults" while settings.json couldn't be used (PeakPrefs.settingsNotice).
     @Published public var settingsNotice: String? = nil
     private var baseGhost: GhostState = .idle
+    /// Seconds of complete inactivity before the mark sleeps (GhostState.sleeping). Complete inactivity:
+    /// the snapshot says idle (no engine work, no attention, no error), no live meeting, no chat/typing
+    /// or receipt on the mark, and the watcher reports no active Claude session and no held approval
+    /// (agentsActive, wired by the app; false when the agents module is off). Any activity restarts the
+    /// clock; the next update after activity wakes the mark back to the data state.
+    public static let sleepAfter: TimeInterval = 10 * 60
+    /// The wall clock, injected like AgentWatchModel's so the sleep transition is unit-testable.
+    public var clock: () -> Date = Date.init
+    /// Watcher activity (an agent session working/waiting, or a held approval pending).
+    public var agentsActive: () -> Bool = { false }
+    private var lastActivityAt: Date? = nil
     let performer: CardActionPerforming
     weak var logger: PeakLogging?
 
@@ -238,7 +249,12 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         cards = r.cards; unnamed = r.unnamed; pipelineHidden = r.pipelineHidden
         baseGhost = GhostState.from(s)
         progress = LiveProgress(s)
-        if ghost != .typing && ghost != .receipt { ghost = baseGhost }
+        let now = clock()
+        let active = baseGhost != .idle || s.meeting != nil || ghost == .typing || ghost == .receipt || agentsActive()
+        if active || lastActivityAt == nil { lastActivityAt = now }
+        if ghost != .typing && ghost != .receipt {
+            ghost = (!active && now.timeIntervalSince(lastActivityAt ?? now) >= Self.sleepAfter) ? .sleeping : baseGhost
+        }
         if case .describing(let id) = phase, !cards.contains(where: { $0.id == id }) { phase = .list }
     }
 
@@ -247,14 +263,22 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         return nil
     }
 
+    /// A user action: the sleep clock restarts, and a sleeping mark wakes to the data state at once
+    /// rather than waiting for the next feed read.
+    private func noteActivity() {
+        lastActivityAt = clock()
+        if ghost == .sleeping { ghost = baseGhost }
+    }
+
     /// A tap on a card ONLY shows its plain description. It never runs anything.
     public func tap(_ card: PeakCard) {
+        noteActivity()
         phase = .describing(card.id)
         lastResult = nil
         logger?.log("card describe kind=\(card.kind.rawValue)")
     }
 
-    public func back() { phase = .list; lastResult = nil }
+    public func back() { noteActivity(); phase = .list; lastResult = nil }
 
     /// The receipt one-shot finished: back to what the data says.
     public func ghostOneShotFinished() { if ghost == .receipt { ghost = baseGhost } }
@@ -262,6 +286,7 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     /// The only path to an action: an explicit button tap, on the card whose description is showing, and allowed by policy.
     @discardableResult
     public func choose(_ action: CardAction) async -> Bool {
+        noteActivity()
         guard let card = describedCard else { return false }
         guard CardPolicy.isAllowed(action, on: card) else {
             lastResult = card.viewOnlyReason ?? "Not available from Peek."
@@ -286,6 +311,7 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     /// view-only card, never an approval or fix.
     @discardableResult
     public func quickStart(_ card: PeakCard) async -> Bool {
+        noteActivity()
         guard card.kind == .meeting, CardPolicy.isAllowed(.run, on: card) else {
             logger?.log("card quick-start refused kind=\(card.kind.rawValue)")
             return false

@@ -4,14 +4,17 @@
 verified). Brand sign-off in the pack MANIFEST: "TRON-approved 10/18 (ForceIQ Peak surface)". Internal ForceIQ art,
 Chris-locked: Peak never recolors or alters the mark; effects only go around it (and none for attention, which has its own bloom).
 
-Bundled (only what Peak uses): `bob/MANIFEST.json` (as shipped, v1.1) and `bob/h264-black/peak-bob-<asset>-{64,128}.mp4`
+Bundled (only what Peak uses): `bob/MANIFEST.json` (v1.1 as shipped, plus the one Peek-side map entry noted
+below) and `bob/h264-black/peak-bob-<asset>-{64,128}.mp4`
 for all six assets (idle, attention, thinking, typing, receipt, error), 12 files, ~240 KB. Every file's MD5 is checked
 against MANIFEST.json by `PeakCoreTests.testBundledFilesMatchManifestMD5AndOnlyUsedSizesShip`.
 
 Playback is driven by MANIFEST.json (`peak_state_map` + `states.*.loop`), never by frame numbers in code:
 idle = loop (v1.1: 60 frames, 0-59, seamless); attention = loop 0-47; working = thinking intro 0-15 then loop 16-71;
 typing = intro 0-19 then loop 20-67; receipt = once, then idle; error = once, hold f61 (real failures only).
-No idle crossfade (v1.1's idle is seamless).
+No idle crossfade (v1.1's idle is seamless). The one Peek-side addition to the shipped map: `sleeping` -> idle
+(the pack has no sleeping pose; sleeping is Peek's own inactivity state, reached after 10 min of complete
+inactivity — no engine work or attention, no live meeting, no chat, no active Claude session).
 
 Formats: `h264-black` (default; no alpha needed on the pure-black notch/pill). `hevc-alpha` is a setting
 (`settings.json` `ghostFormat`), not bundled and not yet proven in AVFoundation; Peak falls back to h264-black for any
@@ -56,5 +59,9 @@ a manifest without one keeps the BOB default.
 Source: the 1152x768 / 24 fps / 10 s motion-test grid (2 cols x 3 rows). Each cell was centre-cropped
 256x256 and scaled; loops are ping-pong (the BOB idle precedent: frames 24..83..25 of the cell, 118 frames),
 one-shots play forward (60 frames). State map: idle->idle (fierce), working->working, attention->waiting,
-receipt->done (one-shot, then idle), error->failed (one-shot, hold last frame). typing has no pose in the
-grid and rides the working loop; sleeping ships in the pack but no GhostState maps to it yet.
+receipt->done (one-shot, then idle), error->failed (one-shot, hold last frame), sleeping->sleeping
+(gold crescent). typing has no pose in the grid and rides the working loop. Every state maps to a pose
+and every pose is reachable: sleeping is entered after 10 min of complete inactivity
+(`CardStackViewModel.sleepAfter` — no engine work or attention, no live meeting, no chat/typing, no
+active Claude session or held approval) and any activity wakes the mark back to the data state.
+The eyes mark sleeps with lids shut; the BOB pack maps sleeping to its idle loop (see above).

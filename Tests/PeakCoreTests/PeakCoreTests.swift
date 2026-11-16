@@ -495,6 +495,10 @@ final class GhostPackTests: XCTestCase {
         XCTAssertEqual(r.mode, .oneShot); XCTAssertTrue(r.thenIdle)
         let e = pack.playback(for: .error)!
         XCTAssertEqual(e.mode, .oneShotHold); XCTAssertEqual(e.holdFrame, 61)
+        // Sleeping rides the idle loop: the BOB pack has no sleeping pose of its own.
+        XCTAssertEqual(pack.stateMap["sleeping"], "idle")
+        XCTAssertEqual(pack.playback(for: .sleeping), pack.playback(for: .idle))
+        XCTAssertEqual(pack.file(for: .sleeping, px: 64, format: .h264Black), pack.file(for: .idle, px: 64, format: .h264Black))
     }
 
     func testBundledFilesMatchManifestMD5AndOnlyUsedSizesShip() throws {
@@ -502,7 +506,9 @@ final class GhostPackTests: XCTestCase {
         XCTAssertEqual(pack.pixelSize(points: 22, scale: 2), 64)
         XCTAssertEqual(pack.pixelSize(points: 40, scale: 2), 128)
         let shipped = try FileManager.default.contentsOfDirectory(atPath: bob.appendingPathComponent("h264-black").path).sorted()
-        XCTAssertEqual(shipped.count, GhostState.allCases.count * 2)
+        // Exactly the used files ship — distinct paths across states × sizes (sleeping shares idle's file).
+        let used = Set(GhostState.allCases.flatMap { s in pack.sizes.map { pack.file(for: s, px: $0, format: .h264Black)! } })
+        XCTAssertEqual(Set(shipped.map { "h264-black/\($0)" }), used)
         for s in GhostState.allCases {
             for px in pack.sizes {
                 let rel = pack.file(for: s, px: px, format: .h264Black)!

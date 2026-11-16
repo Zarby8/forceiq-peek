@@ -872,6 +872,12 @@ enum Screens {
     /// held approval, and keep the state snapshot fresh. Off: Peek's hooks are removed if present.
     func setUpAgents(_ p: CoachProfile) {
         agents = AgentWatchModel(logger: log)
+        // The mark's sleep clock reads watcher activity through the card model: a session working or
+        // waiting, or a held approval pending, is activity. Off (module disabled): never active.
+        cards.agentsActive = { [weak self] in
+            guard let self, self.agentsOn, let agents = self.agents else { return false }
+            return !agents.pending.isEmpty || agents.sessions.contains { $0.state == .working || $0.state == .waiting }
+        }
         agentsOn = !demo && (p.isEnabled(.agents) || prefs.agentsWatcher)
         guard agentsOn else { AgentRelayInstaller.reconcile(enabled: false, logger: log); return }
         AgentRelayInstaller.reconcile(enabled: true, logger: log)

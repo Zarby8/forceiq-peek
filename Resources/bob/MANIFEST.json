@@ -66,6 +66,11 @@
    "asset": "error",
    "meaning": "REAL failures only (not cancel / empty result / retry in flight)",
    "playback": "one-shot, hold f61, idle when cleared"
+  },
+  "sleeping": {
+   "asset": "idle",
+   "meaning": "asleep after 10 min of complete inactivity (rides the idle loop: the pack has no sleeping pose)",
+   "playback": "the idle loop"
   }
  },
  "states": {

@@ -60,6 +60,13 @@ import XCTest
         XCTAssertEqual(EyesPose.at(.receipt, t: EyesPose.receiptSeconds).scale, 1.0, accuracy: 0.001, "it settles back")
     }
 
+    func testSleepingIsLidsShutWithASlowBreath() {
+        XCTAssertEqual(EyesPose.rest(.sleeping).open, 0.1, accuracy: 1e-9, "the still frame is asleep")
+        XCTAssertTrue(samples(.sleeping).allSatisfy { $0.open == 0.1 && !$0.ring && !$0.halo }, "shut for the whole loop")
+        let scales = samples(.sleeping, to: 8).map(\.scale)
+        XCTAssertGreaterThan(scales.max() ?? 0, 1.025); XCTAssertLessThan(scales.min() ?? 1, 1.015, "one slow breath, in range")
+    }
+
     func testOnlyAttentionWearsTheGoldRing() {
         for s in GhostState.allCases { for p in samples(s) + [EyesPose.rest(s)] { XCTAssertEqual(p.halo, s == .attention, "\(s)") } }
     }

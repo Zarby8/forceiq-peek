@@ -1,8 +1,10 @@
 import Foundation
 
 /// Peek's Ghost mark states (BOB Motion pack ForceIQ-Peek-BOB-v1, MANIFEST peak_state_map).
+/// `sleeping` is never derived from engine data: it is a time-based overlay the card model applies
+/// after sustained complete inactivity (see CardStackViewModel.sleepAfter), so `from` never returns it.
 public enum GhostState: String, Sendable, CaseIterable {
-    case idle, attention, working, typing, receipt, error
+    case idle, attention, working, typing, receipt, error, sleeping
 
     /// From engine data. `error` is for REAL failures only (a fix GOAT reports failed), never a cancel or empty result.
     public static func from(_ s: EngineSnapshot) -> GhostState {
