@@ -18,13 +18,16 @@ import SwiftUI
 }
 
 @MainActor enum GhostAssets {
+    /// The chosen mark (AppDelegate sets it from prefs + env in setUp, before anything reads the pack).
+    /// Defaults to the env-only resolution, so a read before setUp still honors FORCEIQ_PEAK_MARK.
+    static var markChoice: PeakMark = PeakMark.resolve(env: ProcessInfo.processInfo.environment, setting: nil)
     static let root: URL? = resolveRoot()
     private static func resolveRoot() -> URL? {
         if let d = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_GHOST_DIR"], !d.isEmpty {
             let u = URL(fileURLWithPath: (d as NSString).expandingTildeInPath)
             if FileManager.default.fileExists(atPath: u.appendingPathComponent("MANIFEST.json").path) { return u }
         }
-        if ProcessInfo.processInfo.environment["FORCEIQ_PEAK_MARK"] == "ghost",
+        if markChoice == .ghost,
            let u = Bundle.main.resourceURL?.appendingPathComponent("ghost"),
            FileManager.default.fileExists(atPath: u.appendingPathComponent("MANIFEST.json").path) { return u }
         if let u = Bundle.main.resourceURL?.appendingPathComponent("bob"),

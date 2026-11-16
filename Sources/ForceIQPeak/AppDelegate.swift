@@ -96,12 +96,10 @@ enum Screens {
     let engine = EngineClient()
     let demo = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO"] == "1"
     let geometry: PeakGeometryProviding = PeakGeometry()
-    /// The eyes (👀) by default; FORCEIQ_PEAK_MARK=bob brings back the BOB Motion loops,
-    /// FORCEIQ_PEAK_MARK=ghost selects the GHOST character pack (Resources/ghost).
-    static let bobMark = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_MARK"] == "bob"
-    static let ghostMark = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_MARK"] == "ghost"
-    static let videoMark = bobMark || ghostMark
-    let mark: GhostMarkRendering = AppDelegate.videoMark ? VideoGhostMarkRenderer() : EyesMarkRenderer()
+    /// The mark Peek wears (PeakMark.resolve): FORCEIQ_PEAK_MARK wins, else settings.json `mark`, else
+    /// the eyes (👀). Env-only until setUp reads prefs and resolves for real; the renderer follows.
+    private(set) var markSelection: PeakMark = PeakMark.resolve(env: ProcessInfo.processInfo.environment, setting: nil)
+    private(set) var mark: GhostMarkRendering = EyesMarkRenderer()
     lazy var glow: GhostGlowRendering = ShaderGlowRenderer.available ? ShaderGlowRenderer() : NativeGlowRenderer()
     var profile = CoachProfile.none
     var prefs: PeakPrefs!
@@ -195,6 +193,11 @@ enum Screens {
         CuaWiring.shared.install(CuaBackend.make(env: ProcessInfo.processInfo.environment, cuaActions: prefs.cuaActions, mode: desktopMode,
                                                  config: CuaConfig.standard(resources: Bundle.main.resourcePath, env: ProcessInfo.processInfo.environment)))
         GhostAssets.format = prefs.ghostFormat
+        // The mark, resolved now that prefs exist (the env var still wins). GhostAssets learns the choice
+        // before anything reads the pack, so the bundled pack root matches the renderer.
+        markSelection = PeakMark.resolve(env: ProcessInfo.processInfo.environment, setting: prefs.mark)
+        if markSelection.isVideo { mark = VideoGhostMarkRenderer() }
+        GhostAssets.markChoice = markSelection
         ThreePOAssets.log = { [weak self] e in self?.log.log(e) }
         ThreePOAssets.demoReduceMotion = demo && ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_REDUCE_MOTION"] == "1"
         controller = PeakController(prefs: prefs, profile: p, hotkey: KeyboardShortcutsHotkey(name: PeakHotkeyName.make(p)), logger: log)
@@ -253,7 +256,7 @@ enum Screens {
         cards.gpuHold = gpuHold
         setUpVoice(p, root: root)
         if p.isEnabled(.threePO) { Task { await threePO.loadModels(); await threePO.refreshSpend() } }
-        log.log("launch profile=\(source) configured=\(p.configured ? "yes" : "no") modules=\(PeakModuleID.allCases.filter { p.isEnabled($0) }.map(\.rawValue).joined(separator: ",")) demo=\(demo ? "on" : "off") glow=\(ShaderGlowRenderer.available ? "metal" : "native") mark=\(AppDelegate.videoMark ? (GhostAssets.pack.map { $0.pack.replacingOccurrences(of: " ", with: "_") } ?? "placeholder") : "peek-eyes") format=\(GhostAssets.format.rawValue)")
+        log.log("launch profile=\(source) configured=\(p.configured ? "yes" : "no") modules=\(PeakModuleID.allCases.filter { p.isEnabled($0) }.map(\.rawValue).joined(separator: ",")) demo=\(demo ? "on" : "off") glow=\(ShaderGlowRenderer.available ? "metal" : "native") mark=\(markSelection.isVideo ? (GhostAssets.pack.map { $0.pack.replacingOccurrences(of: " ", with: "_") } ?? "placeholder") : "peek-eyes") format=\(GhostAssets.format.rawValue)")
         controller.onSwitchApp = { [weak self] id in
             let ok = AppLauncher.activate(id)
             self?.log.log("switch \(ok ? "ok" : "refused")")

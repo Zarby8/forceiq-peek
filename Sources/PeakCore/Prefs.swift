@@ -9,6 +9,7 @@ import Foundation
 ///   ghostFormat unset (h264-black) · voiceEnabled unset (the profile's modules.voice) · desktopActions false
 ///   commandMeetingLink false · nextSessionPill false · cuaActions false · readyAlerts true (peek when a pack or FLOW package is ready)
 ///   agentsWatcher false (the Claude watcher: Peek installs its hook relay and shows Claude session states; the profile's modules.agents also turns it on)
+///   mark unset (the eyes; "bob" / "ghost" pick a video pack instead — PeakMark.resolve; FORCEIQ_PEAK_MARK overrides)
 ///   presenting false (hide every client detail on a shared screen) · menuBarItem false (the wing's right-click is the menu) · autoPresenting true (present while Command is live)
 ///   quietHoursStart / quietHoursEnd unset ("HH:mm" local; both set = no peeks in that window, wraps midnight) · dndUntil unset
 /// No file is normal (a fresh Mac): silent defaults. A file that exists but can't be used (unreadable, empty, not valid
@@ -20,12 +21,12 @@ public final class PeakPrefs: @unchecked Sendable {
     struct Doc: Codable {
         var hiddenDisplays: [String] = []; var hotkeyEnabled: Bool? = nil; var globallyHidden = false; var ghostFormat: String? = nil
         var voiceEnabled: Bool? = nil; var desktopActions: Bool? = nil; var commandMeetingLink: Bool? = nil
-        var nextSessionPill: Bool? = nil; var cuaActions: Bool? = nil; var readyAlerts: Bool? = nil; var agentsWatcher: Bool? = nil
+        var nextSessionPill: Bool? = nil; var cuaActions: Bool? = nil; var readyAlerts: Bool? = nil; var agentsWatcher: Bool? = nil; var mark: String? = nil
         var quietHoursStart: String? = nil; var quietHoursEnd: String? = nil; var dndUntil: Double? = nil; var presenting: Bool? = nil; var menuBarItem: Bool? = nil; var autoPresenting: Bool? = nil
         init() {}
         enum CodingKeys: String, CodingKey, CaseIterable {
             case hiddenDisplays, hotkeyEnabled, globallyHidden, ghostFormat, voiceEnabled, desktopActions, commandMeetingLink
-            case nextSessionPill, cuaActions, readyAlerts, quietHoursStart, quietHoursEnd, dndUntil, presenting, menuBarItem, autoPresenting, agentsWatcher
+            case nextSessionPill, cuaActions, readyAlerts, quietHoursStart, quietHoursEnd, dndUntil, presenting, menuBarItem, autoPresenting, agentsWatcher, mark
         }
         /// decodeIfPresent for every key: missing / null = the default. A key of the wrong type throws (typeMismatch),
         /// which load() turns into all defaults plus a logged, visible error.
@@ -40,6 +41,7 @@ public final class PeakPrefs: @unchecked Sendable {
             commandMeetingLink = try c.decodeIfPresent(Bool.self, forKey: .commandMeetingLink)
             nextSessionPill = try c.decodeIfPresent(Bool.self, forKey: .nextSessionPill)
             agentsWatcher = try c.decodeIfPresent(Bool.self, forKey: .agentsWatcher)
+            mark = try c.decodeIfPresent(String.self, forKey: .mark)
             cuaActions = try c.decodeIfPresent(Bool.self, forKey: .cuaActions)
             readyAlerts = try c.decodeIfPresent(Bool.self, forKey: .readyAlerts)
             quietHoursStart = try Doc.clock(c, .quietHoursStart)
@@ -188,6 +190,13 @@ public final class PeakPrefs: @unchecked Sendable {
     public var agentsWatcher: Bool {
         get { lock.lock(); defer { lock.unlock() }; return doc.agentsWatcher ?? false }
         set { edit { $0.agentsWatcher = newValue } }
+    }
+    /// The mark Peek wears (PeakMark): settings.json `mark` — "eyes", "bob" or "ghost". nil = never set on
+    /// this Mac: the eyes, unless FORCEIQ_PEAK_MARK overrides (PeakMark.resolve decides; the env var always
+    /// wins). An unrecognized string reads as nil, never as a mark; an unreadable file fails to nil. No UI.
+    public var mark: PeakMark? {
+        get { lock.lock(); defer { lock.unlock() }; return doc.mark.flatMap(PeakMark.init(rawValue:)) }
+        set { edit { $0.mark = newValue?.rawValue } }
     }
     /// Peek when a meeting pack or a FLOW package becomes ready (GET /api/peak/ready, read-only). ON by default; an unreadable
     /// file also reads as on (it is a notice, not a privacy switch). Off: Peek never asks the engine for the feed.
