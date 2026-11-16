@@ -18,7 +18,7 @@ jobs:
   verify:
     name: SwiftPM build, test, and package
     # Self-hosted forceiq-M5 only; never fork PRs.
-    if: github.event_name != pull_request || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: [self-hosted, macOS]
     timeout-minutes: 60
     env:
