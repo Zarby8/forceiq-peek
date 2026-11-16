@@ -138,6 +138,8 @@ enum Screens {
     var commandMeetingLink = false
     /// The next-session pill + gap warnings (read-only). OFF unless settings.json nextSessionPill is true; no UI toggle.
     var nextSession: NextSessionModel!
+    /// The live meeting checklist + ten-minute nudge (local state only, no client name anywhere).
+    var checklist: MeetingChecklistModel!
     /// Pack ready / FLOW package ready (read-only, GET /api/peak/ready about every 10 min). On unless settings.json readyAlerts is false.
     var ready: ReadyModel!
     /// What Command is running now (upscales, meeting packs) for the sheet: read-only, GET /api/peak/running.
@@ -196,6 +198,7 @@ enum Screens {
                                        enabled: NextSessionGate.enabled(setting: prefs.nextSessionPill), roster: p.roster.names, logger: log)
         ready = ReadyModel(transport: engine, enabled: !demo && prefs.readyAlerts, logger: log)
         running = RunningModel(transport: engine, enabled: !demo, logger: log)
+        checklist = MeetingChecklistModel()
         controller.onPeekAction = { [weak self] a, display in
             guard let self else { return }
             guard let id = a.cardID, let card = self.cards.cards.first(where: { $0.id == id }) else {
@@ -831,6 +834,7 @@ enum Screens {
             if ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "running", running.feed == nil { running.setFeed(DemoData.runningFeed()) }
             considerAlert(s)
             gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date()); controller.setCommandLive(s.gpuWindow?.live)
+            considerChecklist(s.gpuWindow)
             let quiet = ProcessInfo.processInfo.environment["FORCEIQ_PEAK_DEMO_FEED"] == "quiet"
             lastMeeting = isVoiceTour ? DemoData.voiceMeeting() : s.meeting
             if !demoFeedLogged { demoFeedLogged = true; log.log("feed demo=\(quiet ? "quiet" : "sample") ghost=\(cards.ghost.rawValue)") }
@@ -845,12 +849,26 @@ enum Screens {
             considerAlert(s)
             lastMeeting = s.meeting
             gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date()); controller.setCommandLive(s.gpuWindow?.live)
+            considerChecklist(s.gpuWindow)
             _ = briefCache.ingest(s, now: Date())            // last good read per source, for a later brief
             log.log("feed meeting=\(s.meeting != nil ? "yes" : "no") fixes=\(s.fixes.count) approvals=\(s.approvals.count) family=\(s.familyEnabled ? "on" : "off") ghost=\(cards.ghost.rawValue)")
             await nextSession.tick()                                         // at most every 5 min; flag off: never
             await ready.tick()                                               // at most every 10 min, last: a slow read never delays the above
             await running.tick(expanded: controller.expanded)                // 15 s with the sheet open, 1 to 2 min closed
         }
+    }
+
+    /// The live checklist + ten-minute nudge, from the gpu_window spans (no client name anywhere).
+    /// One refresh-tick call; expands the notch once when the nudge is due and Peek is visible.
+    /// Peek hidden stays hidden — expand() would un-hide it, so the guard is on globallyVisible.
+    func considerChecklist(_ w: GPUWindow?) {
+        guard let c = checklist else { return }
+        let fire = c.update(spans: w?.spans ?? [], live: w?.live ?? false, now: Date())
+        guard fire == .fire, controller.globallyVisible else { return }
+        if let d = peekDisplayID() { controller.activeDisplay = d }
+        controller.tab = .home
+        controller.expand()
+        log.log("checklist nudge=fire")
     }
 
     // ── panels ──
@@ -862,7 +880,7 @@ enum Screens {
             if let h = hosts[s.uuid] { h.relayout(s, geometry: geometry); continue }
             let entries = profile.isEnabled(.switcher) ? AppSwitcher.entries(profile, WorkspaceLocator()) : []
             let h = PanelHost(screen: s, geometry: geometry) { [unowned self] st in
-                AnyView(PeakRootView(controller: controller, cards: cards, panel: st, threePO: threePO, drops: dropsStore, voice: voice, nextSession: nextSession, running: running, light: gpuLight, switcher: entries, mark: mark, glow: glow,
+                AnyView(PeakRootView(controller: controller, cards: cards, panel: st, threePO: threePO, drops: dropsStore, voice: voice, nextSession: nextSession, running: running, light: gpuLight, checklist: checklist, switcher: entries, mark: mark, glow: glow,
                                      onSwitch: { [weak self] id in self?.controller.handle(.switchApp(id)) },
                                      onDrop: { [weak self] urls in self?.dropped(urls, uuid: s.uuid) ?? false }))
             }

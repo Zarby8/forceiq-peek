@@ -123,13 +123,24 @@ import XCTest
     func testTheSectionLivesOnTheHomeViewWhichPresentingReplaces() throws {
         let v = try source("Views.swift")
         let presenting = try XCTUnwrap(v.range(of: "if controller.presenting {"))
-        let home = try XCTUnwrap(v.range(of: "PeekHomeScroll(nextSession: nextSession, running: running, cards: cards)"))
+        let home = try XCTUnwrap(v.range(of: "PeekHomeScroll(nextSession: nextSession, running: running, cards: cards, checklist: checklist)"))
         XCTAssertLessThan(presenting.lowerBound, home.lowerBound, "the presenting notice is chosen before the home view")
         XCTAssertEqual(v.components(separatedBy: "PeekHomeScroll(").count - 1, 1)
         let list = try source("RunningViews.swift")
+        let nudge = try XCTUnwrap(list.range(of: "NudgeSection(model: checklist)"))
+        let grid = try XCTUnwrap(list.range(of: "ChecklistGrid(model: checklist)"))
+        let brief = try XCTUnwrap(list.range(of: "SessionBriefCard(brief: brief)"))
         let section = try XCTUnwrap(list.range(of: "RunningSection(model: running)"))
         let cards = try XCTUnwrap(list.range(of: "CardList(cards: cards)"))
+        XCTAssertLessThan(nudge.lowerBound, grid.lowerBound, "the nudge sits above the checklist")
+        XCTAssertLessThan(grid.lowerBound, brief.lowerBound, "the checklist sits above the brief")
+        XCTAssertLessThan(brief.lowerBound, section.lowerBound, "the brief sits above the running section")
         XCTAssertLessThan(section.lowerBound, cards.lowerBound, "running cards sit above the waiting cards")
+        // Presenting keeps the checklist (stages and times only) but never the brief (it names the client).
+        let presentingBody = try body(v, from: "if controller.presenting {", to: "} else if showChat {")
+        XCTAssertTrue(presentingBody.contains("ChecklistGrid(model: checklist)"), "the checklist stays usable on a shared screen")
+        XCTAssertTrue(presentingBody.contains("NudgeSection(model: checklist)"), "the nudge stays usable on a shared screen")
+        XCTAssertFalse(presentingBody.contains("SessionBriefCard"), "the brief names the client: never while presenting")
     }
     func testTheRowsUseOnlyWhiteGoldAndGreenAndNameNothingAboutTheGPUBox() throws {
         let code = codeLines(try source("RunningViews.swift")).joined(separator: "\n")
@@ -173,6 +184,6 @@ import XCTest
         XCTAssertFalse(cards.contains("ScrollView"), "waiting cards live in PeekHomeScroll; a nested ScrollView would clip again")
         XCTAssertFalse(cards.contains(".scrollIndicators(.never)"))
         let v = try source("Views.swift")
-        XCTAssertTrue(v.contains("PeekHomeScroll(nextSession: nextSession, running: running, cards: cards)"))
+        XCTAssertTrue(v.contains("PeekHomeScroll(nextSession: nextSession, running: running, cards: cards, checklist: checklist)"))
     }
 }

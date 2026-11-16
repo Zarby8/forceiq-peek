@@ -217,6 +217,7 @@ struct PeakRootView: View {
     @ObservedObject var nextSession: NextSessionModel
     @ObservedObject var running: RunningModel
     @ObservedObject var light: GPULightModel
+    @ObservedObject var checklist: MeetingChecklistModel
     let switcher: [SwitcherEntry]
     let mark: GhostMarkRendering
     let glow: GhostGlowRendering
@@ -383,7 +384,9 @@ struct PeakRootView: View {
     var collapsedPill: some View {
         HStack(spacing: 6) {
             ghost(panel.collapsedSize.height - 10)
-            if nextSession.showsPill && !controller.presenting {
+            if checklist.isLive() {
+                ChecklistPillLine(model: checklist)
+            } else if nextSession.showsPill && !controller.presenting {
                 NextSessionPill(model: nextSession, compact: true, fill: true)   // names the client; gold on a gap; fills the pill
             } else {
                 Text("ForceIQ Peek").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
@@ -422,6 +425,10 @@ struct PeakRootView: View {
             Group {
                 if controller.presenting {
                     PresentingNotice { controller.setPresenting(false) }       // nothing client-private anywhere on the sheet
+                    // A live meeting's checklist is stages and times only — no client name — so it
+                    // stays usable on a shared screen. The brief (client + Ghost data) never shows here.
+                    if checklist.isLive() { ChecklistGrid(model: checklist) }
+                    if checklist.nudgeShown && checklist.isLive() { NudgeSection(model: checklist) }
                 } else if drops.active {
                     DropsView(drops: drops).transition(reduceMotion ? .identity : .asymmetric(insertion: .scale(scale: 0.94, anchor: .top), removal: .identity))
                 } else if showChat {
@@ -440,7 +447,7 @@ struct PeakRootView: View {
                     DescriptionView(card: card, cards: cards)
                         .transition(reduceMotion ? .identity : .asymmetric(insertion: .move(edge: .trailing), removal: .identity))
                 } else {
-                    PeekHomeScroll(nextSession: nextSession, running: running, cards: cards)
+                    PeekHomeScroll(nextSession: nextSession, running: running, cards: cards, checklist: checklist)
                         .transition(.slideUpFull(reduceMotion))
                 }
             }

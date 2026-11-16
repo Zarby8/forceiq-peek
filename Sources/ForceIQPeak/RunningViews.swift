@@ -8,9 +8,18 @@ struct PeekHomeScroll: View {
     @ObservedObject var nextSession: NextSessionModel
     @ObservedObject var running: RunningModel
     @ObservedObject var cards: CardStackViewModel
+    @ObservedObject var checklist: MeetingChecklistModel
     var body: some View {
         ScrollView(.vertical, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 8) {
+                // Ten-minute nudge first when it is due; the live checklist next; then today's brief.
+                // The brief names the client and quotes Ghost data, so it only renders on the
+                // non-presenting home branch — never while presenting.
+                if checklist.nudgeShown && checklist.isLive() { NudgeSection(model: checklist) }
+                if checklist.isLive() { ChecklistGrid(model: checklist) }
+                if let brief = nextSession.session.flatMap({ SessionBriefBuilder.build(session: $0, since: nextSession.since) }) {
+                    SessionBriefCard(brief: brief)
+                }
                 if nextSession.showsPill {
                     NextSessionPill(model: nextSession).onTapGesture { Haptic.tick(); nextSession.openCard() }
                 }
