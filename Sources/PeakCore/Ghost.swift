@@ -36,6 +36,7 @@ public struct GhostPlayback: Equatable, Sendable {
 
 public struct GhostPack: Sendable {
     public let pack: String
+    public let filePrefix: String
     public let sizes: [Int]
     public let stateMap: [String: String]               // Peek state → asset
     public let playback: [String: GhostPlayback]        // asset → playback
@@ -60,14 +61,15 @@ public struct GhostPack: Sendable {
                                      holdFrame: l["hold_frame"] as? Int, thenIdle: ((l["then"] as? String) ?? "").hasPrefix("idle"))
         }
         let stateMap = map.compactMapValues { $0["asset"] as? String }
+        let prefix = (o["file_prefix"] as? String) ?? "peak-bob-"
         let files = (o["files"] as? [String: [String: Any]]) ?? [:]
         var sizes: Set<Int> = []
         for (k, v) in files where k.hasPrefix("h264-black/") { if let px = (v["px"] as? [Int])?.first { sizes.insert(px) } }
         if let root {
             sizes = sizes.filter { px in stateMap.values.allSatisfy {
-                FileManager.default.fileExists(atPath: root.appendingPathComponent("h264-black/peak-bob-\($0)-\(px).mp4").path) } }
+                FileManager.default.fileExists(atPath: root.appendingPathComponent("h264-black/\(prefix)\($0)-\(px).mp4").path) } }
         }
-        return GhostPack(pack: "\((o["pack"] as? String) ?? "") v\((o["version"] as? String) ?? "")", sizes: sizes.sorted(),
+        return GhostPack(pack: "\((o["pack"] as? String) ?? "") v\((o["version"] as? String) ?? "")", filePrefix: prefix, sizes: sizes.sorted(),
                          stateMap: stateMap, playback: pb, md5: files.compactMapValues { $0["md5"] as? String })
     }
 
@@ -82,7 +84,7 @@ public struct GhostPack: Sendable {
     /// Relative path inside the pack for a state, size and format.
     public func file(for s: GhostState, px: Int, format: GhostFormat) -> String? {
         guard let a = stateMap[s.rawValue] else { return nil }
-        return format == .hevcAlpha ? "hevc-alpha/peak-bob-\(a)-\(px).mov" : "h264-black/peak-bob-\(a)-\(px).mp4"
+        return format == .hevcAlpha ? "hevc-alpha/\(filePrefix)\(a)-\(px).mov" : "h264-black/\(filePrefix)\(a)-\(px).mp4"
     }
 }
 
