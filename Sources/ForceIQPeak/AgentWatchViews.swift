@@ -37,7 +37,8 @@ struct AgentsPillBadge: View {
 }
 
 /// The home sheet's CLAUDE section: one row per live session (state dot, project folder, tmux
-/// label, state + elapsed). Display-only — rows never take a tap in v1.
+/// label, state + elapsed). A row with a jump target (a tmux pane, or the Claude app for a
+/// desktop session) takes a tap and jumps there; a flagged stuck session wears a gold STUCK tag.
 struct AgentsSection: View {
     @ObservedObject var model: AgentWatchModel
     var body: some View {
@@ -56,18 +57,29 @@ struct AgentsSection: View {
             }
         }
     }
-    func row(_ s: AgentSession, now: Date) -> some View {
+    @ViewBuilder func row(_ s: AgentSession, now: Date) -> some View {
+        if SessionJumper.canJump(s) {
+            Button { SessionJumper.jump(s) } label: { rowContent(s, now: now) }
+                .buttonStyle(.plain)
+        } else {
+            rowContent(s, now: now)
+        }
+    }
+    func rowContent(_ s: AgentSession, now: Date) -> some View {
         HStack(spacing: 8) {
             Circle().fill(agentDotColor(s.state.dotHex ?? Brand.whiteHex)).frame(width: 8, height: 8)
             Text(s.folder).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.white).lineLimit(1)
             if let t = s.tmuxLabel {
                 Text(t).font(.system(size: 12)).foregroundStyle(Color.white).lineLimit(1)
             }
+            if s.isFlaggedStuck {
+                Text("STUCK").font(.system(size: 10, weight: .heavy)).tracking(0.6).foregroundStyle(Color.peakGold).lineLimit(1)
+            }
             Spacer(minLength: 8)
             Text(s.displayLine(now: now)).font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.white).lineLimit(1)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(s.folder), \(s.displayLine(now: now))")
+        .accessibilityLabel("\(s.folder), \(s.displayLine(now: now))\(s.isFlaggedStuck ? ", stuck" : "")")
     }
 }
 
@@ -121,5 +133,63 @@ struct ApprovalCard: View {
     }
     func sessionLine(_ a: AgentApproval) -> String {
         a.tmuxLabel.map { "\(a.folder) · \($0)" } ?? a.folder
+    }
+}
+
+/// The collapsed pill's watcher line (watcher-plus): a flagged stuck session's folder + working
+/// age, or the fresh finish inside its fade window. One short line; the shell shows it only while
+/// not presenting (it names a project folder, and presenting shows no names).
+struct AgentPillLineView: View {
+    let line: AgentPillLine
+    var body: some View {
+        Text(line.text)
+            .font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(line.accessibilityLabel)
+    }
+}
+
+/// The sheet's last-finish line: the most recent completed turn (folder · done · duration · time),
+/// kept until a newer finish supersedes it — even after the session itself has faded or ended.
+struct AgentsFinishLine: View {
+    @ObservedObject var model: AgentWatchModel
+    var body: some View {
+        if let f = model.lastFinish {
+            HStack(spacing: 8) {
+                Circle().fill(Color.white).frame(width: 8, height: 8)
+                Text(f.sheetLine).font(.system(size: 12)).foregroundStyle(Color.white).lineLimit(1)
+                Spacer(minLength: 8)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Last finished: \(f.line)")
+        }
+    }
+}
+
+/// The while-you-were-away recap card: what finished, failed, or lapsed unanswered while the mark
+/// slept. The model assembles it on wake; it waits at the top of the home sheet for the first
+/// expansion, shows once, and is dismissed here.
+struct AgentsRecapCard: View {
+    @ObservedObject var model: AgentWatchModel
+    var body: some View {
+        if let r = model.recap {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text("WHILE YOU WERE AWAY").font(.system(size: 11, weight: .heavy)).tracking(1).foregroundStyle(Color.peakGold)
+                    Spacer()
+                    PeakButton(title: "Dismiss", color: .white) { model.dismissRecap() }
+                }
+                ForEach(r.lines) { line in
+                    Text(line.text).font(.system(size: 12)).foregroundStyle(Color.white).lineLimit(1)
+                }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.black))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.peakGold, lineWidth: 1))
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("While you were away: \(r.lines.map(\.text).joined(separator: "; "))")
+        }
     }
 }
