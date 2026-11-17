@@ -27,9 +27,10 @@ public struct PeakLayout: Equatable, Sendable {
     /// auxiliary areas), so Peek draws its own notch-shaped row at the top-center of the screen.
     public var virtualNotch: Bool = false
     /// The mark square (screen coords): the selected mark (ghost / BOB / eyes) always renders here, in
-    /// every mode. In notch mode it is the content row's left square — on a virtual notch that row is
-    /// the drawn notch itself; on the hardware notch the row is the CHIN below the camera housing,
-    /// because the housing's own rect has no display pixels and can never show the mark.
+    /// every mode. In notch mode the collapsed assembly lives inside the menu-bar band: on a virtual
+    /// notch the mark sits at the assembly's center; on the hardware notch it sits in the right ear
+    /// hard against the camera housing, because the housing's own rect has no display pixels and can
+    /// never show the mark.
     public var markRect: CGRect = .zero
     public let collapsed: CGRect           // panel frame when collapsed
     public let expanded: CGRect            // the expanded sheet (home: cards + switcher)
@@ -39,10 +40,13 @@ public struct PeakLayout: Equatable, Sendable {
     /// notch) for a few seconds, the way Boring Notch's sneak peek works: the client on the left of the notch, what happened
     /// on the right. Then it retracts.
     public var peek: CGRect = .zero
-    /// Notch mode: the status-text part of the collapsed content row — right of the mark square, in
-    /// the same visible strip (the drawn virtual notch, or the chin below the hardware housing), so
-    /// [mark][text] reads as one notch. It is part of `collapsed`, so hover and click on it open Peek.
+    /// Notch mode: the status-text zone of the collapsed assembly — right of the mark square, inside
+    /// the band, so [dots][mark][text] reads as one notch. It is part of `collapsed`, so hover and
+    /// click on it open Peek.
     public var wing: CGRect = .zero
+    /// Notch mode: the status-dots zone of the collapsed assembly — the band-height strip at the
+    /// assembly's left end (the left ear segment on a hardware notch). Part of `collapsed`.
+    public var dotsRect: CGRect = .zero
     /// Notch mode: a 2 pt line hanging just under the notch (the notch itself has no pixels), for live progress.
     /// Not a hit rect: it never takes a click.
     public var progressLine: CGRect = .zero
@@ -80,15 +84,11 @@ public struct PeakGeometry: PeakGeometryProviding {
     public var edgeTriggerSlack: CGFloat = 40                  // how far past each notch edge the top-edge trigger reaches
     public var edgeTriggerHeight: CGFloat = 3
     public var wingWidth: CGFloat = 96                          // fits "PRESENTING"
-    /// Collapsed notch row: the status text wing beside the mark square (the mark itself is one row-height square).
-    public var textWingVirtual: CGFloat = 184
-    /// Hardware notch: the visible content lives in a chin below the camera housing (the housing's
-    /// rect has no pixels): the chin's height — also the mark's side — and its status-text width.
-    public var chinHeight: CGFloat = 36
-    public var textWingChin: CGFloat = 184
-    /// Hardware notch: how far the black housing reaches into each ear beside the camera housing,
-    /// so the drawn shape and the hardware read as one piece.
-    public var earShoulder: CGFloat = 8
+    /// The collapsed notch assembly (Christopher's spec, Nov 17, 2026): the assembly stays inside
+    /// the notch silhouette / menu-bar band — never dipping below it — as [dots][mark][status
+    /// text]. The dots zone at the assembly's left end; the status-text zone right of the mark.
+    public var dotsZoneWidth: CGFloat = 30
+    public var textWingBand: CGFloat = 184
     /// A plain external display's virtual notch: centered at the top of the screen, a bit bigger than a
     /// hardware notch so it reads as a notch on a big display (Studio Display menu-bar band is ~25 pt).
     public var virtualNotchSize = CGSize(width: 230, height: 46)
@@ -122,48 +122,55 @@ public struct PeakGeometry: PeakGeometryProviding {
     }
 
     /// The notch-mode layout, shared by the hardware notch and the virtual notch.
-    /// Virtual: the notch rect IS the collapsed row — [mark square][status text] — because Peek draws
-    /// the whole notch and every point of it is real display.
-    /// Hardware: the notch rect is the camera housing — a hole in the display with no pixels, so
-    /// content placed there is invisible at any window level (the bug this replaces: the row started
-    /// at the notch's left edge, inside the housing, and could not be seen). The recipe the working
-    /// notch apps use: a black housing covers the notch plus a slim shoulder of each ear, and the
-    /// visible content — [mark square][status text] — sits in a CHIN below the housing, on real
-    /// display. Expanded / peek / chat stay centered on the notch's midX.
+    /// Christopher's spec (Nov 17, 2026): the collapsed assembly stays INSIDE the notch silhouette /
+    /// menu-bar band — never dipping below it — with the colored status dots at the left and the
+    /// mark centered: [dots][mark][status text], every zone inside the band's height.
+    /// Virtual notch: Peek draws the silhouette, so the mark sits at its exact center, the dots in
+    /// the zone to its left, the text to its right; the band is the display's own menu-bar height.
+    /// Hardware notch: the notch rect is the camera housing — a hole in the display with no pixels —
+    /// so the mark cannot sit at the notch's center (it would be invisible, the original bug). The
+    /// closest faithful arrangement: the dots take the left ear, the mark the right ear hard against
+    /// the housing, the text after it — the dots/mark pair straddles the housing symmetrically,
+    /// all inside the band (the notch's own height). Expanded / peek / chat stay centered on the
+    /// notch's midX.
     private func notchLayout(for s: ScreenDescriptor, notch: CGRect, virtual: Bool) -> PeakLayout {
         let top = s.frame.maxY
+        let bandH = virtual ? (s.menuBarHeight > 0 ? s.menuBarHeight : 30) : notch.height
+        let bandY = top - bandH
+        let side = max(20, bandH - 4)                    // the mark square, inside the band
+        let markY = bandY + (bandH - side) / 2
         let collapsed: CGRect
         let markRect: CGRect
-        var wingOverride: CGRect? = nil
-        var progressOverride: CGRect? = nil
+        let dotsRect: CGRect
+        let wingRect: CGRect
         if virtual {
-            collapsed = notch
-            markRect = CGRect(x: notch.minX, y: notch.minY, width: notch.height, height: notch.height)
+            let total = dotsZoneWidth + side + textWingBand
+            collapsed = CGRect(x: s.frame.midX - total / 2, y: bandY, width: total, height: bandH)
+            dotsRect = CGRect(x: collapsed.minX, y: bandY, width: dotsZoneWidth, height: bandH)
+            markRect = CGRect(x: s.frame.midX - side / 2, y: markY, width: side, height: side)
+            wingRect = CGRect(x: markRect.maxX, y: bandY, width: textWingBand, height: bandH)
         } else {
-            let contentW = chinHeight + textWingChin
-            let housingW = max(notch.width, contentW) + 2 * earShoulder
-            collapsed = CGRect(x: notch.midX - housingW / 2, y: notch.minY - chinHeight,
-                               width: housingW, height: notch.height + chinHeight)
-            let rowX = notch.midX - contentW / 2
-            let rowY = notch.minY - chinHeight
-            markRect = CGRect(x: rowX, y: rowY, width: chinHeight, height: chinHeight)
-            wingOverride = CGRect(x: rowX + chinHeight, y: rowY, width: textWingChin, height: chinHeight)
-            progressOverride = CGRect(x: rowX + 12, y: rowY - 5, width: max(0, contentW - 24), height: 2)
+            collapsed = CGRect(x: notch.minX - dotsZoneWidth, y: bandY,
+                               width: dotsZoneWidth + notch.width + side + textWingBand, height: bandH)
+            dotsRect = CGRect(x: collapsed.minX, y: bandY, width: dotsZoneWidth, height: bandH)
+            markRect = CGRect(x: notch.maxX, y: markY, width: side, height: side)
+            wingRect = CGRect(x: markRect.maxX, y: bandY, width: textWingBand, height: bandH)
         }
         let w = max(expandedSize.width, collapsed.width)
         let expanded = CGRect(x: notch.midX - w / 2, y: top - expandedSize.height, width: w, height: expandedSize.height)
         let cw = max(chatSize.width, collapsed.width)
         let chat = CGRect(x: notch.midX - cw / 2, y: top - chatSize.height, width: cw, height: chatSize.height)
         let pw = max(peekWidth, collapsed.width)
-        let peek = CGRect(x: notch.midX - pw / 2, y: notch.minY, width: pw, height: notch.height)
+        let peek = CGRect(x: notch.midX - pw / 2, y: bandY, width: pw, height: bandH)
         let edge = CGRect(x: collapsed.minX - edgeTriggerSlack, y: top - edgeTriggerHeight,
                           width: collapsed.width + 2 * edgeTriggerSlack, height: edgeTriggerHeight)
         var l = PeakLayout(mode: .notch, notchRect: notch, collapsed: collapsed, expanded: clamp(expanded, s.frame))
         l.virtualNotch = virtual
         l.markRect = markRect
+        l.dotsRect = dotsRect
         var out = finish(l, chat: clamp(chat, s.frame), peek: clamp(peek, s.frame), edge: edge, s)
-        if let wingOverride { out.wing = wingOverride }
-        if let progressOverride { out.progressLine = progressOverride }
+        out.wing = wingRect
+        out.progressLine = CGRect(x: notch.minX + 12, y: bandY - 5, width: max(0, notch.width - 24), height: 2)
         return out
     }
 

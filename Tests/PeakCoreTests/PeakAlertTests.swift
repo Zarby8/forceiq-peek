@@ -38,12 +38,12 @@ import XCTest
     func testPeekIsTheCollapsedShapeWidenedInlineInTheMenuBarRow() {
         let l = PeakGeometry().layout(for: m5)
         let n = l.notchRect!
-        XCTAssertEqual(l.collapsed.height, 43 + PeakGeometry().chinHeight, "the collapsed housing is the notch band + the chin below it")
+        XCTAssertEqual(l.collapsed.height, 43, "the collapsed assembly is exactly the notch band: it never dips below it")
         XCTAssertEqual(l.peek.height, n.height, "inline: never taller than the notch, nothing hangs below it")
         XCTAssertEqual(l.peek.maxY, 1330, "flush with the top edge"); XCTAssertEqual(l.peek.minY, n.minY)
         XCTAssertEqual(l.peek.midX, n.midX, accuracy: 0.5, "centered on the notch: the client left, what happened right")
         XCTAssertEqual(l.peek.maxY, l.collapsed.maxY, "both shells are flush with the top edge")
-        XCTAssertEqual(l.peek.midX, l.collapsed.midX, accuracy: 0.5, "the peek widens from the collapsed housing's center")
+        XCTAssertEqual(l.collapsed.height, l.peek.height, "collapsed and peek share the band")
         XCTAssertEqual((l.peek.width - n.width) / 2, 145, accuracy: 0.5)
         XCTAssertTrue(l.canvas.contains(l.peek))
         XCTAssertEqual(l.hitRect(.peek), l.peek)

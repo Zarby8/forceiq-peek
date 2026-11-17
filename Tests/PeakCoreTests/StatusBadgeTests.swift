@@ -25,22 +25,24 @@ final class StatusBadgeTests: XCTestCase {
         }
     }
 
-    // ── the status wing: the text half of the chin row under the notch ──
+    // ── the status wing: the text zone of the band assembly, right of the mark ──
     let m5 = ScreenDescriptor(uuid: "M5", name: "Built-in Display", frame: CGRect(x: 0, y: 0, width: 2048, height: 1330),
                               safeAreaTop: 43, auxiliaryTopLeft: CGRect(x: 0, y: 1287, width: 899, height: 43),
                               auxiliaryTopRight: CGRect(x: 1149, y: 1287, width: 899, height: 43))
 
-    func testTheWingSitsInTheChinUnderTheNotch() {
-        // Chin design: the wing is the status text right of the mark square, in the chin row below
-        // the camera housing — its top flush with the housing's bottom edge, never inside its rect
-        // (the old in-notch row was occluded by the housing and invisible).
+    func testTheWingSitsInTheBandBesideTheMark() {
+        // Band design: the wing is the status text right of the mark, inside the menu-bar band —
+        // the mark in the right ear hard against the housing, the wing after it, the whole
+        // assembly exactly the band's height (the in-notch row was occluded by the housing; the
+        // chin row dipped below the band).
         let l = PeakGeometry().layout(for: m5)
         let n = l.notchRect!
+        XCTAssertEqual(l.markRect.minX, n.maxX, "the mark sits in the right ear, hard against the housing")
         XCTAssertEqual(l.wing.minX, l.markRect.maxX, "the text starts where the mark square ends")
-        XCTAssertEqual(l.wing.maxY, n.minY, "the chin row's top is the housing's bottom edge")
-        XCTAssertEqual(l.wing.minY, l.markRect.minY, "mark and text share the chin row")
-        XCTAssertTrue(l.collapsed.contains(l.markRect.union(l.wing)), "the housing silhouette contains the content row")
-        XCTAssertEqual(l.collapsed.maxY, 1330, "the housing is flush with the top edge")
+        XCTAssertEqual(l.wing.minY, n.minY); XCTAssertEqual(l.wing.height, n.height)
+        XCTAssertEqual(l.collapsed.height, n.height, "the assembly is exactly the band")
+        XCTAssertEqual(l.collapsed.maxY, 1330, "the assembly is flush with the top edge")
+        XCTAssertTrue(l.collapsed.contains(l.markRect.union(l.wing)), "the silhouette contains mark + text")
         XCTAssertTrue(l.canvas.contains(l.collapsed))
         XCTAssertEqual(l.hitRect(.collapsed), l.collapsed, "hover and click on the wing open Peek")
     }
@@ -64,7 +66,7 @@ final class StatusBadgeTests: XCTestCase {
                                       safeAreaTop: 0, auxiliaryTopLeft: nil, auxiliaryTopRight: nil)
         let l = PeakGeometry().layout(for: studio)
         XCTAssertTrue(l.virtualNotch)
-        XCTAssertEqual(l.wing.width, PeakGeometry().textWingVirtual); XCTAssertEqual(l.collapsed.size, CGSize(width: 230, height: 46))
+        XCTAssertEqual(l.wing.width, PeakGeometry().textWingBand); XCTAssertEqual(l.collapsed.size, CGSize(width: 234, height: 24), "band-height assembly at the mock menu-bar height of 24")
     }
 
     func testTheWingViewIsBrandTextOnBlackAndNothingElseDrawsBesideTheNotch() throws {

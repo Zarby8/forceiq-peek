@@ -124,27 +124,47 @@ struct NotchWingLive: View {
     }
 }
 
-/// The status wing: small shape-only dots stacked at its left edge, then one short word. Brand green (gold while presenting)
-/// on black.
+/// The status wing's text: one short word. Brand green (gold while presenting) on black. The dots
+/// render in their own zone at the assembly's left (NotchDots) — Christopher's layout spec:
+/// dots left, mark centered, text right, all inside the band.
 struct NotchWing: View {
     let spec: WingSpec
     var body: some View {
-        HStack(spacing: 5) {
-            if !spec.dots.isEmpty {
-                VStack(spacing: 4) {
-                    ForEach(Array(spec.dots.enumerated()), id: \.offset) { _, hex in
-                        Circle().fill(hex == Brand.redHex ? Color.peakRed : (hex == Brand.greenHex ? Color.peakGreen : (hex == Brand.whiteHex ? Color.white : Color.peakGold))).frame(width: 7, height: 7)
-                    }
-                }
+        Text(spec.text)
+            .font(.system(size: 11, weight: .heavy)).kerning(0.6).lineLimit(1).minimumScaleFactor(0.75)
+            .foregroundStyle(spec.textHex == Brand.goldHex ? Color.peakGold : Color.peakGreen)
+            .padding(.leading, 6).padding(.trailing, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(spec.accessibilityLabel)
+    }
+}
+
+/// The status dots: small shape-only dots stacked in the collapsed assembly's left zone.
+struct NotchDots: View {
+    let spec: WingSpec
+    var body: some View {
+        VStack(spacing: 4) {
+            ForEach(Array(spec.dots.enumerated()), id: \.offset) { _, hex in
+                Circle().fill(hex == Brand.redHex ? Color.peakRed : (hex == Brand.greenHex ? Color.peakGreen : (hex == Brand.whiteHex ? Color.white : Color.peakGold))).frame(width: 7, height: 7)
             }
-            Text(spec.text)
-                .font(.system(size: 11, weight: .heavy)).kerning(0.6).lineLimit(1).minimumScaleFactor(0.75)
-                .foregroundStyle(spec.textHex == Brand.goldHex ? Color.peakGold : Color.peakGreen)
         }
-        .padding(.leading, 10).padding(.trailing, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(spec.accessibilityLabel)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The dots zone's live state: the same WingStatus judgement as NotchWingLive, dots only.
+struct NotchDotsLive: View {
+    @ObservedObject var controller: PeakController
+    @ObservedObject var nextSession: NextSessionModel
+    @ObservedObject var light: GPULightModel
+    @ObservedObject var agents: AgentWatchModel
+    @ObservedObject var cards: CardStackViewModel
+    var body: some View {
+        NotchDots(spec: WingStatus.spec(presenting: controller.presenting, session: nextSession.session,
+                                        gaps: nextSession.warnings.filter { $0.state == .present }.count, light: light.shown, now: Date(),
+                                        agents: agents.summary, tonightText: controller.presenting ? nil : cards.tonightText))
     }
 }
 
@@ -373,18 +393,22 @@ struct PeakRootView: View {
 
     @ViewBuilder var collapsed: some View {
         if panel.mode == .notch {
-            // [mark square][status text], each placed at the layout's own rect (offsets inside the
-            // collapsed frame): on a virtual notch they tile the drawn notch row; on the hardware
-            // notch they sit in the chin BELOW the camera housing — the housing's own rect has no
-            // pixels and can never show content. The mark ALWAYS renders here (ghost / BOB / eyes,
-            // same state as the sheet), and the black shell spans the whole housing (notch +
-            // shoulders + chin), so it reads as one notch. The status text keeps the wing's
-            // existing rules (presenting suppression included: the mark is not private, the text
-            // still is).
+            // [dots][mark][status text], each placed at the layout's own rect (offsets inside the
+            // collapsed frame): the assembly stays inside the notch silhouette / menu-bar band —
+            // never below it. On a virtual notch the mark is at the assembly's center; on the
+            // hardware notch the dots take the left ear and the mark the right ear hard against
+            // the camera housing (its rect has no pixels and can never show content). The mark
+            // ALWAYS renders here (ghost / BOB / eyes, same state as the sheet). The status text
+            // keeps the wing's existing rules (presenting suppression included: the mark is not
+            // private, the text still is).
             let c = panel.local(panel.layout.collapsed)
+            let d = panel.local(panel.layout.dotsRect)
             let m = panel.local(panel.layout.markRect)
             let w = panel.local(panel.layout.wing)
             ZStack(alignment: .topLeading) {
+                NotchDotsLive(controller: controller, nextSession: nextSession, light: light, agents: agents, cards: cards)
+                    .frame(width: d.width, height: d.height)
+                    .padding(.leading, d.minX - c.minX).padding(.top, d.minY - c.minY)
                 ghost(max(10, panel.layout.markRect.height - 6))
                     .frame(width: m.width, height: m.height)
                     .padding(.leading, m.minX - c.minX).padding(.top, m.minY - c.minY)

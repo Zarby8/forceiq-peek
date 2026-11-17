@@ -72,7 +72,7 @@ import XCTest
         let sl = PeakGeometry().layout(for: studio)
         XCTAssertTrue(sl.virtualNotch, "the Studio Display now has a virtual notch, so the line hangs under it like the hardware one")
         XCTAssertEqual(sl.progressLine.height, 2)
-        XCTAssertLessThan(sl.progressLine.maxY, sl.notchRect!.minY)
+        XCTAssertLessThan(sl.progressLine.maxY, sl.collapsed.minY, "under the drawn assembly, in the screen content")
     }
 
     func testTheLineIsBrandGoldShapesOnlyAndNeverAnimates() throws {
