@@ -391,7 +391,13 @@ struct PeakRootView: View {
                     .frame(width: m.width, height: m.height)
                     .padding(.leading, m.minX - c.minX).padding(.top, m.minY - c.minY)
             }
-            .frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
+            // alignment .topLeading is LOAD-BEARING: a plain .frame(width:height:) CENTERS the
+            // padded ZStack (its ideal size is the mark plus its padding, smaller than the
+            // silhouette), which shifted the rendered ghost +(250−144.5)/2 ≈ +53 pt right of
+            // markRect — the "ghost is not centered" Christopher photographed on Nov 17, 2026,
+            // while the layout (and its log line) said centered. The dots, placed by a single
+            // absolute padding, were never affected, which is why they measured exact.
+            .frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height, alignment: .topLeading)
         } else {
             collapsedPill
         }
@@ -429,7 +435,7 @@ struct PeakRootView: View {
             }
         }
         .padding(.horizontal, 6)
-        .frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
+        .frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height, alignment: .leading)   // leading, not centered: markRect is the pill's left edge
     }
 
     var expanded: some View {
@@ -801,7 +807,7 @@ struct SwitcherRow: View {
     var readouts: TileReadouts? = nil   // Stage 5: live readouts under the sourced tiles only
     let onSwitch: (String) -> Void
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .top, spacing: 8) {
             ForEach(entries) { e in
                 SwitcherTile(entry: e, readout: readouts?.text(forBundleID: e.app.bundleID)) { if e.installed { onSwitch(e.app.bundleID) } }
             }
@@ -816,26 +822,38 @@ struct SwitcherTile: View {
     @State private var hover = false
     var style: SwitcherTileStyle { .of(installed: entry.installed) }
     var body: some View {
-        VStack(spacing: 3) {
-            Group {
-                if let icon = AppIcons.shared.icon(entry.app.bundleID) {
-                    Image(nsImage: icon).resizable()
-                } else {
-                    Image(systemName: "app.dashed").font(.system(size: 18, weight: .semibold)).foregroundStyle(Color.peakGold)
+        // The WHOLE tile is the hit target, logo included (Christopher, Nov 17, 2026: "the
+        // hitbox for the launcher is too small — the logo should be included"). A Button whose
+        // label is the entire tile: every tile carries the same minHeight (the tallest tile's:
+        // icon + name + readout), so the targets tile the row edge to edge with no dead band
+        // above or below a short tile, and contentShape makes even the tile's empty corners
+        // live. (Before: an onTapGesture on a content-height VStack — a tile without a readout
+        // was shorter than the row, and its logo sat outside the tappable rect entirely when
+        // the pointer aimed where the taller tiles put theirs.)
+        Button {
+            if entry.installed { Haptic.tick(); action() }
+        } label: {
+            VStack(spacing: 3) {
+                Group {
+                    if let icon = AppIcons.shared.icon(entry.app.bundleID) {
+                        Image(nsImage: icon).resizable()
+                    } else {
+                        Image(systemName: "app.dashed").font(.system(size: 18, weight: .semibold)).foregroundStyle(Color.peakGold)
+                    }
                 }
+                .frame(width: 30, height: 30)
+                .padding(3)
+                .overlay { if let o = style.outlineHex { RoundedRectangle(cornerRadius: 9).stroke(Color(hex: o), lineWidth: 1.5) } }
+                .saturation(style.saturation).opacity(style.opacity)           // full color, full opacity, installed or not
+                .scaleEffect(hover && style.tappable ? 1.12 : 1)
+                Text(entry.app.name).font(.system(size: 12, weight: .bold)).foregroundStyle(Color(hex: style.labelHex))
+                if let note = style.note { Text(note).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color(hex: style.noteHex)) }
+                if let r = readout { Text(r).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.peakGold).lineLimit(1) }
             }
-            .frame(width: 30, height: 30)
-            .padding(3)
-            .overlay { if let o = style.outlineHex { RoundedRectangle(cornerRadius: 9).stroke(Color(hex: o), lineWidth: 1.5) } }
-            .saturation(style.saturation).opacity(style.opacity)           // full color, full opacity, installed or not
-            .scaleEffect(hover && style.tappable ? 1.12 : 1)
-            Text(entry.app.name).font(.system(size: 12, weight: .bold)).foregroundStyle(Color(hex: style.labelHex))
-            if let note = style.note { Text(note).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color(hex: style.noteHex)) }
-            if let r = readout { Text(r).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.peakGold).lineLimit(1) }
+            .frame(maxWidth: .infinity, minHeight: 76, alignment: .top)
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity)
-        .contentShape(Rectangle())
-        .onTapGesture { if entry.installed { Haptic.tick(); action() } }
+        .buttonStyle(.plain)
         .onHover { h in withAnimation(.spring(response: 0.25, dampingFraction: 0.65)) { hover = h }; if h && entry.installed { Haptic.tick() } }
     }
 }
