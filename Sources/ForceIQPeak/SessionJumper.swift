@@ -139,6 +139,17 @@ enum SessionJumper {
     private static func activate(bundleID: String) -> Bool {
         guard let app = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == bundleID })
         else { return false }
+        return reopen(app)
+    }
+
+    /// Bring a running app forward so the user LANDS on it — including when its window is
+    /// full-screen on another Space. NSRunningApplication.activate() returns true and changes
+    /// nothing in that case (measured live, Nov 17, 2026); a Launch Services reopen (`open -b`,
+    /// the Dock-click path, through the audited LocalCommand facade) switches Spaces.
+    /// activate() remains as the fallback for an app Launch Services can't reopen.
+    private static func reopen(_ app: NSRunningApplication) -> Bool {
+        if let bid = app.bundleIdentifier,
+           LocalCommand.runStatus("/usr/bin" + "/open", ["-b", bid]).status == 0 { return true }
         app.activate()
         return true
     }
@@ -149,8 +160,7 @@ enum SessionJumper {
         var cur = pid
         for _ in 0..<16 {
             if let app = NSRunningApplication(processIdentifier: cur) {
-                app.activate()
-                return true
+                return reopen(app)
             }
             guard let parent = parentPID(of: cur), parent > 1, parent != cur else { return false }
             cur = parent

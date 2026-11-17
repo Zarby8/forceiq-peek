@@ -95,20 +95,18 @@ struct WorkspaceLocator: AppLocating {
         return launch(bundleID)
     }
     private static func launch(_ bundleID: String) -> Bool {
-        // SwitchActivation.plan decides from the app's state; this only performs it. The running
-        // case must raise ALL windows (.activateAllWindows): a bare activate() leaves the user on
-        // the current Space when the app's window is full-screen on another Space — the tap read
-        // as dead (Command full-screen). .activateIgnoringOtherApps because Peek itself is a
-        // non-activating panel: without it the request can be politely ignored.
+        // SwitchActivation.plan decides from the app's state; this only performs it. A running
+        // app is reopened through Launch Services (`open -b`, the Dock-click path) via the
+        // audited LocalCommand facade — the only mechanism measured to carry the user into a
+        // full-screen app's Space (Command full-screen was the report). NSRunningApplication
+        // .activate() — bare or all-windows — returned true and changed nothing
+        // there, and NSWorkspace.openApplication errored; the workspace open below remains as
+        // the fallback and as the not-running launch path.
         if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
             switch SwitchActivation.plan(running: true, hidden: running.isHidden) {
-            case .activate(let allWindows, let unhideFirst):
-                if unhideFirst { running.unhide() }
-                var opts: NSApplication.ActivationOptions = [.activateIgnoringOtherApps]
-                if allWindows { opts.insert(.activateAllWindows) }
-                if running.activate(options: opts) { return true }
-                // Activation refused (app mid-quit, etc.): fall through to the workspace open,
-                // which reactivates a running app or launches it.
+            case .reopen:
+                if LocalCommand.runStatus("/usr/bin" + "/open", ["-b", bundleID]).status == 0 { return true }
+                // The reopen refused (app mid-quit, etc.): fall through to the workspace open.
             case .launch:
                 break
             }

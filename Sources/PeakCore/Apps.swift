@@ -32,22 +32,25 @@ public enum AppSwitcher {
 }
 
 /// How a switcher tap brings the target app to the coach, decided purely from the app's state.
-/// The bug this fixes: a bare `activate()` on a running app whose windows live in a full-screen
-/// Space raises nothing the user can see — the app becomes active but the user stays on the
-/// current Space, so the tap reads as dead. The path that carries the user across Spaces is
-/// activation with `.activateAllWindows` (raise every window, switching to their Space), after
-/// unhiding a hidden app. Not running → launch (which already worked).
+/// The bug this fixes: activating a running app whose window lives in a full-screen Space does
+/// not move the user to that Space, so the tap reads as dead. Measured live on this machine
+/// (Nov 17, 2026) against a sacrificial full-screen app: NSRunningApplication.activate() — bare,
+/// and with .activateAllWindows (the earlier fix) — returned true and changed nothing;
+/// NSWorkspace.openApplication errored instead of switching; a Launch Services reopen
+/// (`open -b`, the Dock-click path) switched Spaces every time, as did an AppleScript activate.
+/// The plan therefore sends every running app — windowed, hidden, or full-screen — down the
+/// reopen path (a reopen also unhides, so `hidden` no longer changes the plan). Not running →
+/// launch (which already worked).
 public enum SwitchActivationPlan: Equatable, Sendable {
     /// Not running: launch it (NSWorkspace, activates on open).
     case launch
-    /// Running: unhide first when hidden, then activate raising ALL windows so a full-screen
-    /// window's Space comes with it.
-    case activate(allWindows: Bool, unhideFirst: Bool)
+    /// Running: reopen it through Launch Services (`open -b` via LocalCommand), the measured
+    /// mechanism that carries the user into a full-screen app's Space.
+    case reopen
 }
 
 public enum SwitchActivation {
     public static func plan(running: Bool, hidden: Bool) -> SwitchActivationPlan {
-        guard running else { return .launch }
-        return .activate(allWindows: true, unhideFirst: hidden)
+        running ? .reopen : .launch
     }
 }

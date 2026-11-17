@@ -2,8 +2,11 @@ import Foundation
 import XCTest
 @testable import PeakCore
 
-// Stage 4: the switcher activation plan — the state matrix behind AppLauncher's AppKit calls.
-// The bug: a bare activate() on a running full-screen app never moved the user to its Space.
+// The switcher activation plan — the state matrix behind AppLauncher's calls.
+// The bug: activating a running full-screen app never moved the user to its Space.
+// Measured live (Nov 17, 2026) against a sacrificial full-screen app: activate() — bare and
+// with .activateAllWindows — returned true and changed nothing; NSWorkspace.openApplication
+// errored; a Launch Services reopen (`open -b`) switched Spaces every time.
 
 final class SwitchActivationTests: XCTestCase {
     func testNotRunningLaunches() {
@@ -11,35 +14,31 @@ final class SwitchActivationTests: XCTestCase {
         XCTAssertEqual(SwitchActivation.plan(running: false, hidden: true), .launch, "hidden is meaningless when not running")
     }
 
-    func testRunningWindowedRaisesAllWindows() {
-        XCTAssertEqual(SwitchActivation.plan(running: true, hidden: false),
-                       .activate(allWindows: true, unhideFirst: false),
-                       "all-windows activation is what carries the user to a full-screen Space")
+    func testRunningReopensThroughLaunchServices() {
+        XCTAssertEqual(SwitchActivation.plan(running: true, hidden: false), .reopen,
+                       "a Launch Services reopen is what carries the user to a full-screen Space")
+        XCTAssertEqual(SwitchActivation.plan(running: true, hidden: true), .reopen,
+                       "a reopen also unhides: hidden no longer changes the plan")
     }
 
-    func testRunningHiddenUnhidesFirst() {
-        XCTAssertEqual(SwitchActivation.plan(running: true, hidden: true),
-                       .activate(allWindows: true, unhideFirst: true))
-    }
-
-    func testRunningFullScreenIsTheAllWindowsCase() {
-        // A full-screen app is simply running + not hidden from the plan's point of view; the
-        // all-windows activation is the case that switches Spaces to reach it.
-        let plan = SwitchActivation.plan(running: true, hidden: false)
-        guard case .activate(let allWindows, _) = plan else { return XCTFail("expected .activate, got \(plan)") }
-        XCTAssertTrue(allWindows)
-    }
-
-    /// The app side performs the plan with the real options (source-level wiring, like GPUGuardTests).
+    /// The app side performs the plan (source-level wiring, like GPUGuardTests).
     func testAppLauncherPerformsThePlan() throws {
         let base = #filePath.replacingOccurrences(of: "Tests/PeakCoreTests/SwitchActivationTests.swift", with: "Sources/ForceIQPeak/")
         let support = try String(contentsOfFile: base + "Support.swift", encoding: .utf8)
         let launcher = support.components(separatedBy: "@MainActor enum AppLauncher").last?
             .components(separatedBy: "// ─────").first ?? ""
         XCTAssertTrue(launcher.contains("SwitchActivation.plan(running: true, hidden: running.isHidden)"), "the plan decides")
-        XCTAssertTrue(launcher.contains(".activateAllWindows"), "all-windows activation is performed")
-        XCTAssertTrue(launcher.contains(".activateIgnoringOtherApps"))
-        XCTAssertTrue(launcher.contains("running.unhide()"), "hidden apps are unhidden first")
-        XCTAssertFalse(launcher.contains("running.activate()"), "the bare activate() that missed full-screen Spaces is gone")
+        XCTAssertTrue(launcher.contains("LocalCommand.runStatus"), "the reopen runs through the audited facade")
+        XCTAssertTrue(launcher.contains("\"-b\""), "the reopen is `open -b <bundleID>`")
+        XCTAssertFalse(launcher.contains(".activateAllWindows"), "the all-windows activation is gone: it returned true and changed nothing")
+        XCTAssertFalse(launcher.contains("running.activate("), "no NSRunningApplication.activate on the running path")
+    }
+
+    /// The session jumper's app activation shares the reopen path (same bug, second site).
+    func testSessionJumperReopensToo() throws {
+        let base = #filePath.replacingOccurrences(of: "Tests/PeakCoreTests/SwitchActivationTests.swift", with: "Sources/ForceIQPeak/")
+        let jumper = try String(contentsOfFile: base + "SessionJumper.swift", encoding: .utf8)
+        XCTAssertTrue(jumper.contains("LocalCommand.runStatus"), "the jumper reopens through the audited facade")
+        XCTAssertTrue(jumper.contains("\"-b\""), "the jumper's reopen is `open -b <bundleID>`")
     }
 }

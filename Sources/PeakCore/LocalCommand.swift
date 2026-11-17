@@ -11,7 +11,15 @@ public enum LocalCommand {
     /// executable missing, a spawn error, a timeout — returns whatever was captured, or "".
     public static func run(_ exe: String, _ args: [String], env: [String: String] = [:],
                            deadline: TimeInterval = 5) -> String {
-        guard let child = try? ChildProcess.spawn(exe, args, env: env, stdin: Data()) else { return "" }
+        runStatus(exe, args, env: env, deadline: deadline).output
+    }
+
+    /// Run `exe args` and report the exit status too (nil: the spawn failed, or the deadline
+    /// killed the child). Same audited spawn site as run() — callers that act on success (the
+    /// switcher's Launch Services reopen) need the status, not the output.
+    public static func runStatus(_ exe: String, _ args: [String], env: [String: String] = [:],
+                                 deadline: TimeInterval = 5) -> (status: Int32?, output: String) {
+        guard let child = try? ChildProcess.spawn(exe, args, env: env, stdin: Data()) else { return (nil, "") }
         let end = Date().addingTimeInterval(deadline)
         var status: Int32? = nil
         while Date() < end {
@@ -23,6 +31,6 @@ public enum LocalCommand {
             child.killGroup()
             _ = child.reapIfExited()
         }
-        return child.readOutput()
+        return (status, child.readOutput())
     }
 }
