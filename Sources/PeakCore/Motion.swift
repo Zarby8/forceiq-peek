@@ -12,6 +12,18 @@ public enum HoverLift {
     }
 }
 
+/// Hover growth for the collapsed notch (Christopher, Nov 17, 2026: "you can make the window bigger
+/// when the mouse is inside the notch" — specified at 25% bigger). The whole collapsed assembly
+/// scales about its top-center while the pointer is inside it, a middle state between rest and the
+/// sheet. This supersedes the Oct 2026 pill-only rule for the hover state only: at rest the notch
+/// still paints nothing outside the band. Reduce Motion keeps the growth (it is the readability
+/// affordance) and drops the animation, per the Motion.hover fallback.
+public enum HoverGrow {
+    public static func applies(mode: PeakMode, hovering: Bool, expanded: Bool) -> Bool {
+        mode == .notch && hovering && !expanded
+    }
+}
+
 public enum PeakMotion {
     /// The ONE spring for expand / collapse and every morph (shell path, matched-geometry ghost, title, badge, pills).
     public static let springResponse = 0.38
@@ -20,6 +32,8 @@ public enum PeakMotion {
     public static let hoverResponse = 0.24
     public static let hoverDamping = 0.9
     public static let hoverScale = 1.02
+    /// Hover growth on the collapsed notch: 25% bigger while the pointer is inside it (his number).
+    public static let hoverGrowScale = 1.25
     /// Reduce Motion: a short crossfade of the shell (never of text) instead of a spring.
     public static let reduceCrossfade = 0.16
 

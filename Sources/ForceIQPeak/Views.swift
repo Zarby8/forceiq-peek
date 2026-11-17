@@ -265,6 +265,12 @@ struct PeakRootView: View {
     var bottomRadius: CGFloat { isExpanded ? 24 : (panel.mode == .notch ? 12 : panel.collapsedSize.height / 2) }
     var shape: PeakShellShape { PeakShellShape(rect: shellRect, topRadius: topRadius, bottomRadius: bottomRadius, notch: panel.mode == .notch) }
     var hoverLift: Bool { HoverLift.applies(mode: panel.mode, hovering: panel.hovering, expanded: isExpanded || peekShowing || captionShowing, reduceMotion: reduceMotion) }
+    /// The shell's scale: the collapsed notch GROWS to 1.25 under the pointer (HoverGrow — a
+    /// middle state, not the sheet); the pill keeps its 1.02 lift; everything else is 1.
+    var hoverScale: CGFloat {
+        if HoverGrow.applies(mode: panel.mode, hovering: panel.hovering, expanded: isExpanded || peekShowing || captionShowing) { return PeakMotion.hoverGrowScale }
+        return hoverLift ? PeakMotion.hoverScale : 1
+    }
     /// Dictating with the sheet closed: the live words, inline in the menu bar row (the notch's own height, centered on it; on a
     /// display without a notch the pill widens in place). Nothing hangs below it.
     var captionShowing: Bool {
@@ -291,10 +297,10 @@ struct PeakRootView: View {
             else if peekShowing { Haptic.level(); controller.openPeek() }
             else if !isExpanded { Haptic.level(); controller.activeDisplay = panel.uuid; controller.expand() }
         }
-        .scaleEffect(hoverLift ? PeakMotion.hoverScale : 1, anchor: UnitPoint(x: (shellRect.midX) / max(1, panel.layout.canvas.width), y: 0))
+        .scaleEffect(hoverScale, anchor: UnitPoint(x: (shellRect.midX) / max(1, panel.layout.canvas.width), y: 0))
         .frame(width: panel.layout.canvas.width, height: panel.layout.canvas.height, alignment: .topLeading)
         .animation(Motion.spring(reduceMotion), value: surface)
-        .animation(Motion.hover(reduceMotion), value: hoverLift)
+        .animation(Motion.hover(reduceMotion), value: hoverScale)
         .onDrop(of: [.fileURL], isTargeted: Binding(get: { panel.dropTargeted }, set: { on in
             if on != panel.dropTargeted { panel.dropTargeted = on; if on { Haptic.tick() } }
         })) { providers in

@@ -83,7 +83,14 @@ enum Screens {
     }
 
     /// Is this global point over the live shell (a little slack so the edge doesn't flicker)?
-    func contains(_ p: NSPoint) -> Bool { layout.hitRect(surface).insetBy(dx: -2, dy: -2).contains(p) }
+    /// While the collapsed notch is hover-grown, the GROWN rect is the shell: testing against it
+    /// (not the rest rect) is the hysteresis that keeps the growth from strobing — a pointer in
+    /// the grown-only ring still counts as inside, and one outside both rects counts as out.
+    func contains(_ p: NSPoint) -> Bool {
+        var r = layout.hitRect(surface)
+        if surface == .collapsed, state.hovering, layout.mode == .notch { r = layout.grown(r, by: PeakMotion.hoverGrowScale) }
+        return r.insetBy(dx: -2, dy: -2).contains(p)
+    }
 
     func setVisible(_ on: Bool) {
         state.visible = on
@@ -1055,14 +1062,16 @@ enum Screens {
         hoverCollapse?.cancel()
         if inside, controller.peek != nil { controller.extendPeek(); return }      // reading an alert: hold it, open only on a tap
         if inside {
-            Haptic.generic()                                     // paired with the 1.02 scale + brightness lift
+            Haptic.generic()                                     // paired with the hover lift / notch growth
             if !controller.expanded {
                 let w = DispatchWorkItem { [weak self] in
                     guard let self, self.hoveredDisplay == uuid, !self.controller.expanded else { return }
                     Haptic.level(); self.controller.activeDisplay = uuid; self.controller.expand()
                 }
                 hoverCollapse = w
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18, execute: w)   // a brush past doesn't open it
+                // 1.0 s, not the old 0.18: the pointer first GROWS the collapsed notch (1.25×) so
+                // it can be read; a deliberate hover still opens the sheet, and a click always did.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: w)
             }
         } else if controller.expanded && controller.askText == nil && controller.activeDisplay == uuid
                     && !(controller.tab == .threePO && profile.isEnabled(.threePO)) {   // the chat stays open until Collapse

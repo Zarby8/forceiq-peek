@@ -78,7 +78,7 @@ final class MotionPolishGuardTests: XCTestCase {
         XCTAssertTrue(ring.contains("reduceMotion ? nil"), "the focus ring switches at once under Reduce Motion")
         let v = try code("Views.swift")
         XCTAssertTrue(v.contains("PeakMotion.springResponse, dampingFraction: PeakMotion.springDamping"), "Motion.spring is the one spring")
-        XCTAssertTrue(v.contains(".animation(Motion.hover(reduceMotion), value: hoverLift)"), "hover animates the lift only")
+        XCTAssertTrue(v.contains(".animation(Motion.hover(reduceMotion), value: hoverScale)"), "hover animates the scale (the pill lift / the notch growth) only")
         XCTAssertFalse(v.contains("value: panel.hovering)"), "an animation keyed to every hover flip re-animates the whole shell")
         let t = try code("ThreePOViews.swift")
         XCTAssertTrue(t.contains(".contentTransition(.identity)"), "the streamed text lands at full white")
@@ -203,5 +203,36 @@ final class MotionPolishGuardTests: XCTestCase {
         let tour = try body(a, from: "func motionPolishTour()", to: "var avatarTour")
         for bad in ["choose(.run)", ".run(", ".confirm(", "perform("] { XCTAssertFalse(tour.contains(bad), "polish tour calls \(bad)") }
         XCTAssertTrue(a.contains(#"var polishTour: Bool { demo && "#))
+    }
+}
+
+
+// Hover growth (Christopher, Nov 17, 2026): the collapsed notch grows 25% while the pointer is
+// inside it — a middle state, not the sheet. Policy, token, and the grown-rect geometry.
+final class HoverGrowTests: XCTestCase {
+    func testGrowAppliesOnlyToTheCollapsedNotchUnderThePointer() {
+        XCTAssertTrue(HoverGrow.applies(mode: .notch, hovering: true, expanded: false))
+        XCTAssertFalse(HoverGrow.applies(mode: .pill, hovering: true, expanded: false), "the pill keeps its 1.02 lift")
+        XCTAssertFalse(HoverGrow.applies(mode: .notch, hovering: true, expanded: true), "never over the sheet")
+        XCTAssertFalse(HoverGrow.applies(mode: .notch, hovering: false, expanded: false))
+    }
+
+    func testGrowScaleIsHisTwentyFivePercent() {
+        XCTAssertEqual(PeakMotion.hoverGrowScale, 1.25)
+    }
+
+    func testGrownRectKeepsTheTopEdgeAndCenter() {
+        let m5 = ScreenDescriptor(uuid: "M5", name: "Built-in Display", frame: CGRect(x: 0, y: 0, width: 2048, height: 1330),
+                                  safeAreaTop: 43, auxiliaryTopLeft: CGRect(x: 0, y: 1287, width: 899, height: 43),
+                                  auxiliaryTopRight: CGRect(x: 1149, y: 1287, width: 899, height: 43))
+        let l = PeakGeometry().layout(for: m5)
+        let g = l.grown(l.collapsed, by: PeakMotion.hoverGrowScale)
+        XCTAssertEqual(g.maxY, l.collapsed.maxY, "the grown assembly stays flush with the top edge")
+        XCTAssertEqual(g.midX, l.collapsed.midX, accuracy: 0.5, "growth is anchored on the assembly's center")
+        XCTAssertEqual(g.width, l.collapsed.width * 1.25, accuracy: 0.5)
+        XCTAssertEqual(g.height, l.collapsed.height * 1.25, accuracy: 0.5)
+        XCTAssertTrue(l.canvas.contains(g), "the canvas has room for the grown assembly: it never clips")
+        let gm = l.grown(l.markRect, by: PeakMotion.hoverGrowScale)
+        XCTAssertEqual(gm.width, l.markRect.width * 1.25, accuracy: 0.5, "the mark grows with the assembly")
     }
 }

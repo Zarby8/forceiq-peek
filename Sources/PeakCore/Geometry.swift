@@ -66,6 +66,15 @@ public struct PeakLayout: Equatable, Sendable {
     }
     /// Is a global point on the edge-trigger strip? (Collapsed notch only; nothing here ever captures the mouse.)
     public func triggers(at p: CGPoint) -> Bool { edgeTrigger != .zero && edgeTrigger.contains(p) }
+
+    /// A collapsed-state rect scaled by `k` about the collapsed assembly's top-center — the
+    /// hover-grown state's geometry. The view grows via a scale effect on the same anchor; this
+    /// pure version serves hit-testing (the grown rect is the shell while grown — the hysteresis
+    /// that keeps the growth from strobing at its edge) and the canvas union.
+    public func grown(_ r: CGRect, by k: CGFloat) -> CGRect {
+        let ax = collapsed.midX, ay = collapsed.maxY
+        return CGRect(x: ax + (r.minX - ax) * k, y: ay + (r.minY - ay) * k, width: r.width * k, height: r.height * k)
+    }
 }
 
 /// A seam: a pinned notch-geometry pick can replace this without touching the panel code.
@@ -185,7 +194,8 @@ public struct PeakGeometry: PeakGeometryProviding {
                 : CGRect(x: n.minX - wingWidth, y: n.minY, width: wingWidth, height: n.height)
             out.progressLine = CGRect(x: l.collapsed.minX + 12, y: n.minY - 5, width: max(0, l.collapsed.width - 24), height: 2)
         }
-        let u = l.collapsed.union(l.expanded).union(chat).union(peek)
+        var u = l.collapsed.union(l.expanded).union(chat).union(peek)
+        if l.mode == .notch { u = u.union(l.grown(l.collapsed, by: PeakMotion.hoverGrowScale)) }   // room for the hover-grown assembly
         var c = CGRect(x: u.minX - glowMargin, y: u.minY - glowMargin, width: u.width + 2 * glowMargin, height: s.frame.maxY - (u.minY - glowMargin))
         c.origin.x = max(c.minX, s.frame.minX); if c.maxX > s.frame.maxX { c.size.width = s.frame.maxX - c.minX }
         out.canvas = c
