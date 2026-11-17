@@ -267,62 +267,62 @@ final class GeometryTests: XCTestCase {
                                   safeAreaTop: 0, auxiliaryTopLeft: nil, auxiliaryTopRight: nil)
 
     func testNotchDisplayWrapsTheNotch() {
-        // Band design (Christopher's spec): the collapsed assembly stays inside the notch band —
-        // exactly the notch's height, flush with the top edge — as [dots][mark][text]: the dots
-        // zone in the left ear, the mark in the right ear hard against the housing (its rect has
-        // no display pixels), the text after it.
+        // The notch's own dimensions (Christopher's spec, Nov 17, 2026): the collapsed panel is
+        // exactly the notch's width, centered on it — no wing, no ear assembly, nothing reaching
+        // toward the menu bar items. The ghost sits at the notch's horizontal center in the
+        // silhouette's chin below the housing; the dots sit in the left ear.
         let g = PeakGeometry()
         let l = g.layout(for: notch)
         XCTAssertEqual(l.mode, .notch)
         XCTAssertFalse(l.virtualNotch)
         XCTAssertEqual(l.notchRect, CGRect(x: 662, y: 950, width: 188, height: 32))
         let n = l.notchRect!
-        XCTAssertEqual(l.collapsed.maxY, 982, "the assembly is flush with the top edge")
-        XCTAssertEqual(l.collapsed.height, n.height, "the assembly is exactly the band: it never dips below it")
-        XCTAssertTrue(l.collapsed.contains(n), "the silhouette covers the notch")
+        XCTAssertEqual(l.collapsed.width, n.width, "the footprint is the notch's width, no wider")
+        XCTAssertEqual(l.collapsed.minX, n.minX, "centered on the notch")
+        XCTAssertEqual(l.collapsed.maxY, 982, "flush with the top edge")
+        XCTAssertEqual(l.collapsed.height, n.height + g.chinTopGap + l.markRect.height + g.chinBottomGap,
+                       "the silhouette is the notch plus exactly the chin the centered ghost needs")
+        XCTAssertEqual(l.markRect.midX, n.midX, accuracy: 0.5, "the ghost is centered on the notch")
         XCTAssertEqual(l.dotsRect, CGRect(x: n.minX - g.dotsZoneWidth, y: n.minY, width: g.dotsZoneWidth, height: n.height),
                        "the dots zone fills the left ear segment of the band")
-        XCTAssertEqual(l.markRect.minX, n.maxX, "the mark sits in the right ear, hard against the housing")
-        XCTAssertEqual(l.markRect.width, l.markRect.height, "the mark is square")
-        XCTAssertTrue(l.collapsed.contains(l.markRect))
-        XCTAssertEqual(l.wing.minX, l.markRect.maxX); XCTAssertEqual(l.wing.width, g.textWingBand)
-        XCTAssertEqual(l.wing.minY, n.minY, "the text shares the band")
+        XCTAssertFalse(l.collapsed.contains(l.dotsRect), "the dots are NOT part of the panel footprint: the panel is the notch's width only")
+        XCTAssertEqual(l.wing, .zero, "no text wing: the collapsed notch carries no text")
         XCTAssertEqual(l.expanded.maxY, 982)
         XCTAssertEqual(l.expanded.midX, n.midX, accuracy: 0.5)
     }
 
-    func testHardwareNotchContentStaysInTheBandOutsideTheHousing() {
-        // The regression test for the invisible pill: on the built-in screen no collapsed content
-        // may sit inside the notch rect (the camera housing occludes anything there), and nothing
-        // may dip below the band.
+    func testHardwareNotchGhostIsCenteredInTheChinBelowTheHousing() {
+        // The regression test for BOTH invisible-pill bugs: the ghost may not sit inside the
+        // notch rect (the camera housing occludes anything there), and it may not be pushed
+        // into an ear — it sits at the notch's center x, in the chin, inside the silhouette.
         let l = PeakGeometry().layout(for: notch)
         let n = l.notchRect!
-        for r in [l.dotsRect, l.markRect, l.wing] {
-            XCTAssertFalse(r.intersects(n.insetBy(dx: 1, dy: 1)), "no content inside the notch rect")
-            XCTAssertGreaterThanOrEqual(r.minY, n.minY, "content stays inside the band")
-            XCTAssertTrue(l.collapsed.contains(r), "content lives inside the assembly silhouette")
-        }
+        XCTAssertFalse(l.markRect.intersects(n), "the ghost is below the housing, never inside its rect")
+        XCTAssertLessThanOrEqual(l.markRect.maxY, n.minY, "the ghost's top edge is at or below the housing's bottom edge: it renders fully")
+        XCTAssertEqual(l.markRect.midX, n.midX, accuracy: 0.5, "the ghost is aligned middle")
+        XCTAssertTrue(l.collapsed.contains(l.markRect), "the ghost lives inside the silhouette")
+        XCTAssertFalse(l.dotsRect.intersects(n), "the dots are in the visible ear, never inside the housing rect")
         XCTAssertLessThanOrEqual(l.dotsRect.maxX, n.minX, "the dots sit in the left ear")
-        XCTAssertGreaterThanOrEqual(l.markRect.minX, n.maxX, "the mark sits in the right ear")
-        XCTAssertLessThan(l.progressLine.maxY, n.minY, "the progress line hangs under the band")
+        XCTAssertLessThan(l.progressLine.maxY, l.collapsed.minY, "the progress line hangs under the silhouette")
     }
 
     func testNoNotchGetsAVirtualNotch() {
-        // A plain external display (no safe-area top, no auxiliary areas) gets a VIRTUAL notch: mode
-        // stays .notch, and the collapsed assembly is a band-height silhouette at the top-center —
-        // [dots][mark centered][text] — never dipping below the display's menu-bar band.
+        // A plain external display (no safe-area top, no auxiliary areas) gets a VIRTUAL notch:
+        // mode stays .notch, and the collapsed silhouette is contained in the display's menu-bar
+        // band — ghost + dots + small margins only, ghost centered, dots at its left end, no text.
         let g = PeakGeometry()
         let l = g.layout(for: studio)
         XCTAssertEqual(l.mode, .notch)
         XCTAssertTrue(l.virtualNotch)
-        XCTAssertEqual(l.notchRect, CGRect(x: studio.frame.midX - 115, y: studio.frame.maxY - 46, width: 230, height: 46))
+        XCTAssertEqual(l.notchRect, l.collapsed, "the virtual notch IS the silhouette")
         XCTAssertEqual(l.collapsed.maxY, studio.frame.maxY, "flush with the top edge")
-        XCTAssertEqual(l.collapsed.height, studio.menuBarHeight, "the assembly is exactly the menu-bar band")
-        XCTAssertEqual(l.collapsed.midX, studio.frame.midX, accuracy: 0.5, "the assembly is centered on the display")
-        XCTAssertEqual(l.markRect.midX, studio.frame.midX, accuracy: 0.5, "the mark is at the assembly's center")
-        XCTAssertEqual(l.dotsRect.minX, l.collapsed.minX, "the dots zone is the assembly's left end")
+        XCTAssertEqual(l.collapsed.height, studio.menuBarHeight, "the silhouette is exactly the menu-bar band: it never dips below it")
+        XCTAssertEqual(l.collapsed.width, l.markRect.width + 2 * (g.dotsZoneWidth + g.silhouetteGap), "ghost + dots + small margins only")
+        XCTAssertEqual(l.collapsed.midX, studio.frame.midX, accuracy: 0.5, "the silhouette is centered on the display")
+        XCTAssertEqual(l.markRect.midX, studio.frame.midX, accuracy: 0.5, "the ghost is centered in the virtual notch")
+        XCTAssertEqual(l.dotsRect.minX, l.collapsed.minX, "the dots zone is the silhouette's left end")
         XCTAssertEqual(l.dotsRect.width, g.dotsZoneWidth)
-        XCTAssertEqual(l.wing.minX, l.markRect.maxX); XCTAssertEqual(l.wing.width, g.textWingBand)
+        XCTAssertEqual(l.wing, .zero, "no text wing")
         XCTAssertEqual(l.expanded.midX, studio.frame.midX, accuracy: 0.5)
         XCTAssertTrue(studio.frame.contains(l.expanded))
     }
@@ -576,18 +576,19 @@ func md5Hex(_ d: Data) -> String { Insecure.MD5.hash(data: d).map { String(forma
 // Chris's M5, measured 10.19.2026 (14" MacBook Pro, "More Space" 2048×1330): notch x 899…1149, 43 pt tall.
 final class NotchFitM5Tests: XCTestCase {
     func testBandLayoutOnTheMeasuredM5Notch() {
-        // Band design on the measured values: the assembly spans the notch (x 899…1149) plus the
-        // dots zone in the left ear and the mark + text in the right ear — 503 wide, exactly the
-        // 43 pt band, flush with the top edge. The mark sits in the right ear hard against the
-        // housing (x 1149): the notch's own center is camera plastic and can never show it.
+        // The measured M5 (notch x 899...1149, 250 x 43): the collapsed panel is EXACTLY the
+        // notch's width — 250, not the 503 of the rejected build — with the ghost centered on
+        // the notch's center x (1024) in the chin (silhouette 43 + 1 + 39 + 2 = 85 tall), the
+        // dots in the left ear, and no text wing anywhere.
         let m5 = ScreenDescriptor(uuid: "M5", name: "Built-in Display", frame: CGRect(x: 0, y: 0, width: 2048, height: 1330),
                                   safeAreaTop: 43, auxiliaryTopLeft: CGRect(x: 0, y: 1287, width: 899, height: 43),
                                   auxiliaryTopRight: CGRect(x: 1149, y: 1287, width: 899, height: 43))
         let l = PeakGeometry().layout(for: m5)
-        XCTAssertEqual(l.collapsed, CGRect(x: 869, y: 1287, width: 503, height: 43))
+        XCTAssertEqual(l.collapsed, CGRect(x: 899, y: 1245, width: 250, height: 85))
         XCTAssertEqual(l.dotsRect, CGRect(x: 869, y: 1287, width: 30, height: 43))
-        XCTAssertEqual(l.markRect, CGRect(x: 1149, y: 1289, width: 39, height: 39))
-        XCTAssertEqual(l.wing, CGRect(x: 1188, y: 1287, width: 184, height: 43))
+        XCTAssertEqual(l.markRect, CGRect(x: 1004.5, y: 1247, width: 39, height: 39))
+        XCTAssertEqual(l.markRect.midX, 1024, accuracy: 0.5, "the ghost is centered on the notch")
+        XCTAssertEqual(l.wing, .zero)
         XCTAssertEqual(l.hitRect(.collapsed), l.collapsed)
     }
 
@@ -599,7 +600,7 @@ final class NotchFitM5Tests: XCTestCase {
         XCTAssertTrue(l.virtualNotch)
         XCTAssertEqual(l.collapsed.midX, studio.frame.midX, accuracy: 0.5)
         XCTAssertEqual(l.collapsed.maxY, studio.frame.maxY, "top-anchored: the virtual notch touches the screen's top edge")
-        XCTAssertEqual(l.collapsed.size, CGSize(width: 234, height: 24), "band-height assembly: dots zone + centered mark + text zone, at the mock's 24 pt menu-bar height")
+        XCTAssertEqual(l.collapsed.size, CGSize(width: 88, height: 24), "band-height silhouette: ghost + dots + small margins, at the mock's 24 pt menu-bar height")
         XCTAssertEqual(l.markRect.midX, studio.frame.midX, accuracy: 0.5, "the mark is centered in the virtual notch")
     }
 }

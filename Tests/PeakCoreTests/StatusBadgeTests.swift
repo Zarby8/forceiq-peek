@@ -30,21 +30,19 @@ final class StatusBadgeTests: XCTestCase {
                               safeAreaTop: 43, auxiliaryTopLeft: CGRect(x: 0, y: 1287, width: 899, height: 43),
                               auxiliaryTopRight: CGRect(x: 1149, y: 1287, width: 899, height: 43))
 
-    func testTheWingSitsInTheBandBesideTheMark() {
-        // Band design: the wing is the status text right of the mark, inside the menu-bar band —
-        // the mark in the right ear hard against the housing, the wing after it, the whole
-        // assembly exactly the band's height (the in-notch row was occluded by the housing; the
-        // chin row dipped below the band).
+    func testTheCollapsedNotchHasNoTextWing() {
+        // Christopher's rule (Nov 17, 2026): the collapsed notch shows the silhouette, the
+        // centered ghost, and the dots — NO text. The wing is always .zero; the panel is
+        // exactly the notch's width with the ghost at its center.
         let l = PeakGeometry().layout(for: m5)
         let n = l.notchRect!
-        XCTAssertEqual(l.markRect.minX, n.maxX, "the mark sits in the right ear, hard against the housing")
-        XCTAssertEqual(l.wing.minX, l.markRect.maxX, "the text starts where the mark square ends")
-        XCTAssertEqual(l.wing.minY, n.minY); XCTAssertEqual(l.wing.height, n.height)
-        XCTAssertEqual(l.collapsed.height, n.height, "the assembly is exactly the band")
-        XCTAssertEqual(l.collapsed.maxY, 1330, "the assembly is flush with the top edge")
-        XCTAssertTrue(l.collapsed.contains(l.markRect.union(l.wing)), "the silhouette contains mark + text")
+        XCTAssertEqual(l.wing, .zero, "no text zone exists in the collapsed layout")
+        XCTAssertEqual(l.collapsed.width, n.width, "the panel is the notch's width")
+        XCTAssertEqual(l.collapsed.minX, n.minX)
+        XCTAssertEqual(l.markRect.midX, n.midX, accuracy: 0.5, "the ghost is centered on the notch")
+        XCTAssertTrue(l.collapsed.contains(l.markRect), "the ghost lives inside the silhouette")
         XCTAssertTrue(l.canvas.contains(l.collapsed))
-        XCTAssertEqual(l.hitRect(.collapsed), l.collapsed, "hover and click on the wing open Peek")
+        XCTAssertEqual(l.hitRect(.collapsed), l.collapsed)
     }
 
     func testTheWingFitsTheEmptyGapAndTheLongestWord() {
@@ -61,21 +59,21 @@ final class StatusBadgeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(l.progressLine.minX, l.collapsed.minX); XCTAssertLessThanOrEqual(l.progressLine.maxX, l.collapsed.maxX)
     }
 
-    func testTheStudioDisplayVirtualNotchHasTheTextWing() {
+    func testTheStudioDisplayVirtualNotchHasNoTextWing() {
         let studio = ScreenDescriptor(uuid: "S", name: "Studio Display", frame: CGRect(x: 2048, y: 0, width: 2560, height: 1440),
                                       safeAreaTop: 0, auxiliaryTopLeft: nil, auxiliaryTopRight: nil)
         let l = PeakGeometry().layout(for: studio)
         XCTAssertTrue(l.virtualNotch)
-        XCTAssertEqual(l.wing.width, PeakGeometry().textWingBand); XCTAssertEqual(l.collapsed.size, CGSize(width: 234, height: 24), "band-height assembly at the mock menu-bar height of 24")
+        XCTAssertEqual(l.wing, .zero); XCTAssertEqual(l.collapsed.size, CGSize(width: 88, height: 24), "band-height silhouette at the mock menu-bar height of 24: ghost + dots + small margins")
     }
 
-    func testTheWingViewIsBrandTextOnBlackAndNothingElseDrawsBesideTheNotch() throws {
+    func testTheCollapsedNotchDrawsNoTextView() throws {
         let path = #filePath.replacingOccurrences(of: "Tests/PeakCoreTests/StatusBadgeTests.swift", with: "Sources/ForceIQPeak/Views.swift")
         let v = try String(contentsOfFile: path, encoding: .utf8)
-        let wing = v.components(separatedBy: "struct NotchWing").last?.components(separatedBy: "/// Live progress under the notch").first ?? ""
-        XCTAssertTrue(wing.contains("Color.peakGreen") && wing.contains("Color.peakGold") && wing.contains("spec.text"))
-        XCTAssertFalse(wing.contains("opacity") || wing.contains("gray") || wing.contains(".secondary"))
-        XCTAssertFalse(v.contains("struct NotchTag"), "the under-notch tab is gone: the wing replaced it")
+        XCTAssertFalse(v.contains("struct NotchWing"), "the in-notch text wing is gone: the collapsed notch shows no text")
+        let collapsed = v.components(separatedBy: "@ViewBuilder var collapsed").last?.components(separatedBy: "var collapsedPill").first ?? ""
+        XCTAssertFalse(collapsed.contains("Text("), "the collapsed notch view renders no text at all — silhouette, ghost, dots only")
+        XCTAssertFalse(v.contains("struct NotchTag"), "the under-notch tab is gone")
     }
 
     func testTheAppDrawsItFromTheSpecAndNeverSetsAPlainTitle() throws {

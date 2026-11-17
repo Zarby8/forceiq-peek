@@ -38,12 +38,12 @@ import XCTest
     func testPeekIsTheCollapsedShapeWidenedInlineInTheMenuBarRow() {
         let l = PeakGeometry().layout(for: m5)
         let n = l.notchRect!
-        XCTAssertEqual(l.collapsed.height, 43, "the collapsed assembly is exactly the notch band: it never dips below it")
+        XCTAssertEqual(l.collapsed.height, 85, "the collapsed silhouette is the notch plus the chin that holds the centered ghost")
         XCTAssertEqual(l.peek.height, n.height, "inline: never taller than the notch, nothing hangs below it")
         XCTAssertEqual(l.peek.maxY, 1330, "flush with the top edge"); XCTAssertEqual(l.peek.minY, n.minY)
         XCTAssertEqual(l.peek.midX, n.midX, accuracy: 0.5, "centered on the notch: the client left, what happened right")
         XCTAssertEqual(l.peek.maxY, l.collapsed.maxY, "both shells are flush with the top edge")
-        XCTAssertEqual(l.collapsed.height, l.peek.height, "collapsed and peek share the band")
+        XCTAssertLessThan(l.peek.height, l.collapsed.height, "the peek stays in the band row; only the collapsed silhouette carries the chin")
         XCTAssertEqual((l.peek.width - n.width) / 2, 145, accuracy: 0.5)
         XCTAssertTrue(l.canvas.contains(l.peek))
         XCTAssertEqual(l.hitRect(.peek), l.peek)
@@ -78,7 +78,7 @@ import XCTest
         let l = PeakGeometry().layout(for: m5)
         XCTAssertTrue(l.triggers(at: CGPoint(x: 1024, y: 1329)))
         XCTAssertTrue(l.triggers(at: CGPoint(x: 899 - 35, y: 1329)), "a little past the notch edge")
-        XCTAssertFalse(l.triggers(at: CGPoint(x: l.collapsed.minX - 60, y: 1329)), "not the whole menu bar: only a little past the shape")
+        XCTAssertFalse(l.triggers(at: CGPoint(x: l.dotsRect.minX - 60, y: 1329)), "not the whole menu bar: only a little past the assembly (dots + silhouette)")
         XCTAssertFalse(l.triggers(at: CGPoint(x: 1024, y: 1330 - 20)), "not below the first few points of the edge")
         for s in [PeakLayout.Surface.collapsed, .peek, .home, .chat] {
             XCTAssertNotEqual(l.hitRect(s), l.edgeTrigger, "the trigger is never a surface: it takes no clicks")
@@ -288,7 +288,7 @@ import XCTest
 
     func testPeekShellColorsAreBrandTokensOnly() throws {
         let views = try String(contentsOfFile: #filePath.replacingOccurrences(of: "Tests/PeakCoreTests/PeakAlertTests.swift", with: "Sources/ForceIQPeak/Views.swift"), encoding: .utf8)
-        let line = views.components(separatedBy: "struct PeekInline").last?.components(separatedBy: "/// The status wing's state").first ?? ""
+        let line = views.components(separatedBy: "struct PeekInline").last?.components(separatedBy: "/// The collapsed notch carries NO text").first ?? ""
         XCTAssertTrue(line.contains("Color.white")); XCTAssertTrue(line.contains("Color.peakGold") && line.contains("Color.peakGreen"))
         XCTAssertFalse(line.contains("opacity") || line.contains(".secondary") || line.contains("gray") || line.contains("0x"), "pure white, no gray, no stray hex")
     }

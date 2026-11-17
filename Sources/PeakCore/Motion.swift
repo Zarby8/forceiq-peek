@@ -12,16 +12,13 @@ public enum HoverLift {
     }
 }
 
-/// Hover growth for the collapsed notch (Christopher, Nov 17, 2026: "you can make the window bigger
-/// when the mouse is inside the notch" — specified at 25% bigger). The whole collapsed assembly
-/// scales about its top-center while the pointer is inside it, a middle state between rest and the
-/// sheet. This supersedes the Oct 2026 pill-only rule for the hover state only: at rest the notch
-/// still paints nothing outside the band. Reduce Motion keeps the growth (it is the readability
-/// affordance) and drops the animation, per the Motion.hover fallback.
-public enum HoverGrow {
-    public static func applies(mode: PeakMode, hovering: Bool, expanded: Bool) -> Bool {
-        mode == .notch && hovering && !expanded
-    }
+/// The expanded sheet's growth (Christopher, Nov 17, 2026, correcting the first build of his
+/// hover note): the 25% belongs to the EXPANDED window — "when it expands, make that window 25%
+/// bigger; if the mouse is not over the app, it sits inside the notch." The collapsed notch NEVER
+/// scales, at rest or hovered: it is exactly the notch's dimensions, period. The sheet renders at
+/// PeakMotion.sheetScale about the notch's top-center, expanding downward.
+public enum SheetGrow {
+    public static func applies(mode: PeakMode) -> Bool { mode == .notch }
 }
 
 public enum PeakMotion {
@@ -32,8 +29,8 @@ public enum PeakMotion {
     public static let hoverResponse = 0.24
     public static let hoverDamping = 0.9
     public static let hoverScale = 1.02
-    /// Hover growth on the collapsed notch: 25% bigger while the pointer is inside it (his number).
-    public static let hoverGrowScale = 1.25
+    /// The expanded sheet's scale in notch mode: the window is 25% bigger when expanded (his number).
+    public static let sheetScale = 1.25
     /// Reduce Motion: a short crossfade of the shell (never of text) instead of a spring.
     public static let reduceCrossfade = 0.16
 

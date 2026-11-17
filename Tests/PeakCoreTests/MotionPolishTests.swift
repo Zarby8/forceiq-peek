@@ -78,7 +78,7 @@ final class MotionPolishGuardTests: XCTestCase {
         XCTAssertTrue(ring.contains("reduceMotion ? nil"), "the focus ring switches at once under Reduce Motion")
         let v = try code("Views.swift")
         XCTAssertTrue(v.contains("PeakMotion.springResponse, dampingFraction: PeakMotion.springDamping"), "Motion.spring is the one spring")
-        XCTAssertTrue(v.contains(".animation(Motion.hover(reduceMotion), value: hoverScale)"), "hover animates the scale (the pill lift / the notch growth) only")
+        XCTAssertTrue(v.contains(".animation(isExpanded ? Motion.spring(reduceMotion) : Motion.hover(reduceMotion), value: viewScale)"), "the scale (the pill lift / the expanded sheet's growth) animates on its own value only")
         XCTAssertFalse(v.contains("value: panel.hovering)"), "an animation keyed to every hover flip re-animates the whole shell")
         let t = try code("ThreePOViews.swift")
         XCTAssertTrue(t.contains(".contentTransition(.identity)"), "the streamed text lands at full white")
@@ -207,32 +207,46 @@ final class MotionPolishGuardTests: XCTestCase {
 }
 
 
-// Hover growth (Christopher, Nov 17, 2026): the collapsed notch grows 25% while the pointer is
-// inside it — a middle state, not the sheet. Policy, token, and the grown-rect geometry.
-final class HoverGrowTests: XCTestCase {
-    func testGrowAppliesOnlyToTheCollapsedNotchUnderThePointer() {
-        XCTAssertTrue(HoverGrow.applies(mode: .notch, hovering: true, expanded: false))
-        XCTAssertFalse(HoverGrow.applies(mode: .pill, hovering: true, expanded: false), "the pill keeps its 1.02 lift")
-        XCTAssertFalse(HoverGrow.applies(mode: .notch, hovering: true, expanded: true), "never over the sheet")
-        XCTAssertFalse(HoverGrow.applies(mode: .notch, hovering: false, expanded: false))
+// The expanded sheet's growth (Christopher, Nov 17, 2026, corrected the same morning): the
+// 25% belongs to the EXPANDED window — "when it expands, make that window 25% bigger; if the
+// mouse is not over the app, it sits inside the notch." The collapsed notch NEVER scales.
+final class SheetGrowTests: XCTestCase {
+    func testGrowAppliesToTheSheetInNotchModeOnly() {
+        XCTAssertTrue(SheetGrow.applies(mode: .notch))
+        XCTAssertFalse(SheetGrow.applies(mode: .pill), "the pill keeps its own sizes and lift")
     }
 
-    func testGrowScaleIsHisTwentyFivePercent() {
-        XCTAssertEqual(PeakMotion.hoverGrowScale, 1.25)
+    func testSheetScaleIsHisTwentyFivePercent() {
+        XCTAssertEqual(PeakMotion.sheetScale, 1.25)
     }
 
-    func testGrownRectKeepsTheTopEdgeAndCenter() {
+    func testTheSheetOnScreenIsTwentyFivePercentBiggerAboutTheNotchTopCenter() {
         let m5 = ScreenDescriptor(uuid: "M5", name: "Built-in Display", frame: CGRect(x: 0, y: 0, width: 2048, height: 1330),
                                   safeAreaTop: 43, auxiliaryTopLeft: CGRect(x: 0, y: 1287, width: 899, height: 43),
                                   auxiliaryTopRight: CGRect(x: 1149, y: 1287, width: 899, height: 43))
         let l = PeakGeometry().layout(for: m5)
-        let g = l.grown(l.collapsed, by: PeakMotion.hoverGrowScale)
-        XCTAssertEqual(g.maxY, l.collapsed.maxY, "the grown assembly stays flush with the top edge")
-        XCTAssertEqual(g.midX, l.collapsed.midX, accuracy: 0.5, "growth is anchored on the assembly's center")
-        XCTAssertEqual(g.width, l.collapsed.width * 1.25, accuracy: 0.5)
-        XCTAssertEqual(g.height, l.collapsed.height * 1.25, accuracy: 0.5)
-        XCTAssertTrue(l.canvas.contains(g), "the canvas has room for the grown assembly: it never clips")
-        let gm = l.grown(l.markRect, by: PeakMotion.hoverGrowScale)
-        XCTAssertEqual(gm.width, l.markRect.width * 1.25, accuracy: 0.5, "the mark grows with the assembly")
+        XCTAssertEqual(l.expanded.size, CGSize(width: 620, height: 360), "the sheet's layout size is unchanged")
+        let g = l.grown(l.expanded, by: PeakMotion.sheetScale)
+        XCTAssertEqual(g.width, 775, accuracy: 0.5, "on screen the sheet is 25% wider: 620 -> 775")
+        XCTAssertEqual(g.height, 450, accuracy: 0.5, "and 25% taller: 360 -> 450")
+        XCTAssertEqual(g.midX, l.expanded.midX, accuracy: 0.5, "anchored on the notch's center")
+        XCTAssertEqual(g.maxY, l.expanded.maxY, "anchored on the top edge: it expands downward")
+        XCTAssertTrue(l.canvas.contains(g), "the canvas has room for the grown sheet: it never clips")
+        let gc = l.grown(l.chat, by: PeakMotion.sheetScale)
+        XCTAssertEqual(gc.width, 775, accuracy: 0.5); XCTAssertEqual(gc.height, 650, accuracy: 0.5, "the chat sheet grows the same way: 520 -> 650")
+        XCTAssertTrue(l.canvas.contains(gc))
+    }
+
+    func testTheCollapsedNotchIsNeverGrown() throws {
+        // Source guard: the scale is gated on the sheet being expanded, and the old
+        // hover-grown collapsed hit test is gone from the panel host.
+        let base = #filePath.replacingOccurrences(of: "Tests/PeakCoreTests/MotionPolishTests.swift", with: "Sources/ForceIQPeak/")
+        let views = try String(contentsOfFile: base + "Views.swift", encoding: .utf8)
+        XCTAssertFalse(views.contains("HoverGrow"), "the collapsed hover-grow policy is removed")
+        XCTAssertTrue(views.contains("SheetGrow.applies(mode: panel.mode) && isExpanded"), "the 1.25 scale applies only while the sheet is expanded")
+        let app = try String(contentsOfFile: base + "AppDelegate.swift", encoding: .utf8)
+        XCTAssertFalse(app.contains("hoverGrowScale"), "no hover-grow token survives")
+        XCTAssertFalse(app.contains("surface == .collapsed, state.hovering"), "the hover-grown collapsed hit test is gone")
+        XCTAssertTrue(app.contains("surface == .home || surface == .chat"), "the grown rect is the sheet's shell")
     }
 }

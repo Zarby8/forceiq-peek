@@ -68,12 +68,13 @@ final class WingStatusTests: XCTestCase {
         XCTAssertLessThanOrEqual(CGFloat(worst.count) * 7.4 * 0.75, PeakGeometry().wingWidth - 30)
     }
 
-    func testTheWingViewIsBrandColorsOnlyAndTicksOnlyWhileACountdownShows() throws {
+    func testTheDotsViewIsBrandColorsOnlyAndDrawsNoText() throws {
         let path = #filePath.replacingOccurrences(of: "Tests/PeakCoreTests/WingStatusTests.swift", with: "Sources/ForceIQPeak/Views.swift")
         let v = try String(contentsOfFile: path, encoding: .utf8)
-        let live = v.components(separatedBy: "struct NotchWingLive").last?.components(separatedBy: "/// Live progress under the notch").first ?? ""
-        XCTAssertTrue(live.contains("Color.peakGreen") && live.contains("Color.peakGold") && live.contains("Color.peakRed"))
-        XCTAssertFalse(live.contains("opacity") || live.contains("gray") || live.contains(".secondary") || live.contains("repeatForever"))
-        XCTAssertTrue(live.contains("if ticking {") && live.contains("TimelineView(.periodic"), "a 30 s coarse tick, only while a countdown shows")
+        let dots = v.components(separatedBy: "struct NotchDots: View").last?.components(separatedBy: "/// The dots zone's live state").first ?? ""
+        XCTAssertTrue(dots.contains("Color.peakGreen") && dots.contains("Color.peakGold") && dots.contains("Color.peakRed"))
+        XCTAssertFalse(dots.contains("opacity") || dots.contains("gray") || dots.contains(".secondary") || dots.contains("repeatForever"))
+        XCTAssertFalse(dots.contains("Text("), "the dots are shapes only: the collapsed notch draws no text")
+        XCTAssertFalse(v.contains("struct NotchWingLive"), "the ticking text wing is gone with the text")
     }
 }

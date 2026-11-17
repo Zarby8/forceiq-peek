@@ -52,7 +52,7 @@ import XCTest
     func testAnActionlessAlertShowsNoButton() throws {
         let path = #filePath.replacingOccurrences(of: "Tests/PeakCoreTests/PeekActionsTests.swift", with: "Sources/ForceIQPeak/Views.swift")
         let v = try String(contentsOfFile: path, encoding: .utf8)
-        let inline = v.components(separatedBy: "struct PeekInline").last?.components(separatedBy: "/// The status wing's state").first ?? ""
+        let inline = v.components(separatedBy: "struct PeekInline").last?.components(separatedBy: "/// The collapsed notch carries NO text").first ?? ""
         XCTAssertTrue(inline.contains("if let title = alert.action.buttonTitle"), "the button exists only when the alert has an action")
         XCTAssertTrue(inline.contains("Button(action: onAction)") && inline.contains("Color.black"), "black text on a brand-color capsule")
         XCTAssertEqual(inline.components(separatedBy: "actionButton\n").count - 1 + inline.components(separatedBy: "actionButton }").count - 1, 2,

@@ -101,44 +101,9 @@ struct PeekInline: View {
     }
 }
 
-/// The status wing's state (WingStatus): re-judged on every change, and every 30 s while a session is inside the hour so the
-/// countdown moves (a coarse tick, never an animation).
-struct NotchWingLive: View {
-    @ObservedObject var controller: PeakController
-    @ObservedObject var nextSession: NextSessionModel
-    @ObservedObject var light: GPULightModel
-    @ObservedObject var agents: AgentWatchModel
-    @ObservedObject var cards: CardStackViewModel
-    func spec(_ now: Date) -> WingSpec {
-        WingStatus.spec(presenting: controller.presenting, session: nextSession.session,
-                        gaps: nextSession.warnings.filter { $0.state == .present }.count, light: light.shown, now: now,
-                        agents: agents.summary, tonightText: controller.presenting ? nil : cards.tonightText)
-    }
-    var ticking: Bool { nextSession.session.map { WingStatus.countdown(to: $0.scheduledAt, now: Date()) != nil } ?? false }
-    var body: some View {
-        if ticking {
-            TimelineView(.periodic(from: .now, by: 30)) { ctx in NotchWing(spec: spec(ctx.date)) }
-        } else {
-            NotchWing(spec: spec(Date()))
-        }
-    }
-}
-
-/// The status wing's text: one short word. Brand green (gold while presenting) on black. The dots
-/// render in their own zone at the assembly's left (NotchDots) — Christopher's layout spec:
-/// dots left, mark centered, text right, all inside the band.
-struct NotchWing: View {
-    let spec: WingSpec
-    var body: some View {
-        Text(spec.text)
-            .font(.system(size: 11, weight: .heavy)).kerning(0.6).lineLimit(1).minimumScaleFactor(0.75)
-            .foregroundStyle(spec.textHex == Brand.goldHex ? Color.peakGold : Color.peakGreen)
-            .padding(.leading, 6).padding(.trailing, 8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(spec.accessibilityLabel)
-    }
-}
+/// The collapsed notch carries NO text (Christopher, Nov 17, 2026): no "PEEK" wordmark, no status
+/// line — at rest or hovered. Status text lives in the expanded sheet only. (The WingStatus
+/// judgement still drives the dots below.)
 
 /// The status dots: small shape-only dots stacked in the collapsed assembly's left zone.
 struct NotchDots: View {
@@ -154,7 +119,7 @@ struct NotchDots: View {
     }
 }
 
-/// The dots zone's live state: the same WingStatus judgement as NotchWingLive, dots only.
+/// The dots zone's live state: the WingStatus judgement, dots only.
 struct NotchDotsLive: View {
     @ObservedObject var controller: PeakController
     @ObservedObject var nextSession: NextSessionModel
@@ -265,12 +230,17 @@ struct PeakRootView: View {
     var bottomRadius: CGFloat { isExpanded ? 24 : (panel.mode == .notch ? 12 : panel.collapsedSize.height / 2) }
     var shape: PeakShellShape { PeakShellShape(rect: shellRect, topRadius: topRadius, bottomRadius: bottomRadius, notch: panel.mode == .notch) }
     var hoverLift: Bool { HoverLift.applies(mode: panel.mode, hovering: panel.hovering, expanded: isExpanded || peekShowing || captionShowing, reduceMotion: reduceMotion) }
-    /// The shell's scale: the collapsed notch GROWS to 1.25 under the pointer (HoverGrow — a
-    /// middle state, not the sheet); the pill keeps its 1.02 lift; everything else is 1.
-    var hoverScale: CGFloat {
-        if HoverGrow.applies(mode: panel.mode, hovering: panel.hovering, expanded: isExpanded || peekShowing || captionShowing) { return PeakMotion.hoverGrowScale }
+    /// The view's scale: the EXPANDED sheet renders 1.25x in notch mode (SheetGrow — Christopher's
+    /// 25% is the expanded window, never the collapsed notch, which is always exactly the notch's
+    /// dimensions); the pill keeps its 1.02 hover lift; everything else is 1.
+    var viewScale: CGFloat {
+        if SheetGrow.applies(mode: panel.mode) && isExpanded { return PeakMotion.sheetScale }
         return hoverLift ? PeakMotion.hoverScale : 1
     }
+    /// The collapsed state's status dots, drawn as an overlay in the body: on the hardware notch
+    /// they live in the left ear, OUTSIDE the silhouette — the shell mask must never clip them,
+    /// and no black may back them (the silhouette is exactly the notch's width).
+    var dotsShowing: Bool { panel.mode == .notch && panel.visible && surface == .collapsed }
     /// Dictating with the sheet closed: the live words, inline in the menu bar row (the notch's own height, centered on it; on a
     /// display without a notch the pill widens in place). Nothing hangs below it.
     var captionShowing: Bool {
@@ -290,6 +260,13 @@ struct PeakRootView: View {
                     .padding(.leading, r.minX).padding(.top, r.minY)
                     .allowsHitTesting(false)
             }
+            if dotsShowing {           // the status dots in the left ear (drawn outside the notch mask: the ear is visible menu bar, not Peek's to paint black)
+                let r = panel.local(panel.layout.dotsRect)
+                NotchDotsLive(controller: controller, nextSession: nextSession, light: light, agents: agents, cards: cards)
+                    .frame(width: r.width, height: r.height)
+                    .padding(.leading, r.minX).padding(.top, r.minY)
+                    .allowsHitTesting(false)
+            }
         }
         .contentShape(shape)
         .onTapGesture {
@@ -297,10 +274,10 @@ struct PeakRootView: View {
             else if peekShowing { Haptic.level(); controller.openPeek() }
             else if !isExpanded { Haptic.level(); controller.activeDisplay = panel.uuid; controller.expand() }
         }
-        .scaleEffect(hoverScale, anchor: UnitPoint(x: (shellRect.midX) / max(1, panel.layout.canvas.width), y: 0))
+        .scaleEffect(viewScale, anchor: UnitPoint(x: (shellRect.midX) / max(1, panel.layout.canvas.width), y: 0))
         .frame(width: panel.layout.canvas.width, height: panel.layout.canvas.height, alignment: .topLeading)
         .animation(Motion.spring(reduceMotion), value: surface)
-        .animation(Motion.hover(reduceMotion), value: hoverScale)
+        .animation(isExpanded ? Motion.spring(reduceMotion) : Motion.hover(reduceMotion), value: viewScale)
         .onDrop(of: [.fileURL], isTargeted: Binding(get: { panel.dropTargeted }, set: { on in
             if on != panel.dropTargeted { panel.dropTargeted = on; if on { Haptic.tick() } }
         })) { providers in
@@ -399,28 +376,20 @@ struct PeakRootView: View {
 
     @ViewBuilder var collapsed: some View {
         if panel.mode == .notch {
-            // [dots][mark][status text], each placed at the layout's own rect (offsets inside the
-            // collapsed frame): the assembly stays inside the notch silhouette / menu-bar band —
-            // never below it. On a virtual notch the mark is at the assembly's center; on the
-            // hardware notch the dots take the left ear and the mark the right ear hard against
-            // the camera housing (its rect has no pixels and can never show content). The mark
-            // ALWAYS renders here (ghost / BOB / eyes, same state as the sheet). The status text
-            // keeps the wing's existing rules (presenting suppression included: the mark is not
-            // private, the text still is).
+            // The collapsed notch (Christopher's spec, Nov 17, 2026): the silhouette IS the
+            // notch's footprint — exactly its width, centered on it — and it holds ONLY the
+            // mark, horizontally CENTERED on the notch: in the silhouette's chin below the
+            // camera housing on the built-in screen (the housing's rect has no pixels, so a
+            // centered mark can only live there), centered in the band on a virtual notch.
+            // The mark ALWAYS renders here (ghost / BOB / eyes, same state as the sheet).
+            // The status dots ride as an overlay in the left ear (see dotsShowing in the
+            // body). NO text: no wordmark, no status line, at rest or hovered.
             let c = panel.local(panel.layout.collapsed)
-            let d = panel.local(panel.layout.dotsRect)
             let m = panel.local(panel.layout.markRect)
-            let w = panel.local(panel.layout.wing)
             ZStack(alignment: .topLeading) {
-                NotchDotsLive(controller: controller, nextSession: nextSession, light: light, agents: agents, cards: cards)
-                    .frame(width: d.width, height: d.height)
-                    .padding(.leading, d.minX - c.minX).padding(.top, d.minY - c.minY)
                 ghost(max(10, panel.layout.markRect.height - 6))
                     .frame(width: m.width, height: m.height)
                     .padding(.leading, m.minX - c.minX).padding(.top, m.minY - c.minY)
-                NotchWingLive(controller: controller, nextSession: nextSession, light: light, agents: agents, cards: cards)
-                    .frame(width: w.width, height: w.height)
-                    .padding(.leading, w.minX - c.minX).padding(.top, w.minY - c.minY)
             }
             .frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
         } else {

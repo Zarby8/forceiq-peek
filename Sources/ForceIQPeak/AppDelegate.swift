@@ -83,13 +83,18 @@ enum Screens {
     }
 
     /// Is this global point over the live shell (a little slack so the edge doesn't flicker)?
-    /// While the collapsed notch is hover-grown, the GROWN rect is the shell: testing against it
-    /// (not the rest rect) is the hysteresis that keeps the growth from strobing — a pointer in
-    /// the grown-only ring still counts as inside, and one outside both rects counts as out.
+    /// The expanded sheet renders at PeakMotion.sheetScale, so its on-screen rect — the grown
+    /// rect — is the shell for the home / chat surfaces. The collapsed notch is NEVER grown:
+    /// its shell is the silhouette itself, plus the dots strip in the left ear (the dots are
+    /// part of the assembly for the pointer even though they sit outside the silhouette).
     func contains(_ p: NSPoint) -> Bool {
         var r = layout.hitRect(surface)
-        if surface == .collapsed, state.hovering, layout.mode == .notch { r = layout.grown(r, by: PeakMotion.hoverGrowScale) }
-        return r.insetBy(dx: -2, dy: -2).contains(p)
+        if layout.mode == .notch, surface == .home || surface == .chat { r = layout.grown(r, by: PeakMotion.sheetScale) }
+        if r.insetBy(dx: -2, dy: -2).contains(p) { return true }
+        if surface == .collapsed, layout.mode == .notch, layout.dotsRect != .zero {
+            return layout.dotsRect.insetBy(dx: -2, dy: -2).contains(p)
+        }
+        return false
     }
 
     func setVisible(_ on: Bool) {
@@ -995,7 +1000,8 @@ enum Screens {
                 guard let self, let v = h?.panel.contentView else { return }
                 NSMenu.popUpContextMenu(self.makeMenu(), with: e, for: v)
             }
-            log.log("panel mode=\(h.layout.mode.rawValue) virtual=\(h.layout.virtualNotch) collapsed=\(Int(h.layout.collapsed.width))x\(Int(h.layout.collapsed.height)) mark=\(Int(h.layout.markRect.width))x\(Int(h.layout.markRect.height))")
+            let sheet = h.layout.mode == .notch ? h.layout.grown(h.layout.expanded, by: PeakMotion.sheetScale) : h.layout.expanded
+            log.log("panel mode=\(h.layout.mode.rawValue) virtual=\(h.layout.virtualNotch) notch=\(Int(h.layout.notchRect?.width ?? 0))x\(Int(h.layout.notchRect?.height ?? 0)) collapsed=\(Int(h.layout.collapsed.width))x\(Int(h.layout.collapsed.height)) mark=\(Int(h.layout.markRect.width))x\(Int(h.layout.markRect.height)) markMidX=\(Int(h.layout.markRect.midX)) notchMidX=\(Int(h.layout.notchRect?.midX ?? 0)) sheet=\(Int(sheet.width))x\(Int(sheet.height))")
         }
         syncPanels()
         statusItem?.menu = makeMenu()
@@ -1069,8 +1075,8 @@ enum Screens {
                     Haptic.level(); self.controller.activeDisplay = uuid; self.controller.expand()
                 }
                 hoverCollapse = w
-                // 1.0 s, not the old 0.18: the pointer first GROWS the collapsed notch (1.25×) so
-                // it can be read; a deliberate hover still opens the sheet, and a click always did.
+                // 1.0 s, not the old 0.18: a deliberate hover opens the sheet, and a click always
+                // did. The collapsed notch itself never changes size — the 25% growth is the sheet's.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: w)
             }
         } else if controller.expanded && controller.askText == nil && controller.activeDisplay == uuid
