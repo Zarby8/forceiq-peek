@@ -359,28 +359,36 @@ final class ClamshellDisplayTests: XCTestCase {
                          safeAreaTop: 0, auxiliaryTopLeft: nil, auxiliaryTopRight: nil)
     }
 
-    func testLidClosedEveryExternalDisplayIsAPill() {
+    func testLidClosedEveryExternalDisplayGetsAVirtualNotch() {
+        // New design (in-notch): a plain external display no longer gets a pill hanging below the
+        // menu bar — it gets a virtual notch, top-center, mode .notch with virtualNotch set.
         let screens = [studio(3, x: 0), studio(1, x: 2880), studio(2, x: -2880)]       // no built-in screen at all
         let modes = DisplayPlan.modes(screens)
         XCTAssertEqual(modes.count, 3)
-        XCTAssertTrue(modes.values.allSatisfy { $0 == .pill })
+        XCTAssertTrue(modes.values.allSatisfy { $0 == .notch })
         for s in screens {
             let l = PeakGeometry().layout(for: s)
-            XCTAssertNil(l.notchRect)
-            XCTAssertEqual(l.collapsed.midX, s.frame.midX, accuracy: 0.5)              // centered pill on each display
+            XCTAssertTrue(l.virtualNotch)
+            XCTAssertNotNil(l.notchRect)
+            XCTAssertEqual(l.collapsed.midX, s.frame.midX, accuracy: 0.5)              // centered virtual notch on each display
             XCTAssertTrue(s.frame.contains(l.canvas.insetBy(dx: 1, dy: 1)))
         }
     }
 
     func testANotchIsUsedOnlyWhenThatScreenReportsOne() {
+        // The odd fallback (safe-area top but no auxiliary areas) is the ONLY pill left; a plain
+        // external display reports no notch and gets the virtual one.
         let odd = ScreenDescriptor(uuid: "X", name: "x", frame: CGRect(x: 0, y: 0, width: 1512, height: 982), safeAreaTop: 32,
                                    auxiliaryTopLeft: nil, auxiliaryTopRight: nil)
         let builtIn = ScreenDescriptor(uuid: "B", name: "Built-in", frame: CGRect(x: 0, y: 0, width: 1512, height: 982), safeAreaTop: 32,
                                        auxiliaryTopLeft: CGRect(x: 0, y: 950, width: 660, height: 32),
                                        auxiliaryTopRight: CGRect(x: 852, y: 950, width: 660, height: 32))
-        XCTAssertEqual(DisplayPlan.modes([odd, studio(1, x: 1512)]).values.filter { $0 == .notch }.count, 0)
+        XCTAssertEqual(DisplayPlan.modes([odd]).values.filter { $0 == .notch }.count, 0)
+        XCTAssertEqual(PeakGeometry().layout(for: odd).mode, .pill)
         let m = DisplayPlan.modes([builtIn, studio(1, x: 1512)])
-        XCTAssertEqual(m["B"], .notch); XCTAssertEqual(m["STUDIO-1"], .pill)
+        XCTAssertEqual(m["B"], .notch); XCTAssertEqual(m["STUDIO-1"], .notch)
+        XCTAssertFalse(PeakGeometry().layout(for: builtIn).virtualNotch)
+        XCTAssertTrue(PeakGeometry().layout(for: studio(1, x: 1512)).virtualNotch)
     }
 }
 

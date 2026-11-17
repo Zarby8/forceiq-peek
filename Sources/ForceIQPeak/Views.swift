@@ -372,13 +372,18 @@ struct PeakRootView: View {
 
     @ViewBuilder var collapsed: some View {
         if panel.mode == .notch {
-            // The notch itself has no pixels; the black wing to its left is the always-on status: "PEEK" in green (gold
-            // "PRESENTING" while presenting), in the menu bar row, merged with the notch.
-            ZStack(alignment: .topLeading) {
-                Color.clear.frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
+            // One row starting at the notch's left edge: [mark square][status text]. The mark ALWAYS
+            // renders here (ghost / BOB / eyes, same state as the sheet) — on the hardware notch and on
+            // a plain display's virtual notch alike — and the black shell spans the whole row, so it
+            // reads as one notch. The status text keeps the wing's existing rules (presenting
+            // suppression included: the mark is not private, the text still is).
+            HStack(spacing: 0) {
+                ghost(max(10, panel.layout.markRect.height - 6))
+                    .frame(width: panel.layout.markRect.width, height: panel.layout.markRect.height)
                 NotchWingLive(controller: controller, nextSession: nextSession, light: light, agents: agents)
-                    .frame(width: panel.layout.wing.width, height: panel.layout.wing.height)     // the wing is the leftmost part
+                    .frame(width: panel.layout.wing.width, height: panel.layout.wing.height)
             }
+            .frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
         } else {
             collapsedPill
         }

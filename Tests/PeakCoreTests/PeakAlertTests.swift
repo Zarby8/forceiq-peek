@@ -48,11 +48,14 @@ import XCTest
         XCTAssertEqual(l.hitRect(.peek), l.peek)
     }
 
-    func testStudioDisplayPeekIsTheWiderPillInTheSameRow() {
+    func testStudioDisplayPeekIsTheWiderVirtualNotchInTheSameRow() {
+        // New design (in-notch): the Studio Display's peek is the virtual notch's inline shell —
+        // same row, same height, wider than the collapsed row, centered on the virtual notch.
         let l = PeakGeometry().layout(for: studio)
-        XCTAssertEqual(l.mode, .pill)
-        XCTAssertEqual(l.edgeTrigger, .zero)
-        XCTAssertFalse(l.triggers(at: CGPoint(x: studio.frame.midX, y: studio.frame.maxY - 1)))
+        XCTAssertEqual(l.mode, .notch)
+        XCTAssertTrue(l.virtualNotch)
+        XCTAssertNotEqual(l.edgeTrigger, .zero)
+        XCTAssertTrue(l.triggers(at: CGPoint(x: studio.frame.midX, y: studio.frame.maxY - 1)))
         XCTAssertEqual(l.peek.height, l.collapsed.height); XCTAssertEqual(l.peek.minY, l.collapsed.minY)
         XCTAssertEqual(l.peek.midX, l.collapsed.midX, accuracy: 0.5); XCTAssertGreaterThan(l.peek.width, l.collapsed.width)
         XCTAssertTrue(l.canvas.contains(l.peek))

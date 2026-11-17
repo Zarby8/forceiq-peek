@@ -31,12 +31,14 @@ final class StatusBadgeTests: XCTestCase {
                               auxiliaryTopRight: CGRect(x: 1149, y: 1287, width: 899, height: 43))
 
     func testTheWingIsFlushWithTheNotchAndExactlyAsTall() {
+        // New design (in-notch): the wing is the status text right of the mark square, inside the
+        // collapsed row that starts at the notch's left edge — no longer a wing off the left side.
         let l = PeakGeometry().layout(for: m5)
         let n = l.notchRect!
-        XCTAssertEqual(l.wing.maxX, n.minX, "flush against the notch's left edge")
+        XCTAssertEqual(l.wing.minX, l.markRect.maxX, "the text starts where the mark square ends")
         XCTAssertEqual(l.wing.minY, n.minY); XCTAssertEqual(l.wing.height, n.height); XCTAssertEqual(l.wing.maxY, 1330)
-        XCTAssertEqual(l.collapsed, n.union(l.wing), "one shape: the notch and its wing")
-        XCTAssertEqual(l.collapsed.maxX, n.maxX, "nothing to the right of the notch")
+        XCTAssertEqual(l.collapsed.minX, n.minX, "the row starts at the notch's left edge")
+        XCTAssertEqual(l.collapsed, l.markRect.union(l.wing), "one shape: mark square + status text")
         XCTAssertTrue(l.canvas.contains(l.collapsed))
         XCTAssertEqual(l.hitRect(.collapsed), l.collapsed, "hover and click on the wing open Peek")
     }
@@ -55,11 +57,12 @@ final class StatusBadgeTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(l.progressLine.minX, l.collapsed.minX); XCTAssertLessThanOrEqual(l.progressLine.maxX, l.collapsed.maxX)
     }
 
-    func testTheStudioDisplayPillHasNoWing() {
+    func testTheStudioDisplayVirtualNotchHasTheTextWing() {
         let studio = ScreenDescriptor(uuid: "S", name: "Studio Display", frame: CGRect(x: 2048, y: 0, width: 2560, height: 1440),
                                       safeAreaTop: 0, auxiliaryTopLeft: nil, auxiliaryTopRight: nil)
         let l = PeakGeometry().layout(for: studio)
-        XCTAssertEqual(l.wing, .zero); XCTAssertEqual(l.collapsed.size, PeakGeometry().pillSize)
+        XCTAssertTrue(l.virtualNotch)
+        XCTAssertEqual(l.wing.width, PeakGeometry().textWingVirtual); XCTAssertEqual(l.collapsed.size, CGSize(width: 230, height: 46))
     }
 
     func testTheWingViewIsBrandTextOnBlackAndNothingElseDrawsBesideTheNotch() throws {

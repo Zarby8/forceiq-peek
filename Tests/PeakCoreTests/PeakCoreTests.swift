@@ -267,33 +267,49 @@ final class GeometryTests: XCTestCase {
                                   safeAreaTop: 0, auxiliaryTopLeft: nil, auxiliaryTopRight: nil)
 
     func testNotchDisplayWrapsTheNotch() {
+        // New design (in-notch): the collapsed row STARTS at the notch's left edge — [mark square][status
+        // text] — instead of the old left wing hanging off the notch's left side.
         let l = PeakGeometry().layout(for: notch)
         XCTAssertEqual(l.mode, .notch)
+        XCTAssertFalse(l.virtualNotch)
         XCTAssertEqual(l.notchRect, CGRect(x: 662, y: 950, width: 188, height: 32))
         XCTAssertEqual(l.collapsed.maxY, 982)
         XCTAssertEqual(l.collapsed.height, 32)
         let n = l.notchRect!
-        XCTAssertEqual(l.collapsed.maxX, n.maxX); XCTAssertEqual(l.collapsed.minX, n.minX - PeakGeometry().wingWidth)
+        XCTAssertEqual(l.collapsed.minX, n.minX, "the row starts at the notch's left edge")
+        XCTAssertEqual(l.collapsed.width, 32 + PeakGeometry().textWingHardware, "mark square (row height) + text wing")
         XCTAssertEqual(l.collapsed.minY, n.minY, "exactly the notch's height: never taller, never hanging below it")
+        XCTAssertEqual(l.markRect, CGRect(x: n.minX, y: n.minY, width: 32, height: 32), "the mark square is the row's leftmost square")
+        XCTAssertEqual(l.wing.minX, l.markRect.maxX); XCTAssertEqual(l.wing.width, PeakGeometry().textWingHardware)
         XCTAssertEqual(l.expanded.maxY, 982)
         XCTAssertEqual(l.expanded.midX, l.notchRect!.midX, accuracy: 0.5)
     }
 
-    func testNoNotchGetsTopCenterPill() {
+    func testNoNotchGetsAVirtualNotch() {
+        // A plain external display (no safe-area top, no auxiliary areas) gets a VIRTUAL notch: mode stays
+        // .notch, the notch rect IS the collapsed row (230 × 46, top-center), mark square at its left.
         let g = PeakGeometry()
         let l = g.layout(for: studio)
-        XCTAssertEqual(l.mode, .pill)
-        XCTAssertNil(l.notchRect)
-        XCTAssertEqual(l.collapsed.midX, studio.frame.midX, accuracy: 0.5)
-        XCTAssertEqual(l.collapsed.maxY, studio.frame.maxY - g.pillTopGap, accuracy: 0.5)
-        XCTAssertEqual(l.collapsed.size, g.pillSize)
+        XCTAssertEqual(l.mode, .notch)
+        XCTAssertTrue(l.virtualNotch)
+        XCTAssertEqual(l.notchRect, CGRect(x: studio.frame.midX - 115, y: studio.frame.maxY - 46, width: 230, height: 46))
+        XCTAssertEqual(l.collapsed, l.notchRect)
+        XCTAssertEqual(l.markRect, CGRect(x: l.collapsed.minX, y: l.collapsed.minY, width: 46, height: 46))
+        XCTAssertEqual(l.wing.width, g.textWingVirtual)
+        XCTAssertEqual(l.expanded.midX, studio.frame.midX, accuracy: 0.5)
         XCTAssertTrue(studio.frame.contains(l.expanded))
     }
 
     func testSafeAreaWithoutAuxiliaryAreasIsAPill() {
         let odd = ScreenDescriptor(uuid: "O", name: "x", frame: CGRect(x: 0, y: 0, width: 1000, height: 800), safeAreaTop: 24,
                                    auxiliaryTopLeft: nil, auxiliaryTopRight: nil)
-        XCTAssertEqual(PeakGeometry().layout(for: odd).mode, .pill)
+        let l = PeakGeometry().layout(for: odd)
+        XCTAssertEqual(l.mode, .pill)
+        XCTAssertFalse(l.virtualNotch)
+        // The pill carries the mark too: 232 wide (32 pt mark + text), mark square at the pill's left.
+        XCTAssertEqual(l.collapsed.size, PeakGeometry().pillSize)
+        XCTAssertEqual(l.collapsed.width, 232)
+        XCTAssertEqual(l.markRect, CGRect(x: l.collapsed.minX, y: l.collapsed.minY, width: 32, height: 32))
     }
 }
 
@@ -532,22 +548,27 @@ func md5Hex(_ d: Data) -> String { Insecure.MD5.hash(data: d).map { String(forma
 
 // Chris's M5, measured 10.19.2026 (14" MacBook Pro, "More Space" 2048×1330): notch x 899…1149, 43 pt tall.
 final class NotchFitM5Tests: XCTestCase {
-    func testCollapsedIsTheMeasuredNotchPlusItsLeftWing() {
+    func testCollapsedStartsAtTheMeasuredNotchLeftEdge() {
+        // New design (in-notch): the row starts at the notch's left edge: a 43 pt mark square + the
+        // 120 pt status text wing, 43 pt tall — the old 96 pt left wing is gone.
         let m5 = ScreenDescriptor(uuid: "M5", name: "Built-in Display", frame: CGRect(x: 0, y: 0, width: 2048, height: 1330),
                                   safeAreaTop: 43, auxiliaryTopLeft: CGRect(x: 0, y: 1287, width: 899, height: 43),
                                   auxiliaryTopRight: CGRect(x: 1149, y: 1287, width: 899, height: 43))
         let l = PeakGeometry().layout(for: m5)
-        XCTAssertEqual(l.collapsed, CGRect(x: 899 - 96, y: 1287, width: 250 + 96, height: 43), "the notch plus a 96 pt wing on its left, 43 pt tall")
-        XCTAssertEqual(l.wing, CGRect(x: 899 - 96, y: 1287, width: 96, height: 43))
+        XCTAssertEqual(l.collapsed, CGRect(x: 899, y: 1287, width: 43 + 120, height: 43), "mark square + text wing starting at the notch's left edge")
+        XCTAssertEqual(l.markRect, CGRect(x: 899, y: 1287, width: 43, height: 43))
+        XCTAssertEqual(l.wing, CGRect(x: 899 + 43, y: 1287, width: 120, height: 43))
         XCTAssertEqual(l.hitRect(.collapsed), l.collapsed)
     }
 
-    func testStudioDisplayKeepsTheFloatingPill() {
+    func testStudioDisplayGetsTheVirtualNotch() {
         let studio = ScreenDescriptor(uuid: "S", name: "Studio Display", frame: CGRect(x: 2048, y: 0, width: 2560, height: 1440),
                                       safeAreaTop: 0, auxiliaryTopLeft: nil, auxiliaryTopRight: nil)
         let l = PeakGeometry().layout(for: studio)
-        XCTAssertEqual(l.mode, .pill)
+        XCTAssertEqual(l.mode, .notch)
+        XCTAssertTrue(l.virtualNotch)
         XCTAssertEqual(l.collapsed.midX, studio.frame.midX, accuracy: 0.5)
-        XCTAssertLessThanOrEqual(l.collapsed.maxY, studio.frame.maxY)
+        XCTAssertEqual(l.collapsed.maxY, studio.frame.maxY, "top-anchored: the virtual notch touches the screen's top edge")
+        XCTAssertEqual(l.collapsed.size, CGSize(width: 230, height: 46))
     }
 }

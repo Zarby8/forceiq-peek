@@ -69,7 +69,10 @@ import XCTest
         XCTAssertFalse(l.hitRect(.collapsed).intersects(l.progressLine), "the line hangs below the collapsed shape")
         let studio = ScreenDescriptor(uuid: "S", name: "Studio Display", frame: CGRect(x: 2048, y: 0, width: 2560, height: 1440),
                                       safeAreaTop: 0, auxiliaryTopLeft: nil, auxiliaryTopRight: nil)
-        XCTAssertEqual(PeakGeometry().layout(for: studio).progressLine, .zero, "the Studio pill has the Ghost; no line")
+        let sl = PeakGeometry().layout(for: studio)
+        XCTAssertTrue(sl.virtualNotch, "the Studio Display now has a virtual notch, so the line hangs under it like the hardware one")
+        XCTAssertEqual(sl.progressLine.height, 2)
+        XCTAssertLessThan(sl.progressLine.maxY, sl.notchRect!.minY)
     }
 
     func testTheLineIsBrandGoldShapesOnlyAndNeverAnimates() throws {

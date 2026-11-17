@@ -22,7 +22,13 @@ public enum PeakMode: String, Sendable { case notch, pill }
 
 public struct PeakLayout: Equatable, Sendable {
     public let mode: PeakMode
-    public let notchRect: CGRect?          // the hardware notch cut-out (notch mode only)
+    public let notchRect: CGRect?          // the notch cut-out (hardware, or the virtual notch on a plain external display)
+    /// True when `notchRect` is a VIRTUAL notch: the display has no hardware notch (no safe-area top, no
+    /// auxiliary areas), so Peek draws its own notch-shaped row at the top-center of the screen.
+    public var virtualNotch: Bool = false
+    /// The collapsed row's mark square (screen coords): the leftmost square of the collapsed row, exactly
+    /// as tall as the row. The selected mark (ghost / BOB / eyes) always renders here, in every mode.
+    public var markRect: CGRect = .zero
     public let collapsed: CGRect           // panel frame when collapsed
     public let expanded: CGRect            // the expanded sheet (home: cards + switcher)
     public var chat: CGRect = .zero        // the expanded sheet on the 3PO tab (taller)
@@ -31,9 +37,9 @@ public struct PeakLayout: Equatable, Sendable {
     /// notch) for a few seconds, the way Boring Notch's sneak peek works: the client on the left of the notch, what happened
     /// on the right. Then it retracts.
     public var peek: CGRect = .zero
-    /// Notch mode: the always-on status wing, in the menu bar row flush against the notch's left edge and exactly as tall as
-    /// the notch, so the black shape reads as one wider notch (the way Boring Notch and DynamicNotchKit draw their compact
-    /// state). It is part of `collapsed`, so hover and click on it open Peek.
+    /// Notch mode: the status-text part of the collapsed row — right of the mark square, exactly as tall
+    /// as the notch, so [mark][text] reads as one notch. It is part of `collapsed`, so hover and click
+    /// on it open Peek.
     public var wing: CGRect = .zero
     /// Notch mode: a 2 pt line hanging just under the notch (the notch itself has no pixels), for live progress.
     /// Not a hit rect: it never takes a click.
@@ -65,33 +71,35 @@ public struct PeakGeometry: PeakGeometryProviding {
     public var expandedSize = CGSize(width: 620, height: 360)
     public var chatSize = CGSize(width: 620, height: 520)
     public var glowMargin: CGFloat = 28                  // room for the rim glow / shadow / pop outside the shell
-    public var pillSize = CGSize(width: 196, height: 32)
+    public var pillSize = CGSize(width: 232, height: 32)       // 32 pt mark square + the status text (was 196 before the mark)
     public var pillTopGap: CGFloat = 4
     public var peekWidth: CGFloat = 540                        // notch mode: ~145 pt of text each side of the 250 pt notch
     public var pillPeekWidth: CGFloat = 440
     public var edgeTriggerSlack: CGFloat = 40                  // how far past each notch edge the top-edge trigger reaches
     public var edgeTriggerHeight: CGFloat = 3
     public var wingWidth: CGFloat = 96                          // fits "PRESENTING"
+    /// Collapsed notch row: the status text wing beside the mark square (the mark itself is one row-height square).
+    public var textWingHardware: CGFloat = 120
+    public var textWingVirtual: CGFloat = 184
+    /// A plain external display's virtual notch: centered at the top of the screen, a bit bigger than a
+    /// hardware notch so it reads as a notch on a big display (Studio Display menu-bar band is ~25 pt).
+    public var virtualNotchSize = CGSize(width: 230, height: 46)
     public init() {}
 
     public func layout(for s: ScreenDescriptor) -> PeakLayout {
         let top = s.frame.maxY
         if s.hasNotch, let l = s.auxiliaryTopLeft, let r = s.auxiliaryTopRight {
             let notch = CGRect(x: l.maxX, y: top - s.safeAreaTop, width: max(0, r.minX - l.maxX), height: s.safeAreaTop)
-            // Collapsed is the notch plus a status wing on its LEFT, in the menu bar row and exactly the notch's height: one
-            // black shape that merges with the hardware notch (the compact state Boring Notch / DynamicNotchKit use). Never
-            // taller than the notch, never flared (the 10.19 leak was 44 pt ears each side and a shell hanging past the notch).
-            let collapsed = CGRect(x: notch.minX - wingWidth, y: notch.minY, width: notch.width + wingWidth, height: notch.height)
-            let w = max(expandedSize.width, collapsed.width)
-            let expanded = CGRect(x: notch.midX - w / 2, y: top - expandedSize.height, width: w, height: expandedSize.height)
-            let cw = max(chatSize.width, collapsed.width)
-            let chat = CGRect(x: notch.midX - cw / 2, y: top - chatSize.height, width: cw, height: chatSize.height)
-            let pw = max(peekWidth, collapsed.width)
-            let peek = CGRect(x: notch.midX - pw / 2, y: notch.minY, width: pw, height: notch.height)
-            let edge = CGRect(x: collapsed.minX - edgeTriggerSlack, y: top - edgeTriggerHeight,
-                              width: collapsed.width + 2 * edgeTriggerSlack, height: edgeTriggerHeight)
-            return finish(PeakLayout(mode: .notch, notchRect: notch, collapsed: collapsed, expanded: clamp(expanded, s.frame)),
-                          chat: clamp(chat, s.frame), peek: clamp(peek, s.frame), edge: edge, s)
+            return notchLayout(for: s, notch: notch, virtual: false)
+        }
+        // No safe-area top and no auxiliary areas: a normal external display. It gets a VIRTUAL notch —
+        // Peek's own notch-shaped row at the top-center — instead of a pill hanging below the menu bar.
+        // (The odd fallback — safeAreaTop > 0 but no auxiliary areas — stays a pill: it claims a notch
+        // geometry we cannot see, so we do not invent one.)
+        if s.safeAreaTop == 0, s.auxiliaryTopLeft == nil, s.auxiliaryTopRight == nil {
+            let notch = CGRect(x: s.frame.midX - virtualNotchSize.width / 2, y: top - virtualNotchSize.height,
+                               width: virtualNotchSize.width, height: virtualNotchSize.height)
+            return notchLayout(for: s, notch: notch, virtual: true)
         }
         let collapsed = CGRect(x: s.frame.midX - pillSize.width / 2, y: top - pillTopGap - pillSize.height,
                                width: pillSize.width, height: pillSize.height)
@@ -100,8 +108,35 @@ public struct PeakGeometry: PeakGeometryProviding {
         let chat = CGRect(x: s.frame.midX - chatSize.width / 2, y: top - pillTopGap - chatSize.height,
                           width: chatSize.width, height: chatSize.height)
         let peek = CGRect(x: s.frame.midX - pillPeekWidth / 2, y: collapsed.minY, width: pillPeekWidth, height: pillSize.height)
-        return finish(PeakLayout(mode: .pill, notchRect: nil, collapsed: collapsed, expanded: clamp(expanded, s.frame)),
-                      chat: clamp(chat, s.frame), peek: clamp(peek, s.frame), edge: .zero, s)
+        var l = PeakLayout(mode: .pill, notchRect: nil, collapsed: collapsed, expanded: clamp(expanded, s.frame))
+        l.markRect = CGRect(x: collapsed.minX, y: collapsed.minY, width: pillSize.height, height: pillSize.height)
+        return finish(l, chat: clamp(chat, s.frame), peek: clamp(peek, s.frame), edge: .zero, s)
+    }
+
+    /// The notch-mode layout, shared by the hardware notch and the virtual notch. The collapsed state is
+    /// ONE row starting at the notch's left edge — [mark square][status text] — exactly the notch's
+    /// height, top-anchored, so the black shape reads as one notch with the mark always inside it.
+    /// Expanded / peek / chat stay centered on the notch's midX.
+    private func notchLayout(for s: ScreenDescriptor, notch: CGRect, virtual: Bool) -> PeakLayout {
+        let top = s.frame.maxY
+        let markSide = notch.height
+        let textWing = virtual ? textWingVirtual : textWingHardware
+        // Virtual: the notch rect IS the collapsed row (230 × 46 = 46 mark + 184 text). Hardware: the row
+        // starts at the notch's left edge and runs mark + text wing from there.
+        let collapsed = virtual ? notch
+            : CGRect(x: notch.minX, y: notch.minY, width: markSide + textWing, height: notch.height)
+        let w = max(expandedSize.width, collapsed.width)
+        let expanded = CGRect(x: notch.midX - w / 2, y: top - expandedSize.height, width: w, height: expandedSize.height)
+        let cw = max(chatSize.width, collapsed.width)
+        let chat = CGRect(x: notch.midX - cw / 2, y: top - chatSize.height, width: cw, height: chatSize.height)
+        let pw = max(peekWidth, collapsed.width)
+        let peek = CGRect(x: notch.midX - pw / 2, y: notch.minY, width: pw, height: notch.height)
+        let edge = CGRect(x: collapsed.minX - edgeTriggerSlack, y: top - edgeTriggerHeight,
+                          width: collapsed.width + 2 * edgeTriggerSlack, height: edgeTriggerHeight)
+        var l = PeakLayout(mode: .notch, notchRect: notch, collapsed: collapsed, expanded: clamp(expanded, s.frame))
+        l.virtualNotch = virtual
+        l.markRect = CGRect(x: collapsed.minX, y: collapsed.minY, width: markSide, height: markSide)
+        return finish(l, chat: clamp(chat, s.frame), peek: clamp(peek, s.frame), edge: edge, s)
     }
 
     /// The fixed canvas: the union of every state plus the glow margin, pinned to the screen's top edge.
@@ -109,7 +144,10 @@ public struct PeakGeometry: PeakGeometryProviding {
         var out = l
         out.chat = chat; out.peek = peek; out.edgeTrigger = edge
         if let n = l.notchRect {
-            out.wing = CGRect(x: n.minX - wingWidth, y: n.minY, width: wingWidth, height: n.height)
+            // The wing is now the status-text part of the collapsed row: everything right of the mark square.
+            out.wing = l.markRect != .zero
+                ? CGRect(x: l.markRect.maxX, y: l.collapsed.minY, width: max(0, l.collapsed.width - l.markRect.width), height: l.collapsed.height)
+                : CGRect(x: n.minX - wingWidth, y: n.minY, width: wingWidth, height: n.height)
             out.progressLine = CGRect(x: l.collapsed.minX + 12, y: n.minY - 5, width: max(0, l.collapsed.width - 24), height: 2)
         }
         let u = l.collapsed.union(l.expanded).union(chat).union(peek)

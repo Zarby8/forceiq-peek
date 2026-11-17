@@ -158,10 +158,12 @@ final class VoiceEngineTests: XCTestCase {
     }
 
     func testTheStudioDisplayCaptionIsACompactPillInPlace() {
+        // The caption rides the peek rect; on a Studio Display that is now the virtual notch's
+        // inline row (same height/row as collapsed), not the old pill.
         let studio = ScreenDescriptor(uuid: "S", name: "Studio Display", frame: CGRect(x: 2048, y: 0, width: 2560, height: 1440), safeAreaTop: 0,
                                       auxiliaryTopLeft: nil, auxiliaryTopRight: nil)
         let l = PeakGeometry().layout(for: studio)
-        XCTAssertEqual(l.mode, .pill); XCTAssertEqual(l.peek.height, l.collapsed.height); XCTAssertEqual(l.peek.minY, l.collapsed.minY)
+        XCTAssertEqual(l.mode, .notch); XCTAssertTrue(l.virtualNotch); XCTAssertEqual(l.peek.height, l.collapsed.height); XCTAssertEqual(l.peek.minY, l.collapsed.minY)
         XCTAssertEqual(l.peek.midX, l.collapsed.midX, accuracy: 0.5)
         XCTAssertLessThanOrEqual(CGFloat(LiveCaption.pillChars) * 6.5, l.peek.width - 32 - 16)
     }
