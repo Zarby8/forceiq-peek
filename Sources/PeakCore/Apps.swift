@@ -30,3 +30,24 @@ public enum AppSwitcher {
         profile.allowedBundleIDs.contains(bundleID) && locator.isInstalled(bundleID)
     }
 }
+
+/// How a switcher tap brings the target app to the coach, decided purely from the app's state.
+/// The bug this fixes: a bare `activate()` on a running app whose windows live in a full-screen
+/// Space raises nothing the user can see — the app becomes active but the user stays on the
+/// current Space, so the tap reads as dead. The path that carries the user across Spaces is
+/// activation with `.activateAllWindows` (raise every window, switching to their Space), after
+/// unhiding a hidden app. Not running → launch (which already worked).
+public enum SwitchActivationPlan: Equatable, Sendable {
+    /// Not running: launch it (NSWorkspace, activates on open).
+    case launch
+    /// Running: unhide first when hidden, then activate raising ALL windows so a full-screen
+    /// window's Space comes with it.
+    case activate(allWindows: Bool, unhideFirst: Bool)
+}
+
+public enum SwitchActivation {
+    public static func plan(running: Bool, hidden: Bool) -> SwitchActivationPlan {
+        guard running else { return .launch }
+        return .activate(allWindows: true, unhideFirst: hidden)
+    }
+}

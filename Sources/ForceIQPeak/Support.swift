@@ -95,8 +95,23 @@ struct WorkspaceLocator: AppLocating {
         return launch(bundleID)
     }
     private static func launch(_ bundleID: String) -> Bool {
+        // SwitchActivation.plan decides from the app's state; this only performs it. The running
+        // case must raise ALL windows (.activateAllWindows): a bare activate() leaves the user on
+        // the current Space when the app's window is full-screen on another Space — the tap read
+        // as dead (Command full-screen). .activateIgnoringOtherApps because Peek itself is a
+        // non-activating panel: without it the request can be politely ignored.
         if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
-            return running.activate()
+            switch SwitchActivation.plan(running: true, hidden: running.isHidden) {
+            case .activate(let allWindows, let unhideFirst):
+                if unhideFirst { running.unhide() }
+                var opts: NSApplication.ActivationOptions = [.activateIgnoringOtherApps]
+                if allWindows { opts.insert(.activateAllWindows) }
+                if running.activate(options: opts) { return true }
+                // Activation refused (app mid-quit, etc.): fall through to the workspace open,
+                // which reactivates a running app or launches it.
+            case .launch:
+                break
+            }
         }
         guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) else { return false }
         let cfg = NSWorkspace.OpenConfiguration()
@@ -191,7 +206,7 @@ final class EngineClient: ThreePOTransport, Sendable {
         if mc == 200 {
             (s.meeting, s.meetingError) = EngineParse.meeting(md); s.commandSignIn = EngineParse.commandSignIn(md)
             let o = (try? JSONSerialization.jsonObject(with: md)) as? [String: Any] ?? [:]
-            s.today = EngineParse.today(o); s.gpuWindow = GPUWindow.parse(o)
+            s.today = EngineParse.today(o); s.gpuWindow = GPUWindow.parse(o); s.recording = RecordingSignal.parse(o)
         } else {
             s.meetingError = mc == 404 ? "This Mac's GOAT doesn't have the Peek meeting feed yet." : "GOAT didn't answer for the next meeting."
         }
