@@ -56,6 +56,21 @@ final class Stage5Tests: XCTestCase {
         XCTAssertEqual(f[0].line, "Client upscale failed at interpolation")
         XCTAssertTrue(f[2].line.contains("4 GB free"))
     }
+    func testProlongedStaleCalendarFaultsInPlainWords() {
+        // The Nov 17 freeze: calendar_at an hour old, no issue string — must fault, not just
+        // sit as STALE status text.
+        let now = Date()
+        let s = snap { x in x.gpuWindow = GPUWindow(spans: [], live: false, calendarAt: now.addingTimeInterval(-3600)) }
+        let f = NeedsYou.faults(from: s, now: now)
+        XCTAssertEqual(f.map(\.id), ["calendar-stale"])
+        XCTAssertTrue(f[0].line.contains("60 min"), "the line names the age in plain words: \(f[0].line)")
+    }
+    func testBrieflyStaleCalendarStaysStatusTextOnly() {
+        let now = Date()
+        let s = snap { x in x.gpuWindow = GPUWindow(spans: [], live: false, calendarAt: now.addingTimeInterval(-400)) }
+        XCTAssertFalse(NeedsYou.faults(from: s, now: now).contains { $0.id == "calendar-stale" },
+                       "past the 300 s STALE label but under the prolonged threshold: no fault yet")
+    }
     func testNoFaultsWhenAllFine() {
         let s = snap { x in x.diskFreeGB = 400 }
         XCTAssertTrue(NeedsYou.faults(from: s, now: Date()).isEmpty)

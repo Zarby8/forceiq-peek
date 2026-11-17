@@ -85,6 +85,12 @@ public struct NeedsYouFault: Equatable, Sendable {
 
 public enum NeedsYou {
     public static let diskLowThresholdGB = 10.0
+    /// A calendar read older than this is a needs-you fault, not just STALE status text: the
+    /// snapshot's writer (the GOAT app) exited at 07:22 on Nov 17, 2026 and nothing relaunched
+    /// it, so the read sat "ok" but an hour old — labelled only in the status line while the
+    /// 5090 meeting guard judged holds from the frozen calendar. Brief hiccups (the STALE
+    /// label starts at 300 s) stay status-text-only; prolonged stale faults here.
+    public static let calendarStaleFaultAfter: TimeInterval = 900
     public static func faults(from s: EngineSnapshot, now: Date) -> [NeedsYouFault] {
         var out: [NeedsYouFault] = []
         for f in s.pipelineFailures {
@@ -92,6 +98,8 @@ public enum NeedsYou {
         }
         if s.gpuWindow?.calendarIssue != nil {
             out.append(NeedsYouFault(id: "calendar", line: "Calendar access is off — Peek can't see today's gaps."))
+        } else if let calAt = s.gpuWindow?.calendarAt, now.timeIntervalSince(calAt) > calendarStaleFaultAfter {
+            out.append(NeedsYouFault(id: "calendar-stale", line: "Calendar stopped updating \(BriefClock.age(now.timeIntervalSince(calAt))) ago — the 5090 meeting guard is working from an old calendar."))
         }
         if let gb = s.diskFreeGB, gb < diskLowThresholdGB {
             out.append(NeedsYouFault(id: "disk", line: "Disk nearly full — \(Int(gb)) GB free on this Mac."))
