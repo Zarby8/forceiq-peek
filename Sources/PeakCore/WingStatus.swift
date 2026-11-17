@@ -34,7 +34,7 @@ public enum WingStatus {
         return nil
     }
 
-    public static func spec(presenting: Bool, session: NextSession?, gaps: Int, light: GPULightState, now: Date, agents: AgentPillSummary = .none) -> WingSpec {
+    public static func spec(presenting: Bool, session: NextSession?, gaps: Int, light: GPULightState, now: Date, agents: AgentPillSummary = .none, tonightText: String? = nil) -> WingSpec {
         if presenting {
             let b = StatusBadge.spec(presenting: true)
             return WingSpec(text: b.wingText, textHex: b.textHex, dots: [], accessibilityLabel: b.accessibilityLabel)
@@ -48,6 +48,9 @@ public enum WingStatus {
         if let s = session, let c = countdown(to: s.scheduledAt, now: now) {
             text = "\(firstName(s.client)) \(c)"
             label.append(c == "now" ? "\(s.client) now" : "\(s.client) in \(c.dropLast()) minutes")
+        } else if let t = tonightText {
+            text = t   // Stage 5: the idle-evening default, only when no session countdown owns the wing
+            label.append(t)
         }
         if light.holdsGPU { label.append("5090 held") }
         if gaps > 0 { label.append(gaps == 1 ? "1 gap needs you" : "\(gaps) gaps need you") }

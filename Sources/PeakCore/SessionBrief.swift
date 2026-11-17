@@ -14,6 +14,7 @@ public struct SessionBrief: Equatable, Sendable {
     public let headline: String          // the one thing to teach today
     public let supportLines: [String]    // the feed lines behind it, in engine order
     public let filmLine: String          // the game to pull in FLOW (or why there is none)
+    public let filmReadiness: String?    // Stage 5: pipeline film state in plain words; nil = ready/unknown (quiet)
     public let caveat: String            // what this brief cannot say, and what would fix it
     public let needsEngineRoute: Bool
 }
@@ -125,6 +126,6 @@ public enum SessionBriefBuilder {
         }()
 
         return SessionBrief(client: session.client, headline: headline, supportLines: Array(support.prefix(4)),
-                            filmLine: filmLine, caveat: caveat, needsEngineRoute: true)
+                            filmLine: filmLine, filmReadiness: session.film?.readinessLine, caveat: caveat, needsEngineRoute: true)
     }
 }

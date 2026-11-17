@@ -231,6 +231,15 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     @Published public private(set) var configured = true
     @Published public private(set) var lastResult: String? = nil
     @Published public private(set) var ghost: GhostState = .idle
+    // Stage 5: the needs-you faults (latched — a persistent fault never re-nags), the money line
+    // (nil until an invoice is past due), tonight's games line (evening pill default), tile readouts.
+    @Published public private(set) var needsYou: [NeedsYouFault] = []
+    @Published public private(set) var moneyLine: String? = nil
+    @Published public private(set) var tonightText: String? = nil
+    /// Stage 6: "Shane is meeting with {client}" while the other coach's session is live (else nil).
+    @Published public private(set) var presenceLine: String? = nil
+    @Published public private(set) var tileReadouts = TileReadouts()
+    private var faultLatch = FaultLatch()
     @Published public private(set) var progress = LiveProgress.idle   // the thin gold line under the notch
     @Published public private(set) var approvedPops = 0            // trigger: an approval / run went through (green check pop)
     /// "Settings file couldn't be read: using defaults" while settings.json couldn't be used (PeakPrefs.settingsNotice).
@@ -276,6 +285,17 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         baseGhost = GhostState.from(s)
         progress = LiveProgress(s)
         let now = clock()
+        // Stage 5 surfaces, all from this same snapshot: faults latch through the one needs-you
+        // mechanism; the money line exists only while something is past due; tonight's line only
+        // once every session today has ended (the idle-evening default).
+        let latched = faultLatch.update(NeedsYou.faults(from: s, now: now))
+        needsYou = latched.current
+        for f in latched.fresh { logger?.log("state needs-you \(f.id)") }
+        moneyLine = s.money?.line
+        let dayOver = (s.today ?? []).allSatisfy { $0.scheduledAt.addingTimeInterval(Double($0.durationMinutes) * 60) <= now }
+        tonightText = (dayOver ? s.tonight : nil).flatMap { TonightLine.text($0, now: now) }
+        tileReadouts = TileReadouts.build(from: s, now: now)
+        presenceLine = s.otherCoachLive?.line
         // A meeting counts only while it is live: from 10 min before its start (Peek's own urgency
         // window) through its scheduled end. The snapshot's meeting is the NEXT one — a meeting hours
         // away must not keep the mark awake all day.

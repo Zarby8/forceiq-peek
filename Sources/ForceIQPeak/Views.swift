@@ -108,10 +108,11 @@ struct NotchWingLive: View {
     @ObservedObject var nextSession: NextSessionModel
     @ObservedObject var light: GPULightModel
     @ObservedObject var agents: AgentWatchModel
+    @ObservedObject var cards: CardStackViewModel
     func spec(_ now: Date) -> WingSpec {
         WingStatus.spec(presenting: controller.presenting, session: nextSession.session,
                         gaps: nextSession.warnings.filter { $0.state == .present }.count, light: light.shown, now: now,
-                        agents: agents.summary)
+                        agents: agents.summary, tonightText: controller.presenting ? nil : cards.tonightText)
     }
     var ticking: Bool { nextSession.session.map { WingStatus.countdown(to: $0.scheduledAt, now: Date()) != nil } ?? false }
     var body: some View {
@@ -380,7 +381,7 @@ struct PeakRootView: View {
             HStack(spacing: 0) {
                 ghost(max(10, panel.layout.markRect.height - 6))
                     .frame(width: panel.layout.markRect.width, height: panel.layout.markRect.height)
-                NotchWingLive(controller: controller, nextSession: nextSession, light: light, agents: agents)
+                NotchWingLive(controller: controller, nextSession: nextSession, light: light, agents: agents, cards: cards)
                     .frame(width: panel.layout.wing.width, height: panel.layout.wing.height)
             }
             .frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
@@ -399,8 +400,14 @@ struct PeakRootView: View {
                 ChecklistPillLine(model: checklist)
             } else if !controller.presenting, let line = agents.pillLine {
                 AgentPillLineView(line: line)     // watcher-plus: a stuck session, or the fresh finish (names a folder: never while presenting)
+            } else if !controller.presenting, let t = cards.tonightText {
+                Text(t).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
+                    .minimumScaleFactor(0.7).frame(maxWidth: .infinity)   // Stage 5: tonight's games, the idle-evening default (below stuck/finish, above next session)
             } else if nextSession.showsPill && !controller.presenting {
                 NextSessionPill(model: nextSession, compact: true, fill: true)   // names the client; gold on a gap; fills the pill
+            } else if !controller.presenting, let p = cards.presenceLine {
+                Text(p).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
+                    .minimumScaleFactor(0.7).frame(maxWidth: .infinity)   // Stage 6 presence: strictly below his own live/stuck/finish/tonight/next-session lines — only the idle fallback yields to it
             } else {
                 Text("ForceIQ Peek").font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
                     .matchedGeometryEffect(id: "title", in: ns)
@@ -466,7 +473,7 @@ struct PeakRootView: View {
             }
             .frame(maxHeight: .infinity, alignment: .top)
             .animation(Motion.spring(reduceMotion), value: cards.describedCard?.id)
-            if !showChat && !drops.active { SwitcherRow(entries: switcher, onSwitch: onSwitch) }
+            if !showChat && !drops.active { SwitcherRow(entries: switcher, readouts: cards.tileReadouts, onSwitch: onSwitch) }
         }
         .padding(.horizontal, 16).padding(.bottom, 12)
     }
@@ -784,11 +791,12 @@ struct AskView: View {
 
 struct SwitcherRow: View {
     let entries: [SwitcherEntry]
+    var readouts: TileReadouts? = nil   // Stage 5: live readouts under the sourced tiles only
     let onSwitch: (String) -> Void
     var body: some View {
         HStack(spacing: 8) {
             ForEach(entries) { e in
-                SwitcherTile(entry: e) { if e.installed { onSwitch(e.app.bundleID) } }
+                SwitcherTile(entry: e, readout: readouts?.text(forBundleID: e.app.bundleID)) { if e.installed { onSwitch(e.app.bundleID) } }
             }
         }
     }
@@ -796,6 +804,7 @@ struct SwitcherRow: View {
 
 struct SwitcherTile: View {
     let entry: SwitcherEntry
+    var readout: String? = nil
     let action: () -> Void
     @State private var hover = false
     var style: SwitcherTileStyle { .of(installed: entry.installed) }
@@ -815,6 +824,7 @@ struct SwitcherTile: View {
             .scaleEffect(hover && style.tappable ? 1.12 : 1)
             Text(entry.app.name).font(.system(size: 12, weight: .bold)).foregroundStyle(Color(hex: style.labelHex))
             if let note = style.note { Text(note).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color(hex: style.noteHex)) }
+            if let r = readout { Text(r).font(.system(size: 11, weight: .semibold)).foregroundStyle(Color.peakGold).lineLimit(1) }
         }
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())

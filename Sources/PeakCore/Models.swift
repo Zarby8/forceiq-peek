@@ -118,6 +118,15 @@ public struct EngineSnapshot: Equatable, Sendable {
     public var today: [SessionRow]? = nil              // next-meeting `today`: this coach's named sessions today
     public var gpuWindow: GPUWindow? = nil             // next-meeting `gpu_window`: times the 5090 must hold around
     public var recording: Bool? = nil                  // next-meeting `recording`: Command is recording the live meeting (recording DND); nil = unknown (no change)
+    // Stage 5: 5090 queue depth (GOAT tile), past-due money rollup (sheet), tonight's games (evening
+    // pill line), free disk GB (needs-you fault), failed pipeline activities (needs-you + mark).
+    public var queueDepth: Int? = nil
+    public var money: MoneyRollup? = nil
+    public var tonight: TonightGames? = nil
+    public var diskFreeGB: Double? = nil
+    public var pipelineFailures: [PipelineFailure] = []
+    /// Stage 6: the other coach's live session, when one is live (presence line; else nil).
+    public var otherCoachLive: OtherCoachLive? = nil
     public var fixesNeeded: [BriefItem] = []           // /api/live `fixes_needed` (BLOCKED)
     public var liveAt: Date? = nil                     // /api/live doc's own write time
     public var approvalsAt: Date? = nil                // /api/approvals listing time

@@ -8,6 +8,7 @@ public enum GhostState: String, Sendable, CaseIterable {
 
     /// From engine data. `error` is for REAL failures only (a fix GOAT reports failed), never a cancel or empty result.
     public static func from(_ s: EngineSnapshot) -> GhostState {
+        if !s.pipelineFailures.isEmpty { return .error }   // Stage 5: a failed 5090 job escalates the mark
         if s.fixes.contains(where: { $0.state == "failed" }) { return .error }
         if s.fixesRunning > 0 || s.downloadsRunning > 0 { return .working }
         if s.approvals.contains(where: { !$0.test }) || (s.familyEnabled && !s.family.isEmpty) { return .attention }

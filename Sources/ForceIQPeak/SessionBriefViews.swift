@@ -18,6 +18,9 @@ struct SessionBriefCard: View {
             }
             Text(brief.filmLine).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white)
                 .lineLimit(2)
+            if let fr = brief.filmReadiness {
+                Text(fr).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.peakGold).lineLimit(2)   // Stage 5: film not ready yet, in plain words
+            }
             Text(brief.caveat).font(.system(size: 11)).foregroundStyle(Color.white).lineLimit(3)
         }
         .padding(10)

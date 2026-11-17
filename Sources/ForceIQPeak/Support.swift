@@ -207,12 +207,16 @@ final class EngineClient: ThreePOTransport, Sendable {
             (s.meeting, s.meetingError) = EngineParse.meeting(md); s.commandSignIn = EngineParse.commandSignIn(md)
             let o = (try? JSONSerialization.jsonObject(with: md)) as? [String: Any] ?? [:]
             s.today = EngineParse.today(o); s.gpuWindow = GPUWindow.parse(o); s.recording = RecordingSignal.parse(o)
+            s.queueDepth = Stage5Parse.queueDepth(o); s.money = Stage5Parse.money(o)
+            s.tonight = Stage5Parse.tonight(o); s.diskFreeGB = Stage5Parse.diskFreeGB(o)
+            s.otherCoachLive = OtherCoachLive.parse(o)
         } else {
             s.meetingError = mc == 404 ? "This Mac's GOAT doesn't have the Peek meeting feed yet." : "GOAT didn't answer for the next meeting."
         }
         let (lc, ld) = await l
         if lc == 200 {
             let x = EngineParse.live(ld); s.fixes = x.fixes; s.fixesRunning = x.fixing; s.downloadsRunning = x.downloading; s.downloadPercents = x.percents; s.downloadsDone = x.done
+            s.pipelineFailures = Stage5Parse.pipelineFailures(liveData: ld)
             let o = (try? JSONSerialization.jsonObject(with: ld)) as? [String: Any] ?? [:]
             s.fixesNeeded = EngineParse.fixesNeeded(o); s.liveAt = EngineParse.docAt(o)
         } else { s.errors.append("live") }

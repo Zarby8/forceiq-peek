@@ -46,12 +46,33 @@ public struct GapWarning: Equatable, Sendable, Identifiable {
     public var actions: [NextSessionAction] { GapWarning.actions }
 }
 
+/// The next session's game-film state (engine peaknextsession, from Command's shifts pipeline).
+public struct FilmState: Equatable, Sendable {
+    public enum State: String, Sendable { case ready, processing, finding, unknown }
+    public var state: State
+    public var stage: String = ""
+    public init(state: State, stage: String = "") { self.state = state; self.stage = stage }
+    /// Plain words for the brief — nil when the film is ready (quiet) or unknown (nothing invented).
+    public var readinessLine: String? {
+        switch state {
+        case .ready, .unknown: return nil
+        case .finding: return "Film still being found."
+        case .processing: return stage.isEmpty ? "Film still processing." : "Film still processing: \(stage)."
+        }
+    }
+    public static func parse(_ v: Any?) -> FilmState? {
+        guard let f = v as? [String: Any], let st = FilmState.State(rawValue: EngineParse.str(f["state"])) else { return nil }
+        return FilmState(state: st, stage: EngineParse.str(f["stage"]))
+    }
+}
+
 public struct NextSession: Equatable, Sendable {
     public let client: String
     public let scheduledAt: Date
     public let durationMinutes: Int
     public let sessionType: String
     public let today: Bool
+    public var film: FilmState? = nil   // Stage 5: the session's game film, from the pipeline snapshot
 }
 
 public struct SinceLastMet: Equatable, Sendable {
@@ -98,6 +119,7 @@ public enum NextSessionResult: Equatable, Sendable {
            let at = EngineParse.date(EngineParse.str(s["scheduled_at"])) {
             session = NextSession(client: c, scheduledAt: at, durationMinutes: (s["duration_minutes"] as? Int) ?? 60,
                                   sessionType: clean(s["session_type"]), today: (s["today"] as? Bool) ?? false)
+            session?.film = FilmState.parse(o["film"])
         }
         var since: SinceLastMet?
         if session != nil, let s = o["since_last_met"] as? [String: Any] {

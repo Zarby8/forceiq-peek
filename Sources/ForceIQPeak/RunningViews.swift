@@ -25,6 +25,9 @@ struct PeekHomeScroll: View {
                 ApprovalCard(model: agents)
                 AgentsSection(model: agents)
                 AgentsFinishLine(model: agents)
+                PresenceLineView(cards: cards)
+                NeedsYouSection(cards: cards)
+                MoneyLineView(cards: cards)
                 if checklist.nudgeShown && checklist.isLive() { NudgeSection(model: checklist) }
                 if checklist.isLive() { ChecklistGrid(model: checklist) }
                 if let brief = nextSession.session.flatMap({ SessionBriefBuilder.build(session: $0, since: nextSession.since) }) {
@@ -38,6 +41,46 @@ struct PeekHomeScroll: View {
             }
         }
         .scrollIndicators(.visible)
+    }
+}
+
+/// Stage 6 presence: "{coach} is meeting with {client}" while the other coach's session is live.
+/// Home-scroll only, so never while presenting (it names a client).
+struct PresenceLineView: View {
+    @ObservedObject var cards: CardStackViewModel
+    var body: some View {
+        if let line = cards.presenceLine {
+            Text(line).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white).lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+/// Stage 5 "needs you": stack faults in plain words, once (latched in the view model — a persistent
+/// fault never re-nags). Silent when all is fine. Home-scroll only, so never while presenting.
+struct NeedsYouSection: View {
+    @ObservedObject var cards: CardStackViewModel
+    var body: some View {
+        if !cards.needsYou.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("NEEDS YOU").font(.system(size: 10, weight: .heavy)).tracking(1).foregroundStyle(Color.peakGold)
+                ForEach(cards.needsYou, id: \.id) { f in
+                    Text(f.line).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.white).lineLimit(2)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+/// Stage 5 money line: the past-due rollup, invisible until at least one invoice is past due.
+struct MoneyLineView: View {
+    @ObservedObject var cards: CardStackViewModel
+    var body: some View {
+        if let line = cards.moneyLine {
+            Text(line).font(.system(size: 12, weight: .semibold)).foregroundStyle(Color.peakGold).lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }
 
