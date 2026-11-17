@@ -97,6 +97,21 @@ final class RecordingDNDTrackerTests: XCTestCase {
         XCTAssertTrue(c.panelVisible(on: "any-display"))
     }
 
+    func testAnotherCoachLiveAndRecordingElsewhereNeverDarkens() {
+        // The engine hard-scopes its `recording` flag to the owner's own booking, so while another
+        // coach's session is live the reads stay false — and false reads never darken Peek, however
+        // many arrive, even with a meeting end set (the owner's own next session rides the same
+        // snapshot). This is the app-level half of the hard scope: only a positively-true flag,
+        // which the engine now only produces for the owner's own recording, can darken Peek.
+        let c = makeController()
+        let end = Date().addingTimeInterval(3600)
+        for _ in 0..<3 { c.setRecording(false, meetingEnd: end) }
+        XCTAssertFalse(c.recordingDND)
+        XCTAssertTrue(c.panelVisible(on: "any-display"))
+        c.expand()
+        XCTAssertTrue(c.expanded)
+    }
+
     func testUnknownReadsChangeNothing() {
         let c = makeController()
         c.setRecording(nil, meetingEnd: nil)
