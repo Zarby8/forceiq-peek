@@ -217,6 +217,14 @@ struct PeakRootView: View {
 
     var isExpanded: Bool { controller.expanded && controller.activeDisplay == panel.uuid }
     var showChat: Bool { isExpanded && !controller.presenting && controller.tab == .threePO && controller.profile.isEnabled(.threePO) }
+    /// The home surface is the expanded Group's last branch (not presenting, no drops,
+    /// no chat, no ask, no described or next-session card). Only there does the GPU
+    /// light move into the sheet's NOW section; on every other surface it stays pinned
+    /// under the header, exactly as before.
+    var showsHome: Bool {
+        !controller.presenting && !drops.active && !showChat && controller.askText == nil
+            && !nextSession.showingCard && cards.describedCard == nil
+    }
     var progressShowing: Bool { panel.mode == .notch && panel.visible && !isExpanded && !peekShowing && !captionShowing && cards.progress.working }
     var peekShowing: Bool { !isExpanded && controller.peek != nil && controller.peekDisplay == panel.uuid }
     var surface: PeakLayout.Surface { isExpanded ? (showChat ? .chat : .home) : ((peekShowing || captionShowing) ? .peek : .collapsed) }
@@ -454,7 +462,7 @@ struct PeakRootView: View {
                 PeakButton(title: "Collapse", color: .white, shortcut: .cancelAction, help: "Collapse (Esc)") { controller.collapse() }
             }
             .padding(.top, panel.mode == .notch ? (panel.layout.notchRect?.height ?? 32) + 4 : 12)
-            GPULightDot(light: light)                         // 5090 light: green, or red (held / unknown), labelled
+            if !showsHome { GPULightDot(light: light) }       // 5090 light: pinned here on every surface but home; on home it leads the NOW section
             Group {
                 if controller.presenting {
                     PresentingNotice { controller.setPresenting(false) }       // nothing client-private anywhere on the sheet
@@ -480,7 +488,7 @@ struct PeakRootView: View {
                     DescriptionView(card: card, cards: cards)
                         .transition(reduceMotion ? .identity : .asymmetric(insertion: .move(edge: .trailing), removal: .identity))
                 } else {
-                    PeekHomeScroll(nextSession: nextSession, running: running, cards: cards, checklist: checklist, agents: agents)
+                    PeekHomeScroll(nextSession: nextSession, running: running, cards: cards, checklist: checklist, agents: agents, light: light, gates: HomeSheetGates(meetings: controller.profile.isEnabled(.meetings), agents: controller.profile.isEnabled(.agents) || controller.prefs.agentsWatcher, spend: controller.profile.isEnabled(.spend)))
                         .transition(.slideUpFull(reduceMotion))
                 }
             }

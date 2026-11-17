@@ -85,13 +85,6 @@ public enum SessionBriefBuilder {
     public static func build(session: NextSession, since: SinceLastMet?) -> SessionBrief? {
         guard session.today else { return nil }
         let p = parse(since?.lines ?? [])
-        var support: [String] = []
-        if let g = p.games { support.append(g) }
-        if let pts = p.points { support.append(pts) }
-        if let avg = p.ghostAvg {
-            support.append("Ghost score avg \(avg) since last met.")
-        }
-        if let tc = p.teamChange { support.append(tc) }
 
         let latestLine: String? = {
             guard let d = p.latestDate, let o = p.latestOpponent else { return nil }
@@ -99,30 +92,47 @@ public enum SessionBriefBuilder {
             if let r = p.latestResult { s += ", \(r)" + (p.latestScore.map { " \($0)" } ?? "") }
             return s + "."
         }()
-        if let latest = latestLine { support.append(latest) }
+
+        // The headline leads with one feed fact; whichever fact it spends is NOT repeated
+        // in the support lines — each fact appears once on the card. (The win/loss Latest
+        // line used to print as the headline AND as the last support line; the date the
+        // loss headline drops still rides the film line, which names the game to pull.)
+        var spent = Set<String>()
+        let headline: String = {
+            if p.latestResult == "L", let o = p.latestOpponent {
+                spent.insert("latest")
+                let score = p.latestScore.map { " \($0)" } ?? ""
+                return "Last game: lost\(score) to \(o). Open on what broke down."
+            }
+            if let latest = latestLine {
+                spent.insert("latest")
+                return "\(latest) Start with that game."
+            }
+            if let avg = p.ghostAvg {
+                spent.insert("avg")
+                return "Ghost score avg \(avg) since last met. Hold the standard from there."
+            }
+            if let pts = p.points {
+                spent.insert("points")
+                return "\(pts) Start from the totals."
+            }
+            return "No Ghost read for \(session.client) yet — open the last breakdown."
+        }()
+
+        var support: [String] = []
+        if let g = p.games { support.append(g) }
+        if let pts = p.points, !spent.contains("points") { support.append(pts) }
+        if let avg = p.ghostAvg, !spent.contains("avg") {
+            support.append("Ghost score avg \(avg) since last met.")
+        }
+        if let tc = p.teamChange { support.append(tc) }
+        if let latest = latestLine, !spent.contains("latest") { support.append(latest) }
 
         let filmLine: String = {
             guard let d = p.latestDate, let o = p.latestOpponent else {
                 return "No game since last met — open the last breakdown instead."
             }
             return "Film: \(d) vs \(o) — pull it in FLOW."
-        }()
-
-        let headline: String = {
-            if p.latestResult == "L", let o = p.latestOpponent {
-                let score = p.latestScore.map { " \($0)" } ?? ""
-                return "Last game: lost\(score) to \(o). Open on what broke down."
-            }
-            if let latest = latestLine {
-                return "\(latest) Start with that game."
-            }
-            if let avg = p.ghostAvg {
-                return "Ghost score avg \(avg) since last met. Hold the standard from there."
-            }
-            if let pts = p.points {
-                return "\(pts) Start from the totals."
-            }
-            return "No Ghost read for \(session.client) yet — open the last breakdown."
         }()
 
         return SessionBrief(client: session.client, headline: headline, supportLines: Array(support.prefix(4)),

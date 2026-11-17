@@ -5,12 +5,12 @@ import SwiftUI
 /// the game to pull in FLOW, and one plain line on what the feed cannot say. Read-only —
 /// nothing here sends, books or changes anything. Never shown while presenting (it names the
 /// client and quotes Ghost data); the home sheet only renders it on the non-presenting branch.
+/// The card wears no heading of its own: it renders inside the NEXT SESSION section, whose
+/// label replaced the card's old one-thing heading (Nov 17, 2026 sectioning).
 struct SessionBriefCard: View {
     let brief: SessionBrief
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("TODAY'S ONE THING").font(.system(size: 10, weight: .heavy)).tracking(1)
-                .foregroundStyle(Color.peakGold)
             Text(brief.headline).font(.system(size: 13, weight: .semibold)).foregroundStyle(Color.white)
                 .lineLimit(3)
             ForEach(Array(brief.supportLines.enumerated()), id: \.offset) { _, l in

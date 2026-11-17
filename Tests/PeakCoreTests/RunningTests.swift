@@ -123,7 +123,7 @@ import XCTest
     func testTheSectionLivesOnTheHomeViewWhichPresentingReplaces() throws {
         let v = try source("Views.swift")
         let presenting = try XCTUnwrap(v.range(of: "if controller.presenting {"))
-        let home = try XCTUnwrap(v.range(of: "PeekHomeScroll(nextSession: nextSession, running: running, cards: cards, checklist: checklist, agents: agents)"))
+        let home = try XCTUnwrap(v.range(of: "PeekHomeScroll(nextSession: nextSession, running: running, cards: cards, checklist: checklist, agents: agents, light: light, gates: HomeSheetGates(meetings: controller.profile.isEnabled(.meetings), agents: controller.profile.isEnabled(.agents) || controller.prefs.agentsWatcher, spend: controller.profile.isEnabled(.spend)))"))
         XCTAssertLessThan(presenting.lowerBound, home.lowerBound, "the presenting notice is chosen before the home view")
         XCTAssertEqual(v.components(separatedBy: "PeekHomeScroll(").count - 1, 1)
         let list = try source("RunningViews.swift")
@@ -184,6 +184,6 @@ import XCTest
         XCTAssertFalse(cards.contains("ScrollView"), "waiting cards live in PeekHomeScroll; a nested ScrollView would clip again")
         XCTAssertFalse(cards.contains(".scrollIndicators(.never)"))
         let v = try source("Views.swift")
-        XCTAssertTrue(v.contains("PeekHomeScroll(nextSession: nextSession, running: running, cards: cards, checklist: checklist, agents: agents)"))
+        XCTAssertTrue(v.contains("PeekHomeScroll(nextSession: nextSession, running: running, cards: cards, checklist: checklist, agents: agents, light: light, gates: HomeSheetGates(meetings: controller.profile.isEnabled(.meetings), agents: controller.profile.isEnabled(.agents) || controller.prefs.agentsWatcher, spend: controller.profile.isEnabled(.spend)))"))
     }
 }
