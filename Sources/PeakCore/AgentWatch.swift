@@ -88,19 +88,32 @@ public struct AgentSession: Equatable, Sendable, Identifiable {
     public var folder: String
     /// "deploy · 2" (tmux session · window) when the session runs in tmux, else nil.
     public var tmuxLabel: String?
+    /// The raw tmux target behind the label (session name, window index, pane id), kept for the
+    /// sheet's tap-to-jump. Labels are display; these are what tmux can select.
+    public var tmuxSessionName: String?
+    public var tmuxWindowIndex: String?
+    public var tmuxPaneID: String?
     public var lastEventAt: Date
     public var stateSince: Date
     public var turnStartedAt: Date?
     /// A held PermissionRequest / AskUserQuestion is waiting on Christopher (the approval card exists).
     public var waitingActionable: Bool
     public var rateLimited: Bool
+    /// When the current stuck episode was flagged (the registry's sweep latches it); nil = not flagged.
+    /// Latched once per episode: it clears when the session leaves .working, so a session is never
+    /// nagged twice for the same stall — and a later, separate stall is a new episode.
+    public var stuckSince: Date?
 
     public init(sessionID: String, state: AgentSessionState, folder: String, tmuxLabel: String?,
                 lastEventAt: Date, stateSince: Date, turnStartedAt: Date? = nil,
-                waitingActionable: Bool = false, rateLimited: Bool = false) {
+                waitingActionable: Bool = false, rateLimited: Bool = false,
+                tmuxSessionName: String? = nil, tmuxWindowIndex: String? = nil, tmuxPaneID: String? = nil,
+                stuckSince: Date? = nil) {
         self.sessionID = sessionID; self.state = state; self.folder = folder; self.tmuxLabel = tmuxLabel
         self.lastEventAt = lastEventAt; self.stateSince = stateSince; self.turnStartedAt = turnStartedAt
         self.waitingActionable = waitingActionable; self.rateLimited = rateLimited
+        self.tmuxSessionName = tmuxSessionName; self.tmuxWindowIndex = tmuxWindowIndex; self.tmuxPaneID = tmuxPaneID
+        self.stuckSince = stuckSince
     }
 
     static func folderName(_ cwd: String) -> String {
@@ -128,17 +141,116 @@ public struct AgentSession: Equatable, Sendable, Identifiable {
     }
 
     static func age(_ from: Date, now: Date) -> String {
-        let s = max(0, Int(now.timeIntervalSince(from)))
+        durationText(max(0, now.timeIntervalSince(from)))
+    }
+
+    /// "45s", "12m", "1h 05m" — the one duration format every watcher surface uses.
+    public static func durationText(_ interval: TimeInterval) -> String {
+        let s = max(0, Int(interval))
         if s < 60 { return "\(s)s" }
         if s < 3600 { return "\(s / 60)m" }
         return "\(s / 3600)h \(String(format: "%02d", (s % 3600) / 60))m"
     }
+
+    // ── stuck (watcher-plus): a session working far beyond normal, or silent mid-turn ──
+    /// Continuous time in .working before the session counts as stuck.
+    public static let stuckWorkingAfter: TimeInterval = 20 * 60
+    /// Silence (no hook events) while still .working before the session counts as stuck. This sits
+    /// well inside the sweep's 30-minute silence rule: stuck is the warning, the sweep's flip to
+    /// idle at 30 min is the give-up — one rule set, two thresholds, no duplication.
+    public static let stuckSilentAfter: TimeInterval = 10 * 60
+
+    /// Stuck right now, computed from the clocks (the registry's sweep latches the flag itself).
+    public func isStuck(now: Date) -> Bool {
+        guard state == .working else { return false }
+        return now.timeIntervalSince(stateSince) >= Self.stuckWorkingAfter
+            || now.timeIntervalSince(lastEventAt) >= Self.stuckSilentAfter
+    }
+
+    /// Flagged stuck by the sweep (the latched, once-per-episode form of `isStuck`).
+    public var isFlaggedStuck: Bool { stuckSince != nil }
+
+    /// Where a tap on this session's sheet row can take the coach. A tmux target wins (the relay
+    /// recorded the real session/window/pane); a session with no tmux target lives in the Claude
+    /// desktop app — activating the app is the best jump that exists (there is no deep link to a
+    /// conversation). No target at all: the row stays display-only.
+    public func jumpTarget(claudeAppRunning: Bool) -> AgentJumpTarget {
+        if let s = tmuxSessionName, !s.isEmpty {
+            return .tmux(session: s, window: tmuxWindowIndex, pane: tmuxPaneID)
+        }
+        return claudeAppRunning ? .claudeApp : .none
+    }
+}
+
+/// The resolved destination of a tap on a session row (see AgentSession.jumpTarget).
+public enum AgentJumpTarget: Equatable, Sendable {
+    case tmux(session: String, window: String?, pane: String?)
+    case claudeApp
+    case none
+}
+
+/// One thing that finished happening, kept in the registry's journal: a session's turn ended (done
+/// or failed, with the working span's duration), or a held approval lapsed unanswered at its
+/// deadline. Folder + tmux label only — the same stripped identity the live rows carry. The journal
+/// feeds two surfaces: the last-finish line (sheet + the pill's done-fade window) and the
+/// while-you-were-away recap assembled over a sleep window.
+public struct AgentHistoryEntry: Equatable, Sendable {
+    public enum Kind: String, Sendable { case finished, failed, approvalLapsed }
+    public var kind: Kind
+    public var folder: String
+    public var tmuxLabel: String?
+    public var at: Date
+    /// The working span (turn start → Stop / StopFailure); nil when the turn's start was never seen.
+    public var duration: TimeInterval?
+
+    public init(kind: Kind, folder: String, tmuxLabel: String?, at: Date, duration: TimeInterval? = nil) {
+        self.kind = kind; self.folder = folder; self.tmuxLabel = tmuxLabel; self.at = at; self.duration = duration
+    }
+
+    /// The outcome word the surfaces share.
+    public var outcome: String {
+        switch kind {
+        case .finished: return "done"
+        case .failed: return "failed"
+        case .approvalLapsed: return "approval lapsed"
+        }
+    }
+
+    /// "FlowAI · done · 12m" — folder + outcome + duration (duration omitted when unknown).
+    public var line: String {
+        var parts = [folder, outcome]
+        if let d = duration { parts.append(AgentSession.durationText(d)) }
+        return parts.joined(separator: " · ")
+    }
+
+    /// The sheet's last-finish form: the line plus the wall-clock time it happened.
+    public var sheetLine: String { "\(line) · \(BriefClock.time(at))" }
+}
+
+/// The while-you-were-away recap: what the registry journaled between the mark falling asleep and
+/// waking. Assembled by the registry over the sleep window; nil (no card) when nothing happened.
+public struct AgentRecap: Equatable, Sendable {
+    public struct Line: Equatable, Sendable, Identifiable {
+        public var id: String
+        public var text: String
+        public var at: Date
+        public init(id: String, text: String, at: Date) { self.id = id; self.text = text; self.at = at }
+    }
+    public var lines: [Line]
+    public var from: Date
+    public var to: Date
+    public init(lines: [Line], from: Date, to: Date) { self.lines = lines; self.from = from; self.to = to }
 }
 
 /// The session registry: every state transition in spec §4, and nothing inferred from processes or files.
 /// Pure and value-typed so the whole watcher decision is unit-testable; the app model wraps it.
 public struct AgentRegistry: Equatable, Sendable {
     public private(set) var sessions: [String: AgentSession] = [:]
+    /// The journal of finished things, oldest first, capped (see AgentHistoryEntry).
+    public private(set) var history: [AgentHistoryEntry] = []
+    public static let historyLimit = 60
+    /// How long a done session (and its finish line) holds before fading to idle (the sweep's rule).
+    public static let doneFadeSeconds: TimeInterval = 60
     public init() {}
 
     /// Sessions in sheet order: worst state first, then most recently active.
@@ -154,6 +266,36 @@ public struct AgentRegistry: Equatable, Sendable {
         return AgentPillSummary(count: sessions.count, worst: worst)
     }
 
+    /// The flagged stuck session to surface (the longest-running one when several stall at once).
+    public var stuckSession: AgentSession? {
+        sessions.values.filter { $0.isFlaggedStuck }.min { $0.stateSince < $1.stateSince }
+    }
+
+    /// The most recent finished turn (the sheet's last-finish line; the pill shows it briefly).
+    public var lastFinish: AgentHistoryEntry? { history.last { $0.kind == .finished } }
+
+    private mutating func note(_ entry: AgentHistoryEntry) {
+        history.append(entry)
+        if history.count > Self.historyLimit { history.removeFirst(history.count - Self.historyLimit) }
+    }
+
+    /// A held approval hit its deadline unanswered (the model saw the deadline pass; the terminal
+    /// asked instead). Decided, dropped and pass-through requests are NOT lapses and never land here.
+    public mutating func noteApprovalLapsed(folder: String, tmuxLabel: String?, at: Date) {
+        note(AgentHistoryEntry(kind: .approvalLapsed, folder: folder, tmuxLabel: tmuxLabel, at: at))
+    }
+
+    /// The recap over a sleep window: journal entries inside (from, to], oldest first, as display
+    /// lines. nil when nothing happened while the mark slept — no card, no noise.
+    public func recap(from: Date, to: Date) -> AgentRecap? {
+        let entries = history.filter { $0.at > from && $0.at <= to }.sorted { $0.at < $1.at }
+        guard !entries.isEmpty else { return nil }
+        let lines = entries.enumerated().map { i, e in
+            AgentRecap.Line(id: "\(Int(e.at.timeIntervalSince1970 * 1000))-\(i)", text: e.line, at: e.at)
+        }
+        return AgentRecap(lines: lines, from: from, to: to)
+    }
+
     /// One event. Returns the session's new state, or nil when the event ended / didn't identify a session.
     @discardableResult
     public mutating func apply(_ e: AgentHookEvent) -> AgentSessionState? {
@@ -161,10 +303,14 @@ public struct AgentRegistry: Equatable, Sendable {
         var s = sessions[e.sessionID] ?? AgentSession(
             sessionID: e.sessionID, state: .idle, folder: AgentSession.folderName(e.cwd),
             tmuxLabel: AgentSession.tmuxLabel(session: e.tmuxSession, window: e.tmuxWindow),
-            lastEventAt: e.at, stateSince: e.at)
+            lastEventAt: e.at, stateSince: e.at,
+            tmuxSessionName: e.tmuxSession, tmuxWindowIndex: e.tmuxWindow, tmuxPaneID: e.tmuxPane)
         // A session that moved folders / panes re-labels (the same session_id in a new cwd is a new project).
         if !e.cwd.isEmpty { s.folder = AgentSession.folderName(e.cwd) }
         if let l = AgentSession.tmuxLabel(session: e.tmuxSession, window: e.tmuxWindow) { s.tmuxLabel = l }
+        if let v = e.tmuxSession, !v.isEmpty { s.tmuxSessionName = v }
+        if let v = e.tmuxWindow, !v.isEmpty { s.tmuxWindowIndex = v }
+        if let v = e.tmuxPane, !v.isEmpty { s.tmuxPaneID = v }
         s.lastEventAt = max(s.lastEventAt, e.at)
 
         func move(_ next: AgentSessionState) {
@@ -189,12 +335,17 @@ public struct AgentRegistry: Equatable, Sendable {
             s.waitingActionable = e.held
             if s.state == .working || s.state == .idle { move(.waiting) }
         case "Stop":
+            note(AgentHistoryEntry(kind: .finished, folder: s.folder, tmuxLabel: s.tmuxLabel, at: e.at,
+                                   duration: s.turnStartedAt.map { e.at.timeIntervalSince($0) }))
             s.turnStartedAt = nil; s.waitingActionable = false; move(.done)
         case "StopFailure":
+            note(AgentHistoryEntry(kind: .failed, folder: s.folder, tmuxLabel: s.tmuxLabel, at: e.at,
+                                   duration: s.turnStartedAt.map { e.at.timeIntervalSince($0) }))
             s.turnStartedAt = nil; s.waitingActionable = false; move(.failed)
         default:
             break   // SubagentStart/Stop and anything new: noted (lastEventAt), no state claim
         }
+        if s.state != .working { s.stuckSince = nil }   // leaving working ends any stuck episode
         sessions[e.sessionID] = s
         return s.state
     }
@@ -212,7 +363,7 @@ public struct AgentRegistry: Equatable, Sendable {
         for (id, var s) in sessions {
             if now.timeIntervalSince(s.lastEventAt) > 12 * 3600 { sessions[id] = nil; continue }
             switch s.state {
-            case .done where now.timeIntervalSince(s.stateSince) > 60:
+            case .done where now.timeIntervalSince(s.stateSince) > Self.doneFadeSeconds:
                 s.state = .idle; s.stateSince = now
             case .failed where now.timeIntervalSince(s.stateSince) > 5 * 60:
                 s.state = .idle; s.stateSince = now
@@ -222,6 +373,11 @@ public struct AgentRegistry: Equatable, Sendable {
                 s.state = .idle; s.stateSince = now; s.turnStartedAt = nil
             default: break
             }
+            // The stuck flag latches on the clock: set the first sweep where the session crosses a
+            // threshold, held while the episode lasts, cleared as soon as it no longer holds (it
+            // acted, finished, failed, or swept to idle) — once per episode, never a repeated nag.
+            if s.isStuck(now: now) { if s.stuckSince == nil { s.stuckSince = now } }
+            else { s.stuckSince = nil }
             sessions[id] = s
         }
     }
@@ -242,6 +398,36 @@ public struct AgentPillSummary: Equatable, Sendable {
         let n = count == 1 ? "1 Claude session" : "\(count) Claude sessions"
         guard let w = worst, w != .idle else { return n }
         return "\(n), one \(w.rawValue)"
+    }
+}
+
+/// The collapsed pill's watcher text line (watcher-plus): the one watcher sentence allowed next to
+/// the dot + count. A flagged stuck session outranks everything (it needs the coach's eye); a fresh
+/// finish shows for the done-fade window, then the pill goes back to its usual occupants. Folder
+/// names only — and the view suppresses the line entirely while presenting, like every other
+/// name-bearing pill surface.
+public struct AgentPillLine: Equatable, Sendable {
+    public enum Kind: String, Sendable { case stuck, finish }
+    public var kind: Kind
+    public var text: String
+    public var accessibilityLabel: String
+    public init(kind: Kind, text: String, accessibilityLabel: String) {
+        self.kind = kind; self.text = text; self.accessibilityLabel = accessibilityLabel
+    }
+}
+
+public enum AgentPillLineBuilder {
+    public static func build(stuck: AgentSession?, lastFinish: AgentHistoryEntry?, now: Date) -> AgentPillLine? {
+        if let s = stuck {
+            let age = AgentSession.age(s.stateSince, now: now)
+            return AgentPillLine(kind: .stuck, text: "\(s.folder) · working \(age)",
+                                 accessibilityLabel: "\(s.folder) has been working for \(age); it looks stuck")
+        }
+        if let f = lastFinish, now.timeIntervalSince(f.at) <= AgentRegistry.doneFadeSeconds {
+            return AgentPillLine(kind: .finish, text: f.line,
+                                 accessibilityLabel: "\(f.folder) finished\(f.duration.map { " after \(AgentSession.durationText($0))" } ?? "")")
+        }
+        return nil
     }
 }
 
@@ -329,6 +515,14 @@ public enum AgentDecision: Equatable, Sendable {
 @MainActor public final class AgentWatchModel: ObservableObject {
     @Published public private(set) var sessions: [AgentSession] = []
     @Published public private(set) var pending: [AgentApproval] = []
+    /// The flagged stuck session, if any (drives the pill line and the mark's escalation).
+    @Published public private(set) var stuck: AgentSession?
+    /// The most recent finished turn (the sheet's last-finish line, until superseded).
+    @Published public private(set) var lastFinish: AgentHistoryEntry?
+    /// The collapsed pill's watcher text line right now (stuck, or a finish inside its fade window).
+    @Published public private(set) var pillLine: AgentPillLine?
+    /// The while-you-were-away recap waiting for the first expansion after a wake; nil = no card.
+    @Published public private(set) var recap: AgentRecap?
     public var clock: () -> Date = Date.init
     /// Presenting at arrival: a held request passes straight through (spec §3.1) — no card, no hold.
     public var isPresenting: () -> Bool = { false }
@@ -337,6 +531,7 @@ public enum AgentDecision: Equatable, Sendable {
     weak var logger: PeakLogging?
     private var registry = AgentRegistry()
     private var resolvers: [String: (String?) -> Void] = [:]
+    private var loggedStuckID: String?
 
     public init(logger: PeakLogging? = nil) { self.logger = logger }
 
@@ -396,12 +591,14 @@ public enum AgentDecision: Equatable, Sendable {
     }
 
     /// The clock tick (Peek's 30 s refresh, plus the card's own countdown): expire held requests past
-    /// their deadline — reply nil, the terminal asks — and run the registry sweeps.
+    /// their deadline — reply nil, the terminal asks — and run the registry sweeps. An expiry is a
+    /// lapse: it is journaled, so a sleep window that spans it can recap "approval lapsed".
     public func tick() {
         let now = clock()
         for a in pending where now >= a.deadline {
             resolvers.removeValue(forKey: a.id)?(nil)
             registry.clearActionable(sessionID: a.sessionID)
+            registry.noteApprovalLapsed(folder: a.folder, tmuxLabel: a.tmuxLabel, at: now)
             logger?.log("agents approval=expired kind=\(a.kind.rawValue)")
         }
         pending.removeAll { now >= $0.deadline }
@@ -409,10 +606,31 @@ public enum AgentDecision: Equatable, Sendable {
         publish()
     }
 
+    /// The card model woke from a sleep window: assemble the recap over it. Nothing happened →
+    /// recap stays nil and no card ever shows. A recap already waiting is replaced by the newer one.
+    public func presentRecap(from: Date, to: Date) {
+        recap = registry.recap(from: from, to: to)
+        if let r = recap { logger?.log("agents recap lines=\(r.lines.count)") }
+    }
+
+    /// The recap card's Dismiss: shown once, then gone (the next wake assembles a fresh one).
+    public func dismissRecap() { recap = nil }
+
     private func resolveSession(sessionID: String, line: String?) {
         for a in pending where a.sessionID == sessionID { resolvers.removeValue(forKey: a.id)?(line) }
         pending.removeAll { $0.sessionID == sessionID }
     }
 
-    private func publish() { sessions = registry.ordered }
+    private func publish() {
+        sessions = registry.ordered
+        stuck = registry.stuckSession
+        lastFinish = registry.lastFinish
+        pillLine = AgentPillLineBuilder.build(stuck: stuck, lastFinish: lastFinish, now: clock())
+        // Log a stuck flag once per episode: the registry latch does the once-only, this just
+        // records the moment the surfaced stuck session changes (or clears).
+        if stuck?.sessionID != loggedStuckID {
+            if let s = stuck { logger?.log("agents stuck folder=\(s.folder)") }
+            loggedStuckID = stuck?.sessionID
+        }
+    }
 }
