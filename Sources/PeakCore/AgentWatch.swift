@@ -96,6 +96,12 @@ public struct AgentSession: Equatable, Sendable, Identifiable {
     public var lastEventAt: Date
     public var stateSince: Date
     public var turnStartedAt: Date?
+    /// The chat's title in the Claude desktop app ("BRAIN", "SHIFTS 2"), resolved APP-SIDE from the
+    /// desktop session records at display time — never from hooks, never in the registry, never in
+    /// the persisted watcher state. nil = no record / no title: surfaces fall back to the folder.
+    public var title: String? = nil
+    /// What surfaces name this session: its desktop title when known, else its folder.
+    public var displayName: String { title ?? folder }
     /// A held PermissionRequest / AskUserQuestion is waiting on Christopher (the approval card exists).
     public var waitingActionable: Bool
     public var rateLimited: Bool
@@ -171,12 +177,16 @@ public struct AgentSession: Equatable, Sendable, Identifiable {
     public var isFlaggedStuck: Bool { stuckSince != nil }
 
     /// Where a tap on this session's sheet row can take the coach. A tmux target wins (the relay
-    /// recorded the real session/window/pane); a session with no tmux target lives in the Claude
-    /// desktop app — activating the app is the best jump that exists (there is no deep link to a
-    /// conversation). No target at all: the row stays display-only.
-    public func jumpTarget(claudeAppRunning: Bool) -> AgentJumpTarget {
+    /// recorded the real session/window/pane); next, when the session's desktop thread is known
+    /// (a valid `local_…` id from the Claude app's session records, resolved by the app at click
+    /// time), the thread deep link; then activating the desktop app; no target at all: the row
+    /// stays display-only.
+    public func jumpTarget(claudeAppRunning: Bool, desktopSessionID: String? = nil) -> AgentJumpTarget {
         if let s = tmuxSessionName, !s.isEmpty {
             return .tmux(session: s, window: tmuxWindowIndex, pane: tmuxPaneID)
+        }
+        if let d = desktopSessionID, let url = ClaudeSessionLink.continueURL(sessionId: d) {
+            return .claudeThread(url: url)
         }
         return claudeAppRunning ? .claudeApp : .none
     }
@@ -185,6 +195,8 @@ public struct AgentSession: Equatable, Sendable, Identifiable {
 /// The resolved destination of a tap on a session row (see AgentSession.jumpTarget).
 public enum AgentJumpTarget: Equatable, Sendable {
     case tmux(session: String, window: String?, pane: String?)
+    /// Deep link into the exact Claude desktop thread (claude://code/continue?session=local_…).
+    case claudeThread(url: String)
     case claudeApp
     case none
 }
@@ -202,9 +214,16 @@ public struct AgentHistoryEntry: Equatable, Sendable {
     public var at: Date
     /// The working span (turn start → Stop / StopFailure); nil when the turn's start was never seen.
     public var duration: TimeInterval?
+    /// The session's CLI id (the journal's join key for app-side title resolution; an id, not content).
+    public var sessionID: String = ""
+    /// The chat's desktop title, resolved app-side at publish time (see AgentSession.title).
+    public var title: String? = nil
+    /// What surfaces name this entry: its desktop title when known, else its folder.
+    public var displayName: String { title ?? folder }
 
-    public init(kind: Kind, folder: String, tmuxLabel: String?, at: Date, duration: TimeInterval? = nil) {
+    public init(kind: Kind, folder: String, tmuxLabel: String?, at: Date, duration: TimeInterval? = nil, sessionID: String = "") {
         self.kind = kind; self.folder = folder; self.tmuxLabel = tmuxLabel; self.at = at; self.duration = duration
+        self.sessionID = sessionID
     }
 
     /// The outcome word the surfaces share.
@@ -216,9 +235,10 @@ public struct AgentHistoryEntry: Equatable, Sendable {
         }
     }
 
-    /// "FlowAI · done · 12m" — folder + outcome + duration (duration omitted when unknown).
+    /// "FlowAI · done · 12m" — display name (desktop title when known, else folder) + outcome +
+    /// duration (duration omitted when unknown).
     public var line: String {
-        var parts = [folder, outcome]
+        var parts = [displayName, outcome]
         if let d = duration { parts.append(AgentSession.durationText(d)) }
         return parts.joined(separator: " · ")
     }
@@ -281,14 +301,19 @@ public struct AgentRegistry: Equatable, Sendable {
 
     /// A held approval hit its deadline unanswered (the model saw the deadline pass; the terminal
     /// asked instead). Decided, dropped and pass-through requests are NOT lapses and never land here.
-    public mutating func noteApprovalLapsed(folder: String, tmuxLabel: String?, at: Date) {
-        note(AgentHistoryEntry(kind: .approvalLapsed, folder: folder, tmuxLabel: tmuxLabel, at: at))
+    public mutating func noteApprovalLapsed(folder: String, tmuxLabel: String?, at: Date, sessionID: String = "") {
+        note(AgentHistoryEntry(kind: .approvalLapsed, folder: folder, tmuxLabel: tmuxLabel, at: at, sessionID: sessionID))
+    }
+
+    /// The journal entries inside a sleep window (from, to], oldest first — the recap's raw material.
+    public func journal(from: Date, to: Date) -> [AgentHistoryEntry] {
+        history.filter { $0.at > from && $0.at <= to }.sorted { $0.at < $1.at }
     }
 
     /// The recap over a sleep window: journal entries inside (from, to], oldest first, as display
     /// lines. nil when nothing happened while the mark slept — no card, no noise.
     public func recap(from: Date, to: Date) -> AgentRecap? {
-        let entries = history.filter { $0.at > from && $0.at <= to }.sorted { $0.at < $1.at }
+        let entries = journal(from: from, to: to)
         guard !entries.isEmpty else { return nil }
         let lines = entries.enumerated().map { i, e in
             AgentRecap.Line(id: "\(Int(e.at.timeIntervalSince1970 * 1000))-\(i)", text: e.line, at: e.at)
@@ -336,11 +361,11 @@ public struct AgentRegistry: Equatable, Sendable {
             if s.state == .working || s.state == .idle { move(.waiting) }
         case "Stop":
             note(AgentHistoryEntry(kind: .finished, folder: s.folder, tmuxLabel: s.tmuxLabel, at: e.at,
-                                   duration: s.turnStartedAt.map { e.at.timeIntervalSince($0) }))
+                                   duration: s.turnStartedAt.map { e.at.timeIntervalSince($0) }, sessionID: e.sessionID))
             s.turnStartedAt = nil; s.waitingActionable = false; move(.done)
         case "StopFailure":
             note(AgentHistoryEntry(kind: .failed, folder: s.folder, tmuxLabel: s.tmuxLabel, at: e.at,
-                                   duration: s.turnStartedAt.map { e.at.timeIntervalSince($0) }))
+                                   duration: s.turnStartedAt.map { e.at.timeIntervalSince($0) }, sessionID: e.sessionID))
             s.turnStartedAt = nil; s.waitingActionable = false; move(.failed)
         default:
             break   // SubagentStart/Stop and anything new: noted (lastEventAt), no state claim
@@ -420,12 +445,12 @@ public enum AgentPillLineBuilder {
     public static func build(stuck: AgentSession?, lastFinish: AgentHistoryEntry?, now: Date) -> AgentPillLine? {
         if let s = stuck {
             let age = AgentSession.age(s.stateSince, now: now)
-            return AgentPillLine(kind: .stuck, text: "\(s.folder) · working \(age)",
-                                 accessibilityLabel: "\(s.folder) has been working for \(age); it looks stuck")
+            return AgentPillLine(kind: .stuck, text: "\(s.displayName) · working \(age)",
+                                 accessibilityLabel: "\(s.displayName) has been working for \(age); it looks stuck")
         }
         if let f = lastFinish, now.timeIntervalSince(f.at) <= AgentRegistry.doneFadeSeconds {
             return AgentPillLine(kind: .finish, text: f.line,
-                                 accessibilityLabel: "\(f.folder) finished\(f.duration.map { " after \(AgentSession.durationText($0))" } ?? "")")
+                                 accessibilityLabel: "\(f.displayName) finished\(f.duration.map { " after \(AgentSession.durationText($0))" } ?? "")")
         }
         return nil
     }
@@ -524,6 +549,12 @@ public enum AgentDecision: Equatable, Sendable {
     /// The while-you-were-away recap waiting for the first expansion after a wake; nil = no card.
     @Published public private(set) var recap: AgentRecap?
     public var clock: () -> Date = Date.init
+    /// Desktop chat titles, resolved app-side from the Claude app's session records (the app injects
+    /// the scan; PeakCore never touches the filesystem). Input: a session's CLI id. Output: its title
+    /// in the desktop app, or nil. Applied at publish time to sessions and journal entries that have
+    /// no tmux target — titles live only in the published copies, never in the registry or the
+    /// persisted watcher state.
+    public var titleResolver: ((String) -> String?)? = nil
     /// Presenting at arrival: a held request passes straight through (spec §3.1) — no card, no hold.
     public var isPresenting: () -> Bool = { false }
     /// A new held request landed (and is being held): the app may expand the notch once.
@@ -598,7 +629,7 @@ public enum AgentDecision: Equatable, Sendable {
         for a in pending where now >= a.deadline {
             resolvers.removeValue(forKey: a.id)?(nil)
             registry.clearActionable(sessionID: a.sessionID)
-            registry.noteApprovalLapsed(folder: a.folder, tmuxLabel: a.tmuxLabel, at: now)
+            registry.noteApprovalLapsed(folder: a.folder, tmuxLabel: a.tmuxLabel, at: now, sessionID: a.sessionID)
             logger?.log("agents approval=expired kind=\(a.kind.rawValue)")
         }
         pending.removeAll { now >= $0.deadline }
@@ -608,8 +639,14 @@ public enum AgentDecision: Equatable, Sendable {
 
     /// The card model woke from a sleep window: assemble the recap over it. Nothing happened →
     /// recap stays nil and no card ever shows. A recap already waiting is replaced by the newer one.
+    /// Lines name each entry by its desktop title when the resolver knows one (same as the sheet).
     public func presentRecap(from: Date, to: Date) {
-        recap = registry.recap(from: from, to: to)
+        let entries = registry.journal(from: from, to: to)
+        recap = entries.isEmpty ? nil : AgentRecap(
+            lines: entries.enumerated().map { i, e in
+                let e = titled(e)
+                return AgentRecap.Line(id: "\(Int(e.at.timeIntervalSince1970 * 1000))-\(i)", text: e.line, at: e.at)
+            }, from: from, to: to)
         if let r = recap { logger?.log("agents recap lines=\(r.lines.count)") }
     }
 
@@ -621,10 +658,27 @@ public enum AgentDecision: Equatable, Sendable {
         pending.removeAll { $0.sessionID == sessionID }
     }
 
+    /// A session / journal entry with its desktop title filled in from the injected resolver.
+    /// tmux sessions keep folder naming (they have no desktop record); a session that already
+    /// carries a title keeps it.
+    private func titled(_ s: AgentSession) -> AgentSession {
+        guard s.title == nil, s.tmuxSessionName?.isEmpty ?? true, let r = titleResolver else { return s }
+        var s = s
+        s.title = r(s.sessionID)
+        return s
+    }
+
+    private func titled(_ e: AgentHistoryEntry) -> AgentHistoryEntry {
+        guard e.title == nil, !e.sessionID.isEmpty, e.tmuxLabel == nil, let r = titleResolver else { return e }
+        var e = e
+        e.title = r(e.sessionID)
+        return e
+    }
+
     private func publish() {
-        sessions = registry.ordered
-        stuck = registry.stuckSession
-        lastFinish = registry.lastFinish
+        sessions = registry.ordered.map(titled)
+        stuck = registry.stuckSession.map(titled)
+        lastFinish = registry.lastFinish.map(titled)
         pillLine = AgentPillLineBuilder.build(stuck: stuck, lastFinish: lastFinish, now: clock())
         // Log a stuck flag once per episode: the registry latch does the once-only, this just
         // records the moment the surfaced stuck session changes (or clears).

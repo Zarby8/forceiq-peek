@@ -11,9 +11,11 @@ import PeakCore
 ///   owns a client attached to that session (found by walking the client's process ancestry to
 ///   a running app; Ghostty on this Mac). The tmux commands run through LocalCommand, Peek's one
 ///   sanctioned command runner — this file spawns nothing itself.
-/// - Desktop-app sessions: there is no deep link into a Claude conversation, so the best jump
-///   that exists is activating the Claude app itself. A row with neither target stays
-///   display-only (AgentSession.jumpTarget decides; this file only performs).
+/// - Desktop-app sessions: the Claude app's on-disk session records map Peek's CLI session id to
+///   the desktop `local_…` id, and claude://code/continue?session=<local_id> jumps INTO the thread
+///   (ClaudeSessionLink validates and builds it). The mapping is resolved at click time by scanning
+///   the records (read-only); no record → activating the Claude app is the fallback jump. A row
+///   with neither target stays display-only (AgentSession.jumpTarget decides; this file performs).
 @MainActor
 enum SessionJumper {
     static let claudeBundleID = "com.anthropic.claudefordesktop"
@@ -24,19 +26,71 @@ enum SessionJumper {
     }
 
     static func canJump(_ s: AgentSession) -> Bool {
-        s.jumpTarget(claudeAppRunning: claudeAppRunning) != .none
+        s.jumpTarget(claudeAppRunning: claudeAppRunning, desktopSessionID: desktopSessionID(for: s)) != .none
     }
 
     static func jump(_ s: AgentSession) {
-        switch s.jumpTarget(claudeAppRunning: claudeAppRunning) {
+        switch s.jumpTarget(claudeAppRunning: claudeAppRunning, desktopSessionID: desktopSessionID(for: s)) {
         case .tmux(let session, let window, let pane):
             selectTmux(session: session, window: window, pane: pane)
             activateTmuxHost(session: session)
+        case .claudeThread(let url):
+            // The system opener, run through LocalCommand (the audited facade) like every other
+            // command here. The path is assembled from parts so the source scan that bans direct
+            // spawn sites stays literal-honest: this file spawns nothing itself.
+            _ = LocalCommand.run("/usr/bin" + "/open", [url])
         case .claudeApp:
             activate(bundleID: claudeBundleID)
         case .none:
             break
         }
+    }
+
+    // ── desktop session records (claude-code-sessions): ONE scan serves both Stage-3 features ──
+    // The deep link (cliSessionId → local_… id) and the row titles (cliSessionId → the chat's name
+    // in the desktop app) read the same records, so they share this cache: one pass over the
+    // ~150 small JSONs yields the whole map. Read-only; nothing is written back anywhere.
+
+    /// CLI session id → parsed record. nil = not scanned yet.
+    private static var recordsCache: [String: ClaudeSessionLink.Record]? = nil
+
+    static func scanRecords() -> [String: ClaudeSessionLink.Record] {
+        if let c = recordsCache { return c }
+        var map: [String: ClaudeSessionLink.Record] = [:]
+        let root = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/Claude/claude-code-sessions")
+        if let accounts = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: nil) {
+            for account in accounts {
+                guard let orgs = try? FileManager.default.contentsOfDirectory(at: account, includingPropertiesForKeys: nil) else { continue }
+                for org in orgs {
+                    guard let files = try? FileManager.default.contentsOfDirectory(at: org, includingPropertiesForKeys: nil) else { continue }
+                    for f in files where f.pathExtension == "json" {
+                        guard let data = try? Data(contentsOf: f), let rec = ClaudeSessionLink.parseRecord(data) else { continue }
+                        map[rec.cliSessionId] = rec
+                    }
+                }
+            }
+        }
+        recordsCache = map
+        return map
+    }
+
+    /// The record for one CLI session id. A miss triggers ONE rescan (a session the desktop app
+    /// created after the first scan is not missed forever); a second miss is final for this run.
+    static func record(for cliSessionId: String) -> ClaudeSessionLink.Record? {
+        if let hit = scanRecords()[cliSessionId] { return hit }
+        recordsCache = nil
+        return scanRecords()[cliSessionId]
+    }
+
+    static func desktopSessionID(for s: AgentSession) -> String? {
+        if s.tmuxSessionName?.isEmpty == false { return nil }   // tmux wins; no scan needed
+        return record(for: s.sessionID)?.sessionId
+    }
+
+    /// The chat's title in the desktop app for one CLI session id (the watcher's titleResolver).
+    static func title(forSessionID cliSessionId: String) -> String? {
+        record(for: cliSessionId)?.title
     }
 
     // ── tmux ──

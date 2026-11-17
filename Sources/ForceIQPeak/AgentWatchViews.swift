@@ -68,7 +68,12 @@ struct AgentsSection: View {
     func rowContent(_ s: AgentSession, now: Date) -> some View {
         HStack(spacing: 8) {
             Circle().fill(agentDotColor(s.state.dotHex ?? Brand.whiteHex)).frame(width: 8, height: 8)
-            Text(s.folder).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.white).lineLimit(1)
+            // The chat's own name from the desktop app when the record scan knows it ("BRAIN",
+            // "SHIFTS 2"); the folder follows as the secondary label. No title → folder, as before.
+            Text(s.displayName).font(.system(size: 13, weight: .bold)).foregroundStyle(Color.white).lineLimit(1)
+            if s.title != nil {
+                Text(s.folder).font(.system(size: 12)).foregroundStyle(Color.white).lineLimit(1)
+            }
             if let t = s.tmuxLabel {
                 Text(t).font(.system(size: 12)).foregroundStyle(Color.white).lineLimit(1)
             }
@@ -79,7 +84,7 @@ struct AgentsSection: View {
             Text(s.displayLine(now: now)).font(.system(size: 12).monospacedDigit()).foregroundStyle(Color.white).lineLimit(1)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(s.folder), \(s.displayLine(now: now))\(s.isFlaggedStuck ? ", stuck" : "")")
+        .accessibilityLabel("\(s.displayName), \(s.displayLine(now: now))\(s.isFlaggedStuck ? ", stuck" : "")")
     }
 }
 
@@ -132,7 +137,9 @@ struct ApprovalCard: View {
         }
     }
     func sessionLine(_ a: AgentApproval) -> String {
-        a.tmuxLabel.map { "\(a.folder) · \($0)" } ?? a.folder
+        // Same naming as the session rows: the desktop title when the record scan knows it.
+        let name = (a.tmuxLabel == nil ? SessionJumper.title(forSessionID: a.sessionID) : nil) ?? a.folder
+        return a.tmuxLabel.map { "\(name) · \($0)" } ?? name
     }
 }
 
