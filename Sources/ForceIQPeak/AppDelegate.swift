@@ -881,6 +881,16 @@ enum Screens {
             guard let self, self.agentsOn, let agents = self.agents else { return false }
             return !agents.pending.isEmpty || agents.sessions.contains { $0.state == .working || $0.state == .waiting }
         }
+        // Watcher-plus: a flagged stuck agent escalates the mark to attention, and a wake from
+        // sleep assembles the while-you-were-away recap over exactly that sleep window.
+        cards.agentsAttention = { [weak self] in
+            guard let self, self.agentsOn, let agents = self.agents else { return false }
+            return agents.stuck != nil
+        }
+        cards.onWakeFromSleep = { [weak self] from, to in
+            guard let self, self.agentsOn, let agents = self.agents else { return }
+            agents.presentRecap(from: from, to: to)
+        }
         agentsOn = !demo && (p.isEnabled(.agents) || prefs.agentsWatcher)
         guard agentsOn else { AgentRelayInstaller.reconcile(enabled: false, logger: log); return }
         AgentRelayInstaller.reconcile(enabled: true, logger: log)

@@ -16,11 +16,15 @@ struct PeekHomeScroll: View {
                 // Ten-minute nudge first when it is due; the live checklist next; then today's brief.
                 // The brief names the client and quotes Ghost data, so it only renders on the
                 // non-presenting home branch — never while presenting.
-                // A held Claude approval first (it is blocked on the coach and expires), then the
-                // CLAUDE watcher section. Both are the coach's own infrastructure, never client data;
-                // this whole scroll is replaced by the presenting notice while presenting.
+                // The while-you-were-away recap at the very top when one is waiting (shown once,
+                // then dismissed), then a held Claude approval (it is blocked on the coach and
+                // expires), then the CLAUDE watcher section and its last-finish line. All the
+                // coach's own infrastructure, never client data; this whole scroll is replaced by
+                // the presenting notice while presenting.
+                AgentsRecapCard(model: agents)
                 ApprovalCard(model: agents)
                 AgentsSection(model: agents)
+                AgentsFinishLine(model: agents)
                 if checklist.nudgeShown && checklist.isLive() { NudgeSection(model: checklist) }
                 if checklist.isLive() { ChecklistGrid(model: checklist) }
                 if let brief = nextSession.session.flatMap({ SessionBriefBuilder.build(session: $0, since: nextSession.since) }) {

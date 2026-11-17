@@ -392,6 +392,8 @@ struct PeakRootView: View {
             }
             if checklist.isLive() {
                 ChecklistPillLine(model: checklist)
+            } else if !controller.presenting, let line = agents.pillLine {
+                AgentPillLineView(line: line)     // watcher-plus: a stuck session, or the fresh finish (names a folder: never while presenting)
             } else if nextSession.showsPill && !controller.presenting {
                 NextSessionPill(model: nextSession, compact: true, fill: true)   // names the client; gold on a gap; fills the pill
             } else {
