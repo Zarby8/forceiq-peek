@@ -373,16 +373,24 @@ struct PeakRootView: View {
 
     @ViewBuilder var collapsed: some View {
         if panel.mode == .notch {
-            // One row starting at the notch's left edge: [mark square][status text]. The mark ALWAYS
-            // renders here (ghost / BOB / eyes, same state as the sheet) — on the hardware notch and on
-            // a plain display's virtual notch alike — and the black shell spans the whole row, so it
-            // reads as one notch. The status text keeps the wing's existing rules (presenting
-            // suppression included: the mark is not private, the text still is).
-            HStack(spacing: 0) {
+            // [mark square][status text], each placed at the layout's own rect (offsets inside the
+            // collapsed frame): on a virtual notch they tile the drawn notch row; on the hardware
+            // notch they sit in the chin BELOW the camera housing — the housing's own rect has no
+            // pixels and can never show content. The mark ALWAYS renders here (ghost / BOB / eyes,
+            // same state as the sheet), and the black shell spans the whole housing (notch +
+            // shoulders + chin), so it reads as one notch. The status text keeps the wing's
+            // existing rules (presenting suppression included: the mark is not private, the text
+            // still is).
+            let c = panel.local(panel.layout.collapsed)
+            let m = panel.local(panel.layout.markRect)
+            let w = panel.local(panel.layout.wing)
+            ZStack(alignment: .topLeading) {
                 ghost(max(10, panel.layout.markRect.height - 6))
-                    .frame(width: panel.layout.markRect.width, height: panel.layout.markRect.height)
+                    .frame(width: m.width, height: m.height)
+                    .padding(.leading, m.minX - c.minX).padding(.top, m.minY - c.minY)
                 NotchWingLive(controller: controller, nextSession: nextSession, light: light, agents: agents, cards: cards)
-                    .frame(width: panel.layout.wing.width, height: panel.layout.wing.height)
+                    .frame(width: w.width, height: w.height)
+                    .padding(.leading, w.minX - c.minX).padding(.top, w.minY - c.minY)
             }
             .frame(width: panel.collapsedSize.width, height: panel.collapsedSize.height)
         } else {

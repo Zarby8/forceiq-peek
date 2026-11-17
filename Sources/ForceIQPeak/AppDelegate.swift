@@ -107,6 +107,7 @@ enum Screens {
     var performer: Performer!
     var cards: CardStackViewModel!
     var hosts: [String: PanelHost] = [:]
+    var screenRebuildTask: Task<Void, Never>?
     var statusItem: NSStatusItem?
     var settingsModel: SettingsModel?
     var settings: NSWindow?
@@ -266,7 +267,20 @@ enum Screens {
         buildStatusItem()
         if ProcessInfo.processInfo.environment["FORCEIQ_PEAK_NO_WARM"] != "1" { warmUp() }
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.log.log("screens changed"); self?.rebuildPanels() }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                // Displays settle over a few hundred ms (and the notification also fires spuriously
+                // at launch): debounce, then rebuild on the final geometry. A stale expansion can
+                // land click-dead on the new layout, so the sheet resets on a real change.
+                self.screenRebuildTask?.cancel()
+                self.screenRebuildTask = Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: 250_000_000)
+                    guard !Task.isCancelled else { return }
+                    self.log.log("screens changed")
+                    self.controller.collapse()
+                    self.rebuildPanels()
+                }
+            }
         }
         controller.objectWillChange.receive(on: RunLoop.main).sink { [weak self] _ in
             DispatchQueue.main.async { self?.syncPanels(); self?.noteExpansion() }

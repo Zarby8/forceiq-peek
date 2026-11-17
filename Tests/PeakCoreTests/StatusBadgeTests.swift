@@ -25,20 +25,22 @@ final class StatusBadgeTests: XCTestCase {
         }
     }
 
-    // ── the status wing: merged into the notch, in the menu bar row, exactly the notch's height ──
+    // ── the status wing: the text half of the chin row under the notch ──
     let m5 = ScreenDescriptor(uuid: "M5", name: "Built-in Display", frame: CGRect(x: 0, y: 0, width: 2048, height: 1330),
                               safeAreaTop: 43, auxiliaryTopLeft: CGRect(x: 0, y: 1287, width: 899, height: 43),
                               auxiliaryTopRight: CGRect(x: 1149, y: 1287, width: 899, height: 43))
 
-    func testTheWingIsFlushWithTheNotchAndExactlyAsTall() {
-        // New design (in-notch): the wing is the status text right of the mark square, inside the
-        // collapsed row that starts at the notch's left edge — no longer a wing off the left side.
+    func testTheWingSitsInTheChinUnderTheNotch() {
+        // Chin design: the wing is the status text right of the mark square, in the chin row below
+        // the camera housing — its top flush with the housing's bottom edge, never inside its rect
+        // (the old in-notch row was occluded by the housing and invisible).
         let l = PeakGeometry().layout(for: m5)
         let n = l.notchRect!
         XCTAssertEqual(l.wing.minX, l.markRect.maxX, "the text starts where the mark square ends")
-        XCTAssertEqual(l.wing.minY, n.minY); XCTAssertEqual(l.wing.height, n.height); XCTAssertEqual(l.wing.maxY, 1330)
-        XCTAssertEqual(l.collapsed.minX, n.minX, "the row starts at the notch's left edge")
-        XCTAssertEqual(l.collapsed, l.markRect.union(l.wing), "one shape: mark square + status text")
+        XCTAssertEqual(l.wing.maxY, n.minY, "the chin row's top is the housing's bottom edge")
+        XCTAssertEqual(l.wing.minY, l.markRect.minY, "mark and text share the chin row")
+        XCTAssertTrue(l.collapsed.contains(l.markRect.union(l.wing)), "the housing silhouette contains the content row")
+        XCTAssertEqual(l.collapsed.maxY, 1330, "the housing is flush with the top edge")
         XCTAssertTrue(l.canvas.contains(l.collapsed))
         XCTAssertEqual(l.hitRect(.collapsed), l.collapsed, "hover and click on the wing open Peek")
     }
