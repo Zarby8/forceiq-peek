@@ -228,6 +228,14 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     public var clock: () -> Date = Date.init
     /// Watcher activity (an agent session working/waiting, or a held approval pending).
     public var agentsActive: () -> Bool = { false }
+    /// A flagged stuck agent (the watcher's stuck latch): an otherwise-idle mark escalates to
+    /// attention while one is flagged. A stuck session is by definition working, so in the app's
+    /// wiring this always implies agentsActive too — it is counted as activity either way.
+    public var agentsAttention: () -> Bool = { false }
+    /// Fired once per sleep episode when the mark wakes, carrying the sleep window (start, wake):
+    /// the app assembles the while-you-were-away recap over exactly this window.
+    public var onWakeFromSleep: ((Date, Date) -> Void)?
+    private var sleepingSince: Date? = nil
     private var lastActivityAt: Date? = nil
     let performer: CardActionPerforming
     weak var logger: PeakLogging?
@@ -257,10 +265,14 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
             now >= $0.scheduledAt.addingTimeInterval(-10 * 60)
                 && now <= $0.scheduledAt.addingTimeInterval(Double($0.durationMinutes) * 60)
         } ?? false
-        let active = baseGhost != .idle || meetingLive || ghost == .typing || ghost == .receipt || agentsActive()
+        let active = baseGhost != .idle || meetingLive || ghost == .typing || ghost == .receipt || agentsActive() || agentsAttention()
         if active || lastActivityAt == nil { lastActivityAt = now }
         if ghost != .typing && ghost != .receipt {
-            ghost = (!active && now.timeIntervalSince(lastActivityAt ?? now) >= Self.sleepAfter) ? .sleeping : baseGhost
+            var next: GhostState = (!active && now.timeIntervalSince(lastActivityAt ?? now) >= Self.sleepAfter) ? .sleeping : baseGhost
+            // A flagged stuck agent escalates an otherwise-idle mark to attention (the waiting
+            // pose): the stall needs the coach's eye even though the engine has nothing to say.
+            if next == .idle && agentsAttention() { next = .attention }
+            applyGhost(next, at: now)
         }
         if case .describing(let id) = phase, !cards.contains(where: { $0.id == id }) { phase = .list }
     }
@@ -270,11 +282,25 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         return nil
     }
 
+    /// Every sleep-overlay transition goes through here, so the sleep window is tracked exactly:
+    /// entering .sleeping opens the window; leaving it fires onWakeFromSleep once with the window.
+    private func applyGhost(_ next: GhostState, at now: Date) {
+        if ghost == .sleeping, next != .sleeping {
+            if let since = sleepingSince { onWakeFromSleep?(since, now) }
+            sleepingSince = nil
+        } else if next == .sleeping, ghost != .sleeping {
+            sleepingSince = now
+        }
+        ghost = next
+    }
+
     /// A user action: the sleep clock restarts, and a sleeping mark wakes to the data state at once
     /// rather than waiting for the next feed read.
     private func noteActivity() {
         lastActivityAt = clock()
-        if ghost == .sleeping { ghost = baseGhost }
+        if ghost == .sleeping {
+            applyGhost(baseGhost == .idle && agentsAttention() ? .attention : baseGhost, at: clock())
+        }
     }
 
     /// A tap on a card ONLY shows its plain description. It never runs anything.
