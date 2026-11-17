@@ -861,6 +861,7 @@ enum Screens {
             considerAlert(s)
             lastMeeting = s.meeting
             gpuLight.update(s.gpuWindow, at: s.takenAt ?? Date()); controller.setCommandLive(s.gpuWindow?.live)
+            applyRecording(s)
             considerChecklist(s.gpuWindow)
             _ = briefCache.ingest(s, now: Date())            // last good read per source, for a later brief
             log.log("feed meeting=\(s.meeting != nil ? "yes" : "no") fixes=\(s.fixes.count) approvals=\(s.approvals.count) family=\(s.familyEnabled ? "on" : "off") ghost=\(cards.ghost.rawValue)")
@@ -868,6 +869,20 @@ enum Screens {
             await ready.tick()                                               // at most every 10 min, last: a slow read never delays the above
             await running.tick(expanded: controller.expanded)                // 15 s with the sheet open, 1 to 2 min closed
         }
+    }
+
+    /// Recording DND from the feed's `recording` field: the tracker's meeting end is the snapshot
+    /// meeting's scheduled end when that meeting is the live one (its span contains now), else nil.
+    /// Feed reads keep arriving while Peek is dark (refresh gates on globallyVisible, not panel
+    /// visibility), so the release lands on the first read after the recording stops.
+    func applyRecording(_ s: EngineSnapshot) {
+        var end: Date? = nil
+        if let m = s.meeting {
+            let e = m.scheduledAt.addingTimeInterval(Double(m.durationMinutes) * 60)
+            let now = Date()
+            if m.scheduledAt <= now, now < e { end = e }
+        }
+        controller.setRecording(s.recording, meetingEnd: end)
     }
 
     /// The Claude watcher, when the agents module is on (the profile flag, or the settings.json
@@ -894,12 +909,18 @@ enum Screens {
         agentsOn = !demo && (p.isEnabled(.agents) || prefs.agentsWatcher)
         guard agentsOn else { AgentRelayInstaller.reconcile(enabled: false, logger: log); return }
         AgentRelayInstaller.reconcile(enabled: true, logger: log)
-        agents.isPresenting = { [weak self] in self?.controller.presenting ?? false }
+        // Held approvals pass through to the terminal while presenting OR while recording DND has
+        // Peek dark: nobody can see the notch card either way.
+        agents.isPresenting = { [weak self] in (self?.controller.presenting ?? false) || (self?.controller.recordingDND ?? false) }
+        // Row titles come from the Claude app's session records, resolved app-side at publish time
+        // (the same read-only scan the thread deep link uses) — never through hooks or the registry.
+        agents.titleResolver = { SessionJumper.title(forSessionID: $0) }
         agents.onHeldRequest = { [weak self] _ in self?.considerAgentApproval() }
         agentServer = AgentSocketServer(model: agents, path: AgentRelayInstaller.socketURL.path,
                                         log: { [weak self] line in Task { @MainActor in self?.log.log(line) } })
         agentServer?.start()
         controller.$presenting.sink { [weak self] on in if on { self?.agents.cancelAllHeld() } }.store(in: &bag)
+        controller.$recordingDND.sink { [weak self] on in if on { self?.agents.cancelAllHeld() } }.store(in: &bag)
         agents.$sessions.sink { [weak self] _ in self?.writeAgentState() }.store(in: &bag)
         agents.$pending.sink { [weak self] _ in self?.writeAgentState() }.store(in: &bag)
         log.log("agents watcher=on")
@@ -909,7 +930,7 @@ enum Screens {
     /// is on globallyVisible), home tab, the approval card on top. The request is blocked on the
     /// coach and expires; everything else waits for a hover (spec §3.1/§5).
     func considerAgentApproval() {
-        guard controller.globallyVisible, !controller.presenting else { return }
+        guard controller.globallyVisible, !controller.presenting, !controller.recordingDND else { return }
         if let d = peekDisplayID() { controller.activeDisplay = d }
         controller.tab = .home
         controller.expand()
@@ -953,7 +974,7 @@ enum Screens {
                 guard let self, let v = h?.panel.contentView else { return }
                 NSMenu.popUpContextMenu(self.makeMenu(), with: e, for: v)
             }
-            log.log("panel mode=\(h.layout.mode.rawValue)")
+            log.log("panel mode=\(h.layout.mode.rawValue) virtual=\(h.layout.virtualNotch) collapsed=\(Int(h.layout.collapsed.width))x\(Int(h.layout.collapsed.height)) mark=\(Int(h.layout.markRect.width))x\(Int(h.layout.markRect.height))")
         }
         syncPanels()
         statusItem?.menu = makeMenu()

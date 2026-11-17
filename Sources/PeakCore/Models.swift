@@ -117,6 +117,7 @@ public struct EngineSnapshot: Equatable, Sendable {
     // "What's my day" + the 5090 light (DayBrief.swift, GPULight.swift). nil = not in this read (old engine / failed).
     public var today: [SessionRow]? = nil              // next-meeting `today`: this coach's named sessions today
     public var gpuWindow: GPUWindow? = nil             // next-meeting `gpu_window`: times the 5090 must hold around
+    public var recording: Bool? = nil                  // next-meeting `recording`: Command is recording the live meeting (recording DND); nil = unknown (no change)
     public var fixesNeeded: [BriefItem] = []           // /api/live `fixes_needed` (BLOCKED)
     public var liveAt: Date? = nil                     // /api/live doc's own write time
     public var approvalsAt: Date? = nil                // /api/approvals listing time

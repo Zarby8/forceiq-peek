@@ -46,6 +46,11 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     /// An alert peeking out of the notch (AlertPolicy decides; this only holds it for `holdSeconds`, then retracts it).
     @Published public private(set) var peek: PeakAlert? = nil
     @Published public private(set) var peekDisplay: String? = nil
+    /// Recording DND: Command is recording a meeting — Peek is fully dark (no panel on any display,
+    /// no peek, no expansion) until the recording stops. Driven by RecordingDNDTracker off the
+    /// next-meeting feed's `recording` field; NOT persisted (a feed read re-decides it).
+    @Published public private(set) var recordingDND = false
+    private var recordingTracker = RecordingDNDTracker()
     /// Presenting mode: nothing client-private on screen (Presenting.swift). Persisted in settings.json.
     @Published public private(set) var presenting: Bool
     /// True while presenting only because Command is live (not turned on by hand).
@@ -73,12 +78,14 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
     public func toggle() { globallyVisible ? hide() : show() }
     public func show() { globallyVisible = true; prefs.globallyHidden = false; log("state visible=on") }
     public func hide() { dismissPeek(); globallyVisible = false; expanded = false; prefs.globallyHidden = true; log("state visible=off") }
-    public func expand() { if !globallyVisible { show() }; dismissPeek(); guard !expanded else { return }; expanded = true; log("state expanded=on") }
+    /// Expansion is refused while recording DND is on: Peek stays dark until the recording stops.
+    /// (The expanded state itself is preserved across a dark period — DND only hides the panels.)
+    public func expand() { guard !recordingDND else { return }; if !globallyVisible { show() }; dismissPeek(); guard !expanded else { return }; expanded = true; log("state expanded=on") }
     public func collapse() { guard expanded else { return }; expanded = false; askText = nil; log("state expanded=off") }
 
     /// Drop an alert out of the notch on `display`. Only a visible, collapsed Peek shows one; it retracts by itself.
     public func showPeek(_ a: PeakAlert, on display: String?) {
-        guard globallyVisible, !expanded else { return }
+        guard globallyVisible, !expanded, !recordingDND else { return }
         let a = presenting ? Presenting.redact(a) : a
         peek = a; peekDisplay = display
         log("state peek=\(a.kind.rawValue)")
@@ -135,6 +142,17 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         log("state dnd=\(choice == .off ? "off" : "on")")
     }
 
+    /// The next-meeting feed's `recording` from each read (nil = unknown: no change). Engaging hides
+    /// every panel (panelVisible goes false) and drops any peek; the expanded state is left as it was,
+    /// so when the recording stops the panel returns exactly as it was.
+    public func setRecording(_ recording: Bool?, meetingEnd: Date?, now: Date = Date()) {
+        let on = recordingTracker.update(recording: recording, meetingEnd: meetingEnd, now: now)
+        guard on != recordingDND else { return }
+        recordingDND = on
+        if on { dismissPeek() }
+        log("state recording-dnd=\(on ? "on" : "off")")
+    }
+
     /// GOAT's `gpu_window.live` from each feed read: Command is live on this Mac (nil = unreadable: nothing changes).
     public func setCommandLive(_ live: Bool?) {
         guard let live, live != commandLive else { return }
@@ -180,8 +198,8 @@ extension CardActionPerforming { public var lastOK: Bool { true } }
         shownDisplays[uuid.uppercased()] = shown
         log("state display=\(shown ? "on" : "off")")
     }
-    /// Is the panel on this display visible right now?
-    public func panelVisible(on uuid: String) -> Bool { globallyVisible && prefs.isDisplayShown(uuid) }
+    /// Is the panel on this display visible right now? Recording DND darkens every display.
+    public func panelVisible(on uuid: String) -> Bool { globallyVisible && !recordingDND && prefs.isDisplayShown(uuid) }
 
     public func handle(_ a: PeakURLAction) {
         guard ModuleRegistry.allows(a, profile) else { log("url \(a.name) refused=module-off"); return }

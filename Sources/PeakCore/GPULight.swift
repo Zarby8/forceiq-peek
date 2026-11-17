@@ -177,3 +177,13 @@ public enum GPUGate {
         return GPUGate.refusal(s)
     }
 }
+
+/// next-meeting `recording`: is Command recording the live meeting right now (a RecordingOperation row
+/// in an active status for the live booking's room, judged engine-side). Peek's recording DND follows
+/// it exactly: true = recording, false = not recording, absent / not a bool = unknown (nil: no change).
+public enum RecordingSignal {
+    public static func parse(_ o: [String: Any]) -> Bool? {
+        guard (o["ok"] as? Bool) == true else { return nil }
+        return o["recording"] as? Bool
+    }
+}
