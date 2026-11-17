@@ -96,15 +96,17 @@ struct WorkspaceLocator: AppLocating {
     }
     private static func launch(_ bundleID: String) -> Bool {
         // SwitchActivation.plan decides from the app's state; this only performs it. A running
-        // app is reopened through Launch Services (`open -b`, the Dock-click path) via the
-        // audited LocalCommand facade — the only mechanism measured to carry the user into a
-        // full-screen app's Space (Command full-screen was the report). NSRunningApplication
-        // .activate() — bare or all-windows — returned true and changed nothing
-        // there, and NSWorkspace.openApplication errored; the workspace open below remains as
-        // the fallback and as the not-running launch path.
+        // app is reopened through Launch Services (`open -b`) via the audited LocalCommand
+        // facade — but the reopen alone only ACTIVATES: measured live on Christopher's
+        // three-display desk (Nov 17, 2026), it leaves a full-screen app's Space unshown,
+        // because no public activation path moves a display's current Space. SpaceJump moves
+        // the display to the app's window first (SkyLight, runtime-resolved, plain reopen as
+        // its fallback); the reopen then lands the user in the window. NSWorkspace.open
+        // below remains the not-running launch path and the reopen-refused fallback.
         if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first {
             switch SwitchActivation.plan(running: true, hidden: running.isHidden) {
             case .reopen:
+                _ = SpaceJump.jumpToWindowSpace(of: running)
                 if LocalCommand.runStatus("/usr/bin" + "/open", ["-b", bundleID]).status == 0 { return true }
                 // The reopen refused (app mid-quit, etc.): fall through to the workspace open.
             case .launch:

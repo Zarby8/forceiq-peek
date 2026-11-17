@@ -144,10 +144,13 @@ enum SessionJumper {
 
     /// Bring a running app forward so the user LANDS on it — including when its window is
     /// full-screen on another Space. NSRunningApplication.activate() returns true and changes
-    /// nothing in that case (measured live, Nov 17, 2026); a Launch Services reopen (`open -b`,
-    /// the Dock-click path, through the audited LocalCommand facade) switches Spaces.
-    /// activate() remains as the fallback for an app Launch Services can't reopen.
+    /// nothing in that case, and a Launch Services reopen (`open -b`, through the audited
+    /// LocalCommand facade) activates without moving the display's current Space on a
+    /// multi-display desk (both measured live, Nov 17, 2026) — so SpaceJump moves the display
+    /// to the app's window first, exactly as the switcher does. activate() remains as the
+    /// fallback for an app Launch Services can't reopen.
     private static func reopen(_ app: NSRunningApplication) -> Bool {
+        _ = SpaceJump.jumpToWindowSpace(of: app)
         if let bid = app.bundleIdentifier,
            LocalCommand.runStatus("/usr/bin" + "/open", ["-b", bid]).status == 0 { return true }
         app.activate()

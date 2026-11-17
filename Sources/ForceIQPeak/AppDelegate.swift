@@ -1068,16 +1068,13 @@ enum Screens {
         hoverCollapse?.cancel()
         if inside, controller.peek != nil { controller.extendPeek(); return }      // reading an alert: hold it, open only on a tap
         if inside {
-            Haptic.generic()                                     // paired with the hover lift / notch growth
+            Haptic.generic()                                     // paired with the hover lift / sheet opening
             if !controller.expanded {
-                let w = DispatchWorkItem { [weak self] in
-                    guard let self, self.hoveredDisplay == uuid, !self.controller.expanded else { return }
-                    Haptic.level(); self.controller.activeDisplay = uuid; self.controller.expand()
-                }
-                hoverCollapse = w
-                // 1.0 s, not the old 0.18: a deliberate hover opens the sheet, and a click always
-                // did. The collapsed notch itself never changes size — the 25% growth is the sheet's.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0, execute: w)
+                // Instant (Christopher, Nov 17, 2026): expansion begins the moment the pointer
+                // enters the notch — no dwell, no waiting period; the spring is motion, not a
+                // delay. (The 1.0 s dwell the fix round introduced is vetoed and gone.) The
+                // collapsed notch itself never changes size — the 25% growth is the sheet's.
+                Haptic.level(); controller.activeDisplay = uuid; controller.expand()
             }
         } else if controller.expanded && controller.askText == nil && controller.activeDisplay == uuid
                     && !(controller.tab == .threePO && profile.isEnabled(.threePO)) {   // the chat stays open until Collapse

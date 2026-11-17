@@ -32,20 +32,19 @@ public enum AppSwitcher {
 }
 
 /// How a switcher tap brings the target app to the coach, decided purely from the app's state.
-/// The bug this fixes: activating a running app whose window lives in a full-screen Space does
-/// not move the user to that Space, so the tap reads as dead. Measured live on this machine
-/// (Nov 17, 2026) against a sacrificial full-screen app: NSRunningApplication.activate() — bare,
-/// and with .activateAllWindows (the earlier fix) — returned true and changed nothing;
-/// NSWorkspace.openApplication errored instead of switching; a Launch Services reopen
-/// (`open -b`, the Dock-click path) switched Spaces every time, as did an AppleScript activate.
-/// The plan therefore sends every running app — windowed, hidden, or full-screen — down the
-/// reopen path (a reopen also unhides, so `hidden` no longer changes the plan). Not running →
-/// launch (which already worked).
+/// The bug: activating a running app whose window lives in a full-screen Space does not move
+/// the user to that Space, so the tap reads as dead. Measured live (Nov 17, 2026): on a single
+/// display a Launch Services reopen (`open -b`) switched Spaces and activate() did not; on
+/// Christopher's three-display desk the reopen ALSO only activates — no public path moves a
+/// display's current Space — so the app side performs a SpaceJump (SkyLight's managed-space
+/// setter, runtime-resolved) before the reopen. The plan is unchanged: every running app —
+/// windowed, hidden, or full-screen — goes down the reopen path (a reopen also unhides, so
+/// `hidden` no longer changes the plan). Not running → launch (which already worked).
 public enum SwitchActivationPlan: Equatable, Sendable {
     /// Not running: launch it (NSWorkspace, activates on open).
     case launch
-    /// Running: reopen it through Launch Services (`open -b` via LocalCommand), the measured
-    /// mechanism that carries the user into a full-screen app's Space.
+    /// Running: reopen it through Launch Services (`open -b` via LocalCommand); the app side
+    /// first moves the display into the app's Space (SpaceJump) when its window lives on one.
     case reopen
 }
 

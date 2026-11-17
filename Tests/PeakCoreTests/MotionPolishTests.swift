@@ -211,6 +211,19 @@ final class MotionPolishGuardTests: XCTestCase {
 // 25% belongs to the EXPANDED window — "when it expands, make that window 25% bigger; if the
 // mouse is not over the app, it sits inside the notch." The collapsed notch NEVER scales.
 final class SheetGrowTests: XCTestCase {
+    /// Hover expansion is INSTANT (Christopher, Nov 17, 2026): pointer entry expands in the
+    /// same turn — no dwell work item, no asyncAfter gate on the entry path. (The 0.6 s exit
+    /// grace on the leave path is untouched.)
+    func testHoverExpansionHasNoDwell() throws {
+        let appPath = #filePath.replacingOccurrences(of: "Tests/PeakCoreTests/MotionPolishTests.swift", with: "Sources/ForceIQPeak/AppDelegate.swift")
+        let app = try String(contentsOfFile: appPath, encoding: .utf8)
+        let hoverBody = app.components(separatedBy: "func hover(_ inside: Bool, uuid: String)").last?
+            .components(separatedBy: "func pointerAction").first ?? ""
+        XCTAssertFalse(hoverBody.contains("+ 1.0, execute: w"), "the vetoed 1.0 s dwell is gone")
+        XCTAssertTrue(hoverBody.contains("controller.expand()"), "entry expands immediately")
+        XCTAssertTrue(hoverBody.contains("no dwell"), "the instant rule is recorded at the site")
+    }
+
     func testGrowAppliesToTheSheetInNotchModeOnly() {
         XCTAssertTrue(SheetGrow.applies(mode: .notch))
         XCTAssertFalse(SheetGrow.applies(mode: .pill), "the pill keeps its own sizes and lift")
